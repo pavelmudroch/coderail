@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+
+set -eu
+
+SCRIPT_DIR=$(
+    CDPATH= cd -- "$(dirname "$0")"
+    pwd
+)
+
+OWNER="${CODERAIL_OWNER:-pavelmudroch}"
+REPO="${CODERAIL_REPO:-coderail}"
+VERSION="${CODERAIL_VERSION:-latest}"
+DOWNLOAD_URL="https://github.com/$OWNER/$REPO/releases/$VERSION/download/coderail.tar.gz"
+
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/coderail.XXXXXX")"
+tarball="$tmp_dir/coderail.tar.gz"
+
+cleanup() {
+    rm -rf "$tmp_dir"
+}
+trap cleanup EXIT HUP INT TERM
+
+echo "Downloading coderail from $DOWNLOAD_URL..."
+if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$DOWNLOAD_URL" -o "$tarball"
+elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$tarball" "$DOWNLOAD_URL"
+else
+    echo "error: curl or wget is required" >&2
+    exit 1
+fi
+
+tar -xzf "$tarball" -C "$tmp_dir"
+rm -f "$tarball"
+
+if [ ! -f "$tmp_dir/lib/install.sh" ]; then
+    echo "error: archive does not contain lib/install.sh" >&2
+    exit 1
+fi
+
+sh "$tmp_dir/lib/install.sh"
