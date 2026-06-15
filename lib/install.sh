@@ -14,107 +14,231 @@ ROOT_DIR=$(
 
 : "${HOME:?HOME is required}"
 
+CODERAIL_COMMAND="cr"
 CODERAIL_HOME="${CODERAIL_HOME:-$HOME/.coderail}"
+INSTALL_MARKER=.coderail-install
+
+. "$SCRIPT_DIR/utils/get-absolute-path.sh"
+. "$SCRIPT_DIR/utils/get-link-target-path.sh"
 
 error() {
     echo "error: $*" >&2
+    rollback_installation
     exit 1
 }
 
-find_user_bin_dir() {
+ensure_writable_dir() {
+    dir=$1
+
+    mkdir -p "$dir" || error "Failed to create '$dir'."
+
+    [ -d "$dir" ] || error "$dir is not a directory"
+    [ -w "$dir" ] || error "$dir is not writable"
+}
+
+is_codrail_home_directory() {
+    dir=$1
+
+    [ -d "$dir" ] || return 1
+    [ -z "$(ls -A "$dir")" ] || [ -f "$dir/$INSTALL_MARKER" ] || return 1
+}
+
+is_path_contain_dir() {
+    dir=$1
     old_ifs=$IFS
     IFS=:
     set -- ${PATH:-}
     IFS=$old_ifs
 
     for path_dir do
-        [ -n "$path_dir" ] || continue
-
-        path_dir=$(sh "$SCRIPT_DIR/utils/absolute-path.sh" "$path_dir")
-
-        [ "$path_dir" = "$HOME/.local/bin" ] || [ "$path_dir" = "$HOME/bin" ] || continue
-
-        if [ -d "$path_dir" ]; then
-            [ -w "$path_dir" ] || continue
-        else
-            parent_dir=$(dirname "$path_dir")
-            [ -d "$parent_dir" ] && [ -w "$parent_dir" ] || continue
-        fi
-
-        printf '%s\n' "$path_dir"
-        return
+        [ "$path_dir" = "$dir" ] && return 0
     done
 
     return 1
 }
 
-ensure_writable_dir() {
-    dir=$1
+ask_create_home_bin_dir() {
+    home_bin_dir="$HOME/bin"
 
-    mkdir -p "$dir"
+    echo "No writable user bin directory found in PATH." >&2
+    printf 'Create %s for the cr symlink? [y/N] ' "$home_bin_dir" >&2
 
-    [ -d "$dir" ] || error "$dir is not a directory"
-    [ -w "$dir" ] || error "$dir is not writable"
-}
+    answer=
+    read answer || true
 
-get_current_cr_link() {
-    current_cr=$(command -v cr 2>/dev/null || true)
-
-    case "$current_cr" in
-        */*) sh "$SCRIPT_DIR/utils/absolute-path.sh" "$current_cr" ;;
+    case "$answer" in
+        y|Y|yes|YES)
+            mkdir -p "$home_bin_dir" || error "Failed to create '$home_bin_dir'."
+            echo "Add $home_bin_dir to PATH to run cr from your shell." >&2
+            printf '%s\n' "$home_bin_dir"
+            ;;
+        *)
+            error "set CODERAIL_BIN_DIR or add $home_bin_dir to PATH"
+            ;;
     esac
 }
 
 get_available_cr_link_dir() {
     if [ -n "${CODERAIL_BIN_DIR:-}" ]; then
-        sh "$SCRIPT_DIR/utils/absolute-path.sh" "$CODERAIL_BIN_DIR"
+        absolute_coderail_bin_dir=$(get_absolute_path "$CODERAIL_BIN_DIR")
+        printf '%s\n' "$absolute_coderail_bin_dir"
         return
     fi
 
-    user_bin_dir=$(find_user_bin_dir) || error "no writable standard user bin directory found in PATH; set CODERAIL_BIN_DIR"
-    printf '%s\n' "$user_bin_dir"
+    if is_path_contain_dir "$HOME/bin"; then
+        printf '%s\n' "$HOME/bin"
+        return
+    fi
+
+    if is_path_contain_dir "$HOME/.local/bin"; then
+        printf '%s\n' "$HOME/.local/bin"
+        return
+    fi
+
+    ask_create_home_bin_dir
 }
 
-install_home=$(sh "$SCRIPT_DIR/utils/absolute-path.sh" "$CODERAIL_HOME")
-install_parent=$(dirname "$install_home")
-current_cr_link=$(get_current_cr_link)
-cr_link_dir=$(get_available_cr_link_dir)
-cr_link="$cr_link_dir/cr"
+find_cr_link_in_path() {
+    old_cr_link=""
+    old_ifs=$IFS
+    IFS=:
+    set -- ${PATH:-}
+    IFS=$old_ifs
 
-[ "$install_home" != "/" ] || error "CODERAIL_HOME cannot be /"
-[ "$install_home" != "$HOME" ] || error "CODERAIL_HOME cannot be HOME"
-[ "$install_home" != "$ROOT_DIR" ] || error "CODERAIL_HOME must differ from source directory"
+    for path_dir do
+        [ -n "$path_dir" ] || path_dir=.
 
-case "$install_home/" in
-    "$ROOT_DIR"/*) error "CODERAIL_HOME cannot be inside source directory" ;;
-esac
+        candidate_cr_link="$path_dir/$CODERAIL_COMMAND"
+        [ -x "$candidate_cr_link" ] || continue
 
-[ -f "$ROOT_DIR/bin/cr" ] || error "source does not contain bin/cr"
+        absolute_candidate_cr_link=$(get_absolute_path "$candidate_cr_link")
+        [ "$absolute_candidate_cr_link" = "$old_cr_link" ] && continue
 
-ensure_writable_dir "$install_parent"
-ensure_writable_dir "$cr_link_dir"
+        if [ -n "$old_cr_link" ]; then
+            error "Multiple '$CODERAIL_COMMAND' commands found in PATH: '$old_cr_link' and '$absolute_candidate_cr_link'. Remove duplicates or set CODERAIL_BIN_DIR."
+        fi
 
-if [ -n "$current_cr_link" ] && [ -e "$current_cr_link" ] && [ ! -L "$current_cr_link" ]; then
-    error "$current_cr_link exists and is not a symlink"
+        old_cr_link=$absolute_candidate_cr_link
+    done
+
+    if [ -n "$old_cr_link" ] && [ "$old_cr_link" != "$cr_link" ]; then
+        error "Existing '$CODERAIL_COMMAND' command at '$old_cr_link' differs from install target '$cr_link'. Remove it, reorder PATH, or set CODERAIL_BIN_DIR."
+    fi
+}
+
+rollback_installation() {
+    rollback_successful=true
+
+    if [ "${cr_link_created:-false}" = true ] && [ -n "${cr_link:-}" ] && [ -L "$cr_link" ]; then
+        rel_cr_link_target=$(get_link_target_path "$cr_link")
+        cr_link_target=$(get_absolute_path "$rel_cr_link_target")
+        if [ "$cr_link_target" = "${install_target_dir:-}/bin/$CODERAIL_COMMAND" ]; then
+            if ! rm -f "$cr_link"; then
+                rollback_successful=false
+                echo "Failed to remove new '$CODERAIL_COMMAND' link at '$cr_link'." >&2
+            fi
+        fi
+    fi
+
+    if [ -n "${backup_target_dir:-}" ] && [ -d "$backup_target_dir" ]; then
+        if ! rm -rf "$install_target_dir"; then
+            rollback_successful=false
+            echo "Failed to remove failed install contents at '$install_target_dir'." >&2
+        elif ! mv "$backup_target_dir" "$install_target_dir"; then
+            rollback_successful=false
+            echo "Failed to restore backup contents from '$backup_target_dir' to '$install_target_dir'." >&2
+        fi
+    elif [ "${install_target_dir_created:-false}" = true ] && [ -d "$install_target_dir" ]; then
+        if ! rm -rf "$install_target_dir"; then
+            rollback_successful=false
+            echo "Failed to remove failed install contents at '$install_target_dir'." >&2
+        fi
+    fi
+
+    if [ -n "${backup_old_cr_link:-}" ] && [ -L "$backup_old_cr_link" ]; then
+        if ! mv "$backup_old_cr_link" "$old_cr_link"; then
+            rollback_successful=false
+            echo "Failed to restore backup 'cr' link from '$backup_old_cr_link' to '$old_cr_link'." >&2
+        fi
+    fi
+
+    if ! $rollback_successful; then
+        echo "Rollback encountered errors. Current backup directory: ${backup_directory:-unknown}" >&2
+        exit 1
+    fi
+
+    cleanup
+}
+
+is_valid_cr_link() {
+    link=$(get_absolute_path "$1")
+
+    [ -L "$link" ] || return 1
+    rel_link_target=$(get_link_target_path "$link")
+    link_target=$(get_absolute_path "$rel_link_target")
+    bin_dir=$(dirname "$link_target")
+    target_dir=$(dirname "$bin_dir")
+    [ -f "$target_dir/$INSTALL_MARKER" ] || return 1
+    return 0
+}
+
+cleanup() {
+    if [ -d "${backup_directory:-}" ]; then
+        rm -rf "$backup_directory"
+    fi
+}
+
+install_target_dir=$(get_absolute_path "$CODERAIL_HOME")
+install_target_basename=$(basename "$install_target_dir")
+backup_target_dir=""
+install_target_dir_created=false
+
+old_cr_link=""
+backup_old_cr_link=""
+cr_link_created=false
+
+cr_link_target_dir=$(get_available_cr_link_dir)
+cr_link="$cr_link_target_dir/$CODERAIL_COMMAND"
+find_cr_link_in_path
+
+backup_directory=$(mktemp -d)
+
+if [ -n "$old_cr_link" ]; then
+    if ! is_valid_cr_link "$old_cr_link"; then
+        error "Existing '$CODERAIL_COMMAND' command at '$old_cr_link' is not a valid CodeRail link. Please remove or rename it before installing."
+    fi
+
+    backup_old_cr_link="$backup_directory/$CODERAIL_COMMAND"
+    mv "$old_cr_link" "$backup_old_cr_link" || error "Failed to backup existing '$CODERAIL_COMMAND' link from '$old_cr_link' to '$backup_old_cr_link'."
 fi
 
-if [ -e "$cr_link" ] && [ ! -L "$cr_link" ]; then
-    error "$cr_link exists and is not a symlink"
+if [ -e "$install_target_dir" ]; then
+    if ! is_codrail_home_directory "$install_target_dir"; then
+        error "Cannot install to '$install_target_dir'. It is not empty or not a valid CodeRail home directory."
+    fi
+
+    backup_target_dir="$backup_directory/$install_target_basename"
+    mv "$install_target_dir" "$backup_target_dir" || error "Failed to backup existing contents of '$install_target_dir'."
 fi
 
-rm -rf "$install_home"
-mv "$ROOT_DIR" "$install_home"
-
-if [ -n "$current_cr_link" ]; then
-    rm -f "$current_cr_link"
+if [ -e "$cr_link" ]; then
+    error "Cannot create '$CODERAIL_COMMAND' link at '$cr_link'. A file or link already exists there."
 fi
 
-if [ -L "$cr_link" ]; then
-    rm -f "$cr_link"
+if [ -e "$install_target_dir" ]; then
+    error "Cannot install to '$install_target_dir'. It already exists."
 fi
 
-ln -s "$install_home/bin/cr" "$cr_link"
-chmod +x "$install_home/bin/cr"
+install_target_dir_created=true
+ensure_writable_dir "$install_target_dir"
+ensure_writable_dir "$cr_link_target_dir"
 
-echo "Installed coderail to $install_home"
-echo "Linked cr to $cr_link"
+cp -R "$ROOT_DIR/instructions" "$install_target_dir/" || error "Failed to install into '$install_target_dir'."
+cp -R "$ROOT_DIR/bin" "$install_target_dir/" || error "Failed to install into '$install_target_dir'."
+cp -R "$ROOT_DIR/lib" "$install_target_dir/" || error "Failed to install into '$install_target_dir'."
+touch "$install_target_dir/$INSTALL_MARKER" || error "Failed to install into '$install_target_dir'."
+ln -s "$install_target_dir/bin/cr" "$cr_link" || error "Failed to install '$CODERAIL_COMMAND' command."
+cr_link_created=true
+chmod +x "$cr_link" || error "Failed to install '$CODERAIL_COMMAND' command."
+
+cleanup
