@@ -10,7 +10,7 @@ SCRIPT_DIR=$(
 OWNER="${CODERAIL_OWNER:-pavelmudroch}"
 REPO="${CODERAIL_REPO:-coderail}"
 VERSION="${CODERAIL_VERSION:-latest}"
-DOWNLOAD_URL="https://github.com/$OWNER/$REPO/releases/$VERSION/download/coderail.tar.gz"
+DOWNLOAD_URL="https://github.com/$OWNER/$REPO/archive/refs/tags/$VERSION.tar.gz"
 
 tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/coderail.XXXXXX")"
 tarball="$tmp_dir/coderail.tar.gz"
@@ -39,3 +39,4 @@ if [ ! -f "$tmp_dir/lib/install.sh" ]; then
 fi
 
 sh "$tmp_dir/lib/install.sh"
+cleanup
