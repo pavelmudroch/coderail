@@ -78,7 +78,7 @@ run_command() {
     command=$1
     shift
     args="$@"
-    script="$ROOT_DIR/lib/$command.sh"
+    script="$ROOT_DIR/lib/command/$command.sh"
 
     [ -f "$script" ] || error "$command is not implemented"
 

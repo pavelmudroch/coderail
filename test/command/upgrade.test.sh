@@ -7,13 +7,13 @@ SCRIPT_DIR=$(
     pwd
 )
 ROOT_DIR=$(
-    CDPATH= cd -- "$SCRIPT_DIR/.."
+    CDPATH= cd -- "$SCRIPT_DIR/../.."
     pwd
 )
 
-. "$SCRIPT_DIR/suite.sh"
+. "$SCRIPT_DIR/../suite.sh"
 
-UPGRADE_SCRIPT="$ROOT_DIR/lib/upgrade.sh"
+UPGRADE_SCRIPT="$ROOT_DIR/lib/command/upgrade.sh"
 
 run_upgrade_status() {
     if sh "$UPGRADE_SCRIPT" "$@" >/dev/null 2>&1; then

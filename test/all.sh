@@ -8,7 +8,7 @@ SCRIPT_DIR=$(
 )
 
 some_tests_failed=false
-test_files=$(ls "$SCRIPT_DIR"/*.test.sh)
+test_files=$(find "$SCRIPT_DIR" -type f -name '*.test.sh')
 for test_file in $test_files; do
     echo "Running $test_file"
     echo "-----------------------------"
