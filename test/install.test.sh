@@ -366,3 +366,5 @@ run_test "rollback when bin dir path is a file" "status=1 home=no bin_file=yes m
 run_test "rollback existing install when source instructions are missing" "status=1 old_file=yes link=yes target=yes message=yes tmp=0" missing_source_instructions_rollback_test
 run_test "rollback fresh install when installed cr is missing" "status=1 home=no link=no message=yes tmp=0" missing_installed_cr_rollback_test
 run_test "rollback fresh install when target has broken cr link" "status=1 home=no broken_link=yes message=yes tmp=0" broken_target_link_rollback_test
+
+test_exit

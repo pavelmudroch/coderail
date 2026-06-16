@@ -71,3 +71,5 @@ run_get_absolute_path_failing_test "relative non-existing file with missing pare
 
 cd "$SCRIPT_DIR"
 run_get_absolute_path_test "relative to script directory" "../lib/utils/get-absolute-path.sh" "$ROOT_DIR/lib/utils/get-absolute-path.sh"
+
+test_exit

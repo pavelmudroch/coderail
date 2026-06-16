@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 
 TEST_INDEX=0
+ALL_TESTS_PASSED=true
 
 assert_equal() {
     expected=$1
@@ -27,7 +28,12 @@ run_test() {
     test_function=$3
 
     print_test "$message"
-    actual=$($test_function 2>&1) || { echo "[ fail ]"; echo " > $actual"; return; }
+    actual=$($test_function 2>&1) || {
+        echo "[ fail ]"
+        echo " > $actual"
+        ALL_TESTS_PASSED=false
+        return
+    }
 
     assert_equal "$expected" "$actual"
 }
@@ -41,6 +47,7 @@ run_failing_test() {
     if actual="$($test_function)"; then
         echo "[ fail ]"
         echo " > expected failure, got '$actual'"
+        ALL_TESTS_PASSED=false
         return
     else
         actual_exit_code=$?
@@ -49,6 +56,15 @@ run_failing_test() {
         else
             echo "[ fail ]"
             echo " > expected exit code $exit_code, got $actual_exit_code"
+            ALL_TESTS_PASSED=false
         fi
+    fi
+}
+
+test_exit() {
+    if [ "$ALL_TESTS_PASSED" = true ]; then
+        exit 0
+    else
+        exit 1
     fi
 }

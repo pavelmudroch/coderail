@@ -80,3 +80,5 @@ run_get_link_target_path_test "relative input link chain" "relative-link-chain" 
 
 cd "$SCRIPT_DIR"
 run_get_link_target_path_test "relative to script directory non-link" "../lib/utils/get-link-target-path.sh" "../lib/utils/get-link-target-path.sh"
+
+test_exit
