@@ -32,6 +32,8 @@ usage() {
 Usage:
   cr [options] <command>
 
+  CodeRail CLI tool for agent-based development
+
 Options:
   -h, --help            Show this help message and exit
   --version             Show version information and exit
@@ -74,6 +76,8 @@ set_work_dir() {
 
 run_command() {
     command=$1
+    shift
+    args="$@"
     script="$ROOT_DIR/lib/$command.sh"
 
     [ -f "$script" ] || error "$command is not implemented"
@@ -82,10 +86,10 @@ run_command() {
         [ -d "$work_dir" ] || error "--work-dir is not a directory: $work_dir"
         (
             cd "$work_dir"
-            sh "$script"
+            sh "$script" $args
         )
     else
-        sh "$script"
+        sh "$script" $args
     fi
 }
 
@@ -122,17 +126,15 @@ while [ "$#" -gt 0 ]; do
         upgrade|install|clear)
             command=$1
             shift
-            require_no_args "$@"
             [ "$work_dir_set" -eq 0 ] || error "--work-dir is not valid for $command"
-            run_command "$command"
+            run_command "$command" $@
             exit 0
             ;;
         init|ticket|test|check)
             command=$1
             shift
-            require_no_args "$@"
             uses_work_dir=1
-            run_command "$command"
+            run_command "$command" $@
             exit 0
             ;;
         --*)
