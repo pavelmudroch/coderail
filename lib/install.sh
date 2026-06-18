@@ -236,8 +236,9 @@ ensure_writable_dir "$cr_link_target_dir"
 cp -R "$ROOT_DIR/instructions" "$install_target_dir/" || error "Failed to install into '$install_target_dir'."
 cp -R "$ROOT_DIR/bin" "$install_target_dir/" || error "Failed to install into '$install_target_dir'."
 cp -R "$ROOT_DIR/lib" "$install_target_dir/" || error "Failed to install into '$install_target_dir'."
+cp "$ROOT_DIR/INSTALL" "$install_target_dir/" || error "Failed to install into '$install_target_dir'."
 touch "$install_target_dir/$INSTALL_MARKER" || error "Failed to install into '$install_target_dir'."
-ln -s "$install_target_dir/bin/cr" "$cr_link" || error "Failed to install '$CODERAIL_COMMAND' command."
+ln -s "$install_target_dir/bin/$CODERAIL_COMMAND" "$cr_link" || error "Failed to install '$CODERAIL_COMMAND' command."
 cr_link_created=true
 chmod +x "$cr_link" || error "Failed to install '$CODERAIL_COMMAND' command."
 

@@ -10,15 +10,57 @@ SCRIPT_DIR=$(
 OWNER="${CODERAIL_OWNER:-pavelmudroch}"
 REPO="${CODERAIL_REPO:-coderail}"
 VERSION="${CODERAIL_VERSION:-latest}"
-DOWNLOAD_URL="https://github.com/$OWNER/$REPO/archive/refs/tags/$VERSION.tar.gz"
 
 tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/coderail.XXXXXX")"
 tarball="$tmp_dir/coderail.tar.gz"
+
+error() {
+    echo "error: $*" >&2
+    exit 1
+}
 
 cleanup() {
     rm -rf "$tmp_dir"
 }
 trap cleanup EXIT HUP INT TERM
+
+get_download_url() {
+    case "$VERSION" in
+        latest)
+            printf 'https://github.com/%s/%s/archive/refs/tags/latest.tar.gz\n' "$OWNER" "$REPO"
+            ;;
+        main)
+            printf 'https://github.com/%s/%s/archive/refs/heads/main.tar.gz\n' "$OWNER" "$REPO"
+            ;;
+        v*)
+            printf 'https://github.com/%s/%s/archive/refs/tags/%s.tar.gz\n' "$OWNER" "$REPO" "$VERSION"
+            ;;
+        *)
+            printf 'https://github.com/%s/%s/archive/refs/tags/v%s.tar.gz\n' "$OWNER" "$REPO" "$VERSION"
+            ;;
+    esac
+}
+
+find_install_script() {
+    if [ -f "$tmp_dir/lib/install.sh" ]; then
+        printf '%s\n' "$tmp_dir/lib/install.sh"
+        return
+    fi
+
+    install_script=
+    for entry in "$tmp_dir"/*; do
+        [ -d "$entry" ] || continue
+        [ -f "$entry/lib/install.sh" ] || continue
+        [ -z "$install_script" ] || error "archive contains multiple lib/install.sh files"
+
+        install_script="$entry/lib/install.sh"
+    done
+
+    [ -n "$install_script" ] || error "archive does not contain lib/install.sh"
+    printf '%s\n' "$install_script"
+}
+
+DOWNLOAD_URL=$(get_download_url)
 
 echo "Downloading coderail from $DOWNLOAD_URL..."
 if command -v curl >/dev/null 2>&1; then
@@ -26,17 +68,13 @@ if command -v curl >/dev/null 2>&1; then
 elif command -v wget >/dev/null 2>&1; then
     wget -qO "$tarball" "$DOWNLOAD_URL"
 else
-    echo "error: curl or wget is required" >&2
-    exit 1
+    error "curl or wget is required"
 fi
 
 tar -xzf "$tarball" -C "$tmp_dir"
 rm -f "$tarball"
 
-if [ ! -f "$tmp_dir/lib/install.sh" ]; then
-    echo "error: archive does not contain lib/install.sh" >&2
-    exit 1
-fi
+install_script=$(find_install_script)
 
-sh "$tmp_dir/lib/install.sh"
+sh "$install_script"
 cleanup

@@ -40,6 +40,7 @@ create_case() {
 create_source_copy() {
     CASE_SOURCE="$CASE_DIR/source"
     mkdir -p "$CASE_SOURCE"
+    cp "$ROOT_DIR/INSTALL" "$CASE_SOURCE/"
     cp -R "$ROOT_DIR/instructions" "$CASE_SOURCE/"
     cp -R "$ROOT_DIR/bin" "$CASE_SOURCE/"
     cp -R "$ROOT_DIR/lib" "$CASE_SOURCE/"
@@ -144,12 +145,13 @@ log_contains() {
 }
 
 print_install_summary() {
-    printf 'status=%s marker=%s instructions=%s bin=%s lib=%s link=%s target=%s tmp=%s' \
+    printf 'status=%s marker=%s instructions=%s bin=%s lib=%s install=%s link=%s target=%s tmp=%s' \
         "$INSTALL_STATUS" \
         "$(file_exists "$CASE_CODERAIL_HOME/.coderail-install")" \
         "$(dir_exists "$CASE_CODERAIL_HOME/instructions")" \
         "$(dir_exists "$CASE_CODERAIL_HOME/bin")" \
         "$(dir_exists "$CASE_CODERAIL_HOME/lib")" \
+        "$(file_exists "$CASE_CODERAIL_HOME/INSTALL")" \
         "$(link_exists "$CASE_BIN/cr")" \
         "$(link_target_matches "$CASE_BIN/cr" "$CASE_CODERAIL_HOME/bin/cr")" \
         "$(tmp_entry_count)"
@@ -179,10 +181,11 @@ reinstall_test() {
     printf 'old install\n' > "$CASE_CODERAIL_HOME/old-file"
     capture_install_status
 
-    printf 'status=%s marker=%s old_file=%s link=%s target=%s tmp=%s' \
+    printf 'status=%s marker=%s old_file=%s install=%s link=%s target=%s tmp=%s' \
         "$INSTALL_STATUS" \
         "$(file_exists "$CASE_CODERAIL_HOME/.coderail-install")" \
         "$(file_exists "$CASE_CODERAIL_HOME/old-file")" \
+        "$(file_exists "$CASE_CODERAIL_HOME/INSTALL")" \
         "$(link_exists "$CASE_BIN/cr")" \
         "$(link_target_matches "$CASE_BIN/cr" "$CASE_CODERAIL_HOME/bin/cr")" \
         "$(tmp_entry_count)"
@@ -353,8 +356,8 @@ broken_target_link_rollback_test() {
         "$(tmp_entry_count)"
 }
 
-run_test "clean install" "status=0 marker=yes instructions=yes bin=yes lib=yes link=yes target=yes tmp=0" clean_install_test
-run_test "reinstall overrides previous install" "status=0 marker=yes old_file=no link=yes target=yes tmp=0" reinstall_test
+run_test "clean install" "status=0 marker=yes instructions=yes bin=yes lib=yes install=yes link=yes target=yes tmp=0" clean_install_test
+run_test "reinstall overrides previous install" "status=0 marker=yes old_file=no install=yes link=yes target=yes tmp=0" reinstall_test
 run_test "fail when user bin prompt is declined" "status=1 marker=no link=no message=yes tmp=0" prompt_decline_test
 run_test "fail when unrelated cr is in PATH" "status=1 marker=no link=no message=yes tmp=0" unrelated_cr_in_path_test
 run_test "fail when multiple cr commands are in PATH" "status=1 target_cr=yes message=yes tmp=0" multiple_cr_in_path_test

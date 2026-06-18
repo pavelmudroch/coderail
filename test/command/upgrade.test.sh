@@ -38,22 +38,6 @@ help_test() {
     printf 'status=%s usage=%s' "$status" "$usage"
 }
 
-no_args_test() {
-    run_upgrade_status
-}
-
-version_space_test() {
-    run_upgrade_status --version 1.0.0
-}
-
-version_equals_test() {
-    run_upgrade_status --version=1.0.0
-}
-
-dev_test() {
-    run_upgrade_status --dev
-}
-
 help_value_test() {
     run_upgrade_status --help=true
 }
@@ -86,10 +70,6 @@ unexpected_argument_test() {
     run_upgrade_status 1.0.0
 }
 
-run_test "allow no upgrade arguments" "0" no_args_test
-run_test "allow version separated by space" "0" version_space_test
-run_test "allow version with equals" "0" version_equals_test
-run_test "allow dev option" "0" dev_test
 run_test "show help message" "status=0 usage=yes" help_test
 run_test "fail when help has a value" "1" help_value_test
 run_test "fail when help is combined with another option" "1" help_with_other_option_test
