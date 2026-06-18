@@ -5,13 +5,14 @@ set -eu
 usage() {
     cat <<'EOF'
 Usage:
-  cr install [options] <tool> [...<tool>]
+  cr clear [options] <tool> [...<tool>]
 
-  Install instructions for specific agent-based tool
+  Clear installed instructions for specific agent-based tool
 
 Options:
   --help                Show this help message and exit
-  --force               Override untracked and modified files
+  --force               Clear modified files without confirmation
+  -y, --yes             Auto confirm clearing modified files
 
 Tools:
   codex
