@@ -1,0 +1,150 @@
+#!/usr/bin/env sh
+
+set -eu
+
+script_path=$0
+
+while [ -L "$script_path" ]; do
+    script_dir=$(
+        CDPATH= cd -- "$(dirname "$script_path")"
+        pwd
+    )
+    link_target=$(readlink "$script_path")
+
+    case "$link_target" in
+        /*) script_path=$link_target ;;
+        *) script_path=$script_dir/$link_target ;;
+    esac
+done
+
+SCRIPT_DIR=$(
+    CDPATH= cd -- "$(dirname "$script_path")"
+    pwd
+)
+
+ROOT_DIR=$(
+    CDPATH= cd -- "$SCRIPT_DIR/.."
+    pwd
+)
+
+. "$ROOT_DIR/lib/utils/log.sh"
+. "$ROOT_DIR/lib/utils/args.sh"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  cr [options] <command>
+
+  CodeRail CLI tool for agent-based development
+
+Options:
+  -h, --help            Show this help message and exit
+  --version             Show version information and exit
+  -v, --verbose         Enable verbose logging
+  -q, --quiet           Suppress non-error output
+  --cwd=<dir>, --cwd <dir>
+                        Specify the current working directory
+
+Commands:
+  upgrade             Upgrade this cli tool to a different version
+  install             Install instructions for specific agent-based tool
+  uninstall           Uninstall instructions for specific agent-based tool
+  init                Initialize a new project in the working directory
+  ticket              Ticket management for the project in the working directory
+  test                Run defined checks for the project in the working directory
+EOF
+}
+
+error() {
+    log_usage_error "$@"
+}
+
+version() {
+    log_info "cr version 0.1.0"
+}
+
+set_work_dir() {
+    [ "$work_dir_set" -eq 0 ] || error "--cwd provided multiple times"
+    [ -n "$1" ] || error "--cwd requires a non-empty value"
+
+    work_dir=$1
+    work_dir_set=1
+}
+
+run_command() {
+    command=$1
+    shift
+    script="$ROOT_DIR/lib/commands/$command.sh"
+
+    [ -f "$script" ] || error "$command is not implemented"
+
+    [ -d "$work_dir" ] || error "--cwd is not a directory: $work_dir"
+
+    cd "$work_dir"
+    sh "$script" "$@"
+}
+
+work_dir=.
+work_dir_set=0
+export log_verbose=0
+export log_quiet=0
+
+[ "$#" -gt 0 ] || error "missing command"
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            shift
+            require_no_args "$@"
+            usage
+            exit 0
+            ;;
+        --version)
+            shift
+            require_no_args "$@"
+            version
+            exit 0
+            ;;
+        -v|--verbose)
+            log_verbose=1
+            shift
+            [ "$log_quiet" -eq 0 ] || error "--verbose and --quiet cannot be used together"
+            ;;
+        -q|--quiet)
+            log_quiet=1
+            shift
+            [ "$log_verbose" -eq 0 ] || error "--verbose and --quiet cannot be used together"
+            ;;
+        --cwd=*)
+            set_work_dir "${1#--cwd=}"
+            shift
+            ;;
+        --cwd)
+            shift
+            [ "$#" -gt 0 ] || error "--cwd requires a value"
+            set_work_dir "$1"
+            shift
+            ;;
+        upgrade|install|uninstall)
+            command=$1
+            shift
+            [ "$work_dir_set" -eq 0 ] || error "--cwd is not valid for $command"
+            run_command "$command" "$@"
+            exit 0
+            ;;
+        init|ticket|test|check)
+            command=$1
+            shift
+            run_command "$command" "$@"
+            exit 0
+            ;;
+        --*)
+            error "unknown option: $1"
+            ;;
+        *)
+            error "unknown command: $1"
+            ;;
+    esac
+done
+
+error "missing command"
