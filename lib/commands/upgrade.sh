@@ -9,7 +9,7 @@ Usage:
 
 Options:
   -h, --help            Show this help message and exit
-  --version=<version>, --version <version>
+  --version <version>
                         Upgrade to a specific version, default is latest
   --canary              Upgrade to the latest build from main branch
 EOF

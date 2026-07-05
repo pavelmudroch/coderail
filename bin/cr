@@ -42,16 +42,16 @@ Options:
   --version             Show version information and exit
   -v, --verbose         Enable verbose logging
   -q, --quiet           Suppress non-error output
-  --cwd=<dir>, --cwd <dir>
+  --cwd <dir>
                         Specify the current working directory
 
 Commands:
-  upgrade             Upgrade this cli tool to a different version
-  install             Install instructions for specific agent-based tool
-  uninstall           Uninstall instructions for specific agent-based tool
-  init                Initialize a new project in the working directory
-  ticket              Ticket management for the project in the working directory
-  test                Run defined checks for the project in the working directory
+  upgrade       Upgrade this cli tool to a different version
+  install       Install instructions for specific agent-based tool
+  uninstall     Uninstall instructions for specific agent-based tool
+  init          Initialize a new project in the working directory
+  ticket        Ticket management for the project in the working directory
+  test          Run defined checks for the project in the working directory
 EOF
 }
 
