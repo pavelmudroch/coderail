@@ -1,6 +1,7 @@
 ---
 name: to-spec
 description: Guide for turning current conversation, plan context, and codebase understanding into an implementation spec. Use when the user wants to create a spec for a complex feature, refactor, or change.
+disable-model-invocation: true
 ---
 
 This skill takes the current conversation context and codebase understanding and produces an implementation spec. Do not interview the user by default. Synthesize what is already known. If important assumptions remain, record them clearly in the spec instead of blocking progress.

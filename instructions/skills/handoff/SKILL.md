@@ -1,6 +1,7 @@
 ---
 name: handoff
 description: Guide for handing off resolved decisions to other agent thread or team member.
+disable-model-invocation: true
 ---
 Write the summary as a handoff artifact, not a spec that freezes implementation details.
 Must contain resolved decisions explicitly and leave only genuinely unresolved items open.

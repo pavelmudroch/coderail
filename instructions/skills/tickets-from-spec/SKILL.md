@@ -1,6 +1,7 @@
 ---
 name: tickets-from-spec
 description: Guidance for creating tickets from a SPEC.
+disable-model-invocation: true
 ---
 Understand the SPEC and identify the key implementation units that need to be implemented. Create local tickets by default. Break down the SPEC into smaller, manageable local tickets. Use <skill>ticket-create</skill> skill when defining each ticket.
 

@@ -1,6 +1,7 @@
 ---
 name: code-simplify
 description: Simplify and refactor code to improve readability and maintainability.
+disable-model-invocation: true
 ---
 Read the code and identify following problems and fix them:
 
