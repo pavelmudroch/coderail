@@ -10,7 +10,11 @@ Coderail is not a permanent issue tracker or full project management platform. I
 
 ## Purpose
 
-Coderail exists to keep agents on rails while they work.
+Coderail exists to keep agents on rails while they work. And is trying to unify the behavior between different agent tools, currently including:
+- `codex` (OpenAI Codex)
+- `claude` (Anthropic Claude)
+- `copilot` (GitHub Copilot)
+- `gemini` (Google Gemini)
 
 It gives agents a small set of commands for:
 
@@ -157,6 +161,8 @@ Placeholders:
 ```txt
 {path}   one path; command repeats once per path
 ```
+
+## Usage
 
 ## Inspirations
 
