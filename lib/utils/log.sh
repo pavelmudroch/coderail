@@ -1,15 +1,10 @@
 #!/usr/bin/env sh
 
-if [ ! "${log_verbose+x}" ]; then
-    log_verbose=false
-fi
-
-if [ ! "${log_quiet+x}" ]; then
-    log_quiet=false
-fi
+: "${log_verbose:=0}"
+: "${log_quiet:=0}"
 
 log_notice() {
-    if [ "$log_quiet" = true ] || [ "$log_verbose" = false ]; then
+    if [ "$log_quiet" = 1 ] || [ "$log_verbose" = 0 ]; then
         return
     fi
     message=$1
@@ -17,7 +12,7 @@ log_notice() {
 }
 
 log_info() {
-    if [ "$log_quiet" = true ]; then
+    if [ "$log_quiet" = 1 ]; then
         return
     fi
     message=$1
@@ -25,9 +20,6 @@ log_info() {
 }
 
 log_error() {
-    if [ "$log_quiet" = true ]; then
-        return
-    fi
     message=$1
     echo "error: $message" >&2
 }
