@@ -7,3 +7,5 @@ Interview user relentlessly about every aspect of this plan until shared underst
 Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
 
 If a question can be answered by exploring the codebase or other source use <skill>research</skill>.
+
+Ask question one at a time, wait for feedback before continue. Provide recommended answer.
