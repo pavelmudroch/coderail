@@ -89,8 +89,13 @@ assert_clean_init() {
 
     assert_dir "$work_dir/.coderail"
     assert_empty_dir "$work_dir/.coderail/tickets"
-    assert_file_content "$work_dir/.coderail/conf.ini" "# conf.ini"
-    assert_file_content "$work_dir/.coderail/test.map" "# test.map"
+    assert_file_content "$work_dir/.coderail/conf.ini" "# characters after '#' are comments
+# default_tool = codex # set the default tool for cr"
+    assert_file_content "$work_dir/.coderail/test.map" "# characters after '#' are comments
+
+[default]
+# Add commands that run always
+# biome lint {path} - use dynamic {path} for substitution of current test file path"
 }
 
 assert_init_preserves_existing_files() {
@@ -105,7 +110,11 @@ assert_init_preserves_existing_files() {
     assert_file_content "$work_dir/.coderail/conf.ini" "user conf"
     assert_file_content "$work_dir/project.txt" "project file"
     assert_empty_dir "$work_dir/.coderail/tickets"
-    assert_file_content "$work_dir/.coderail/test.map" "# test.map"
+    assert_file_content "$work_dir/.coderail/test.map" "# characters after '#' are comments
+
+[default]
+# Add commands that run always
+# biome lint {path} - use dynamic {path} for substitution of current test file path"
 }
 
 assert_init_without_write_permission_fails() {
