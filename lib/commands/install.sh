@@ -27,11 +27,14 @@ ROOT_DIR=$(
     pwd
 )
 
+. "$ROOT_DIR/lib/utils/log.sh"
+
 TEMP_DIR="${TMPDIR:-/tmp}"
 TEMP_DIR=${TEMP_DIR%/}
 tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-install.XXXXXX")
 
 cleanup() {
+    log_notice "Cleaning up temporary files"
     rm -rf "$tmp_dir"
 }
 trap cleanup EXIT HUP INT TERM
@@ -347,6 +350,9 @@ render_skills() {
 
         mkdir -p "$(dirname "$target_file")"
 
+        relative_file_path="skills/${source_file#*/skills/}"
+        log_notice "installing $relative_file_path for $tool"
+
         case "$rel_path" in
             */SKILL.md|SKILL.md)
                 render_skill_file "$tool" "$source_file" "$target_file"
@@ -370,8 +376,11 @@ render_agents() {
     [ -d "$source_dir" ] || return 0
 
     find "$source_dir" -type f -name '*.md' | sort | while IFS= read -r source_file; do
+        file_name=$(basename "$source_file")
         agent_name=${source_file##*/}
         agent_name=${agent_name%.md}
+
+        log_notice "installing agents/$file_name for $tool"
 
         case "$tool" in
             codex) target_file=$stage_dir/agents/$agent_name.toml ;;
@@ -392,6 +401,7 @@ render_tool() {
 
     mkdir -p "$stage_dir"
     translate_file "$tool" "$ROOT_DIR/instructions/AGENTS.md" "$stage_dir/$root_file"
+    log_notice "installing $root_file for $tool"
     render_skills "$tool" "$stage_dir"
     render_agents "$tool" "$stage_dir"
 }
@@ -512,6 +522,8 @@ validate_install() {
     new_manifest=$3
     old_manifest=$tool_root/.coderail-install
 
+    log_notice "validating install at $tool_root"
+
     [ ! -e "$tool_root" ] || [ -d "$tool_root" ] ||
         install_error "tool root exists and is not a directory: $tool_root"
 
@@ -569,7 +581,9 @@ write_manifest() {
 
 install_tool() {
     tool=$1
+    log_info "Installing tool: $tool"
     tool_root=$(target_root "$tool")
+    log_notice "root set to: $tool_root"
     tool_tmp=$tmp_dir/$tool
     stage_dir=$tool_tmp/stage
     new_manifest=$tool_tmp/manifest
