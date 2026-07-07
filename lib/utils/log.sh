@@ -1,14 +1,19 @@
 #!/usr/bin/env sh
 
-log_verbose=false
-log_quiet=false
+if [ ! "${log_verbose+x}" ]; then
+    log_verbose=false
+fi
+
+if [ ! "${log_quiet+x}" ]; then
+    log_quiet=false
+fi
 
 log_notice() {
     if [ "$log_quiet" = true ] || [ "$log_verbose" = false ]; then
         return
     fi
     message=$1
-    echo " > $message"
+    echo "\033[90m > $message\033[0m"
 }
 
 log_info() {
