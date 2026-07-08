@@ -4,19 +4,6 @@ set -eu
 
 script_path=$0
 
-while [ -L "$script_path" ]; do
-    script_dir=$(
-        CDPATH= cd -- "$(dirname "$script_path")"
-        pwd
-    )
-    link_target=$(readlink "$script_path")
-
-    case "$link_target" in
-        /*) script_path=$link_target ;;
-        *) script_path=$script_dir/$link_target ;;
-    esac
-done
-
 SCRIPT_DIR=$(
     CDPATH= cd -- "$(dirname "$script_path")"
     pwd
