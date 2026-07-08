@@ -2,6 +2,33 @@
 
 set -eu
 
+script_path=$0
+
+while [ -L "$script_path" ]; do
+    script_dir=$(
+        CDPATH= cd -- "$(dirname "$script_path")"
+        pwd
+    )
+    link_target=$(readlink "$script_path")
+
+    case "$link_target" in
+        /*) script_path=$link_target ;;
+        *) script_path=$script_dir/$link_target ;;
+    esac
+done
+
+SCRIPT_DIR=$(
+    CDPATH= cd -- "$(dirname "$script_path")"
+    pwd
+)
+
+ROOT_DIR=$(
+    CDPATH= cd -- "$SCRIPT_DIR/../.."
+    pwd
+)
+
+. "$ROOT_DIR/lib/utils/log.sh"
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -338,18 +365,41 @@ collect_commands() {
     done < "$map_records"
 }
 
+print_failed_command_output() {
+    print_output_command=$1
+    print_output_file=$2
+
+    [ "$log_quiet" = 0 ] && [ "$log_verbose" = 1 ] || return 0
+
+    log_notice "failed command: $print_output_command"
+
+    if [ ! -s "$print_output_file" ]; then
+        log_notice "failed command output: <empty>"
+        return
+    fi
+
+    log_notice "failed command output:"
+
+    while IFS= read -r print_output_line || [ -n "$print_output_line" ]; do
+        log_notice "$print_output_line"
+    done < "$print_output_file"
+}
+
 run_commands() {
     run_command_index=0
 
     while IFS= read -r run_command || [ -n "$run_command" ]; do
         run_command_index=$((run_command_index + 1))
+        run_command_output=$tmp_dir/command-output
 
         set +e
-        sh -c "$run_command"
+        sh -c "$run_command" > "$run_command_output" 2>&1
         run_command_status=$?
         set -e
 
         if [ "$run_command_status" -ne 0 ]; then
+            print_failed_command_output "$run_command" "$run_command_output"
+
             while IFS= read -r failed_path || [ -n "$failed_path" ]; do
                 append_unique_line "$failed_paths_file" "$failed_path"
             done < "$command_paths_dir/$run_command_index"
