@@ -17,7 +17,8 @@ Commands:
   next                  List open tickets with satisfied dependencies
   close                 Close an active ticket
   activate              Activate an open ticket
-  reopen                Reopen a closed or active ticket
+  deactivate            Deactivate an active ticket
+  reopen                Reopen a closed ticket
   validate              Validate tickets format
   clean                 Clean up tickets
 EOF
@@ -74,7 +75,7 @@ ticket_command=$1
 shift
 
 case "$ticket_command" in
-    create|next|close|activate|reopen|validate|clean)
+    create|next|close|activate|deactivate|reopen|validate|clean)
         run_ticket_command "$ticket_command" "$@"
         ;;
     *)

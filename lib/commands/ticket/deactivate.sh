@@ -21,19 +21,19 @@ ROOT_DIR=$(
 usage() {
     cat <<'EOF'
 Usage:
-  cr ticket reopen [options] <ticket>
+  cr ticket deactivate [options] <ticket>
 
-  Reopen a closed ticket for the current repository.
+  Deactivate an active ticket for the current repository.
 
 Options:
   -h, --help            Show this help message and exit
   -d <ticket>, --depends-on <ticket>
-                        Specify a ticket that this reopened ticket depends on.
+                        Specify a ticket that this deactivated ticket depends on.
                         Can be specified multiple times to add multiple dependencies.
                         Accepts ticket ID, name, or path.
 
 Arguments:
-  <ticket>    The ticket to reopen, specified by its ID, name, or path
+  <ticket>    The ticket to deactivate, specified by its ID, name, or path
 EOF
 }
 
@@ -122,14 +122,14 @@ log_notice "located ticket: $ticket_path"
 log_notice "validating ticket: $ticket_path"
 ticket_validate_file "$project_dir" "$ticket_file"
 
-log_notice "verifying closed ticket: $ticket_path"
-if ! ticket_is_state "$ticket_file" closed; then
-    fatal "ticket must be closed: $ticket_path"
+log_notice "verifying active ticket: $ticket_path"
+if ! ticket_is_state "$ticket_file" active; then
+    fatal "ticket must be active: $ticket_path"
 fi
-log_notice "verified closed ticket: $ticket_path"
+log_notice "verified active ticket: $ticket_path"
 
 log_notice "moving ticket to open: $ticket_path"
 open_ticket_path=$(ticket_open_with_dependencies "$project_dir" "$ticket_file" "$depends_on")
-log_notice "reopened ticket: $open_ticket_path"
+log_notice "deactivated ticket: $open_ticket_path"
 
 printf '%s\n' "$open_ticket_path"

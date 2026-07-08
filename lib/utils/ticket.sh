@@ -12,6 +12,33 @@ _ticket_valid_state() {
     esac
 }
 
+_ticket_normalize_id() {
+    [ "$#" -eq 1 ] || _ticket_error "_ticket_normalize_id expects 1 argument" || return 1
+
+    _ticket_normalize_id_value=$1
+
+    case "$_ticket_normalize_id_value" in
+        ''|*[!0123456789]*)
+            _ticket_error "invalid ticket id: $_ticket_normalize_id_value"
+            return 1
+            ;;
+    esac
+
+    case "$_ticket_normalize_id_value" in
+        *[123456789]*) ;;
+        *)
+            _ticket_error "ticket id must be positive: $_ticket_normalize_id_value"
+            return 1
+            ;;
+    esac
+
+    while [ "${#_ticket_normalize_id_value}" -lt 4 ]; do
+        _ticket_normalize_id_value=0$_ticket_normalize_id_value
+    done
+
+    printf '%s\n' "$_ticket_normalize_id_value"
+}
+
 _ticket_project_dir() {
     _ticket_project_dir_path=$1
 
@@ -38,6 +65,93 @@ _ticket_file_path() {
     _ticket_file_path_base=$(basename "$1")
 
     printf '%s/%s\n' "$_ticket_file_path_dir" "$_ticket_file_path_base"
+}
+
+_ticket_existing_path_reference() {
+    _ticket_existing_project=$1
+    _ticket_existing_reference=$2
+
+    case "$_ticket_existing_reference" in
+        /*) _ticket_existing_file=$_ticket_existing_reference ;;
+        *) _ticket_existing_file=$_ticket_existing_project/$_ticket_existing_reference ;;
+    esac
+
+    [ -f "$_ticket_existing_file" ] ||
+        _ticket_error "ticket path not found: $_ticket_existing_reference" ||
+        return 1
+
+    _ticket_existing_base=$(basename "$_ticket_existing_file")
+    case "$_ticket_existing_base" in
+        *.md) ;;
+        *)
+            _ticket_error "ticket path must have .md extension: $_ticket_existing_reference"
+            return 1
+            ;;
+    esac
+
+    _ticket_existing_project_path=$(_ticket_project_dir "$_ticket_existing_project") || return 1
+    _ticket_existing_dir=$(_ticket_file_dir "$_ticket_existing_file") || return 1
+
+    for _ticket_existing_state in open active closed; do
+        if [ "$_ticket_existing_dir" = "$_ticket_existing_project_path/.coderail/tickets/$_ticket_existing_state" ]; then
+            printf '.coderail/tickets/%s/%s\n' "$_ticket_existing_state" "$_ticket_existing_base"
+            return 0
+        fi
+    done
+
+    _ticket_error "ticket path is not under .coderail/tickets: $_ticket_existing_reference"
+    return 1
+}
+
+_ticket_search_reference() {
+    _ticket_search_project=$1
+    _ticket_search_mode=$2
+    _ticket_search_value=$3
+    _ticket_search_reference=$4
+    _ticket_search_count=0
+    _ticket_search_match=
+
+    for _ticket_search_state in open active closed; do
+        _ticket_search_dir=$_ticket_search_project/.coderail/tickets/$_ticket_search_state
+
+        for _ticket_search_file in "$_ticket_search_dir"/*.md; do
+            [ -f "$_ticket_search_file" ] || continue
+
+            _ticket_search_base=$(basename "$_ticket_search_file")
+            case "$_ticket_search_mode" in
+                id)
+                    _ticket_search_current=$(ticket_id_from_name "$_ticket_search_base" 2>/dev/null) || continue
+                    ;;
+                name)
+                    _ticket_search_current=$_ticket_search_base
+                    ;;
+                slug)
+                    _ticket_search_current=$(ticket_slug_from_name "$_ticket_search_base" 2>/dev/null) || continue
+                    ;;
+                *)
+                    _ticket_error "unknown ticket reference search mode: $_ticket_search_mode"
+                    return 1
+                    ;;
+            esac
+
+            [ "$_ticket_search_current" = "$_ticket_search_value" ] || continue
+
+            _ticket_search_count=$((_ticket_search_count + 1))
+            _ticket_search_match=.coderail/tickets/$_ticket_search_state/$_ticket_search_base
+
+            if [ "$_ticket_search_count" -gt 1 ]; then
+                _ticket_error "ambiguous ticket reference: $_ticket_search_reference"
+                return 1
+            fi
+        done
+    done
+
+    if [ "$_ticket_search_count" -eq 0 ]; then
+        _ticket_error "ticket reference not found: $_ticket_search_reference"
+        return 1
+    fi
+
+    printf '%s\n' "$_ticket_search_match"
 }
 
 _ticket_frontmatter_value() {
@@ -142,6 +256,117 @@ _ticket_rewrite_lifecycle() {
         _ticket_error "failed to update ticket file: $_ticket_rewrite_file"
         return 1
     fi
+}
+
+ticket_slugify_title() {
+    [ "$#" -eq 1 ] || _ticket_error "ticket_slugify_title expects 1 argument" || return 1
+
+    _ticket_slugify_slug=$(
+        awk -v value="$1" '
+            BEGIN {
+                value = tolower(value)
+                gsub(/[^abcdefghijklmnopqrstuvwxyz0123456789]+/, "-", value)
+                gsub(/^-+/, "", value)
+                gsub(/-+$/, "", value)
+                print value
+            }
+        '
+    )
+
+    [ -n "$_ticket_slugify_slug" ] ||
+        _ticket_error "ticket title cannot be slugified: $1" ||
+        return 1
+
+    printf '%s\n' "$_ticket_slugify_slug"
+}
+
+ticket_id_from_name() {
+    [ "$#" -eq 1 ] || _ticket_error "ticket_id_from_name expects 1 argument" || return 1
+
+    _ticket_id_name=$(basename "$1")
+    _ticket_id_name=${_ticket_id_name%.md}
+
+    case "$_ticket_id_name" in
+        *-*) _ticket_id_value=${_ticket_id_name%%-*} ;;
+        *)
+            _ticket_error "ticket name must start with id: $1"
+            return 1
+            ;;
+    esac
+
+    case "$_ticket_id_value" in
+        ''|*[!0123456789]*)
+            _ticket_error "invalid ticket id in name: $1"
+            return 1
+            ;;
+    esac
+
+    case "$_ticket_id_value" in
+        *[123456789]*) ;;
+        *)
+            _ticket_error "ticket id must be positive in name: $1"
+            return 1
+            ;;
+    esac
+
+    printf '%s\n' "$_ticket_id_value"
+}
+
+ticket_slug_from_name() {
+    [ "$#" -eq 1 ] || _ticket_error "ticket_slug_from_name expects 1 argument" || return 1
+
+    _ticket_slug_name=$(basename "$1")
+    _ticket_slug_name=${_ticket_slug_name%.md}
+
+    case "$_ticket_slug_name" in
+        *-*) _ticket_slug_value=${_ticket_slug_name#*-} ;;
+        *)
+            _ticket_error "ticket name must include slug: $1"
+            return 1
+            ;;
+    esac
+
+    [ -n "$_ticket_slug_value" ] ||
+        _ticket_error "ticket slug must not be empty in name: $1" ||
+        return 1
+
+    printf '%s\n' "$_ticket_slug_value"
+}
+
+ticket_resolve_reference() {
+    [ "$#" -eq 2 ] || _ticket_error "ticket_resolve_reference expects 2 arguments" || return 1
+
+    _ticket_resolve_project=$1
+    _ticket_resolve_reference=$2
+
+    [ -n "$_ticket_resolve_reference" ] ||
+        _ticket_error "ticket reference must not be empty" ||
+        return 1
+
+    case "$_ticket_resolve_reference" in
+        */*) _ticket_existing_path_reference "$_ticket_resolve_project" "$_ticket_resolve_reference"; return $? ;;
+    esac
+
+    if _ticket_resolve_id=$(_ticket_normalize_id "$_ticket_resolve_reference" 2>/dev/null); then
+        _ticket_search_reference "$_ticket_resolve_project" id "$_ticket_resolve_id" "$_ticket_resolve_reference"
+        return $?
+    fi
+
+    if ticket_id_from_name "$_ticket_resolve_reference" >/dev/null 2>&1 &&
+        ticket_slug_from_name "$_ticket_resolve_reference" >/dev/null 2>&1
+    then
+        _ticket_resolve_name=$(basename "$_ticket_resolve_reference")
+        case "$_ticket_resolve_name" in
+            *.md) ;;
+            *) _ticket_resolve_name=$_ticket_resolve_name.md ;;
+        esac
+
+        _ticket_search_reference "$_ticket_resolve_project" name "$_ticket_resolve_name" "$_ticket_resolve_reference"
+        return $?
+    fi
+
+    _ticket_resolve_slug=$(ticket_slugify_title "$_ticket_resolve_reference") || return 1
+    _ticket_search_reference "$_ticket_resolve_project" slug "$_ticket_resolve_slug" "$_ticket_resolve_reference"
 }
 
 ticket_is_state() {
