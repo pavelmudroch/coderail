@@ -1,47 +1,56 @@
 ---
 id: 0001
-slug: some-ticket
+slug: implement-ticket-dependency-append-logic
+title: Implement Ticket Dependency Append Logic
 status: open
 created_at: 2024-06-01T12:00:00Z
 updated_at: 2024-06-01T12:00:00Z
 dependencies:
 ---
 
-# Some Ticket
+# Implement Ticket Dependency Append Logic
 
-This is brief summary or description of the ticket.
-
-## Acceptance Criteria
-
-- Acceptance criteria 1.
-- Acceptance criteria 2.
+This ticket focuses on enhancing the ticket management system by implementing logic to append dependencies without duplication.
 
 ## Tasks
 
-### [x] T001: Brief summary of task 1 (title)
+1. [x] Add shared transition helper
+2. [ ] Add dependency append logic
+
+## Task details
+
+### 1. Add shared transition helper
+
+Implement shared logic for moving a ticket back to `open/`.
 
 Expected outcome:
 
-What should be achieved after completing this task.
+- Ticket can be moved from a validated source state to `open/`.
+- Status is set to `open`.
+- `updated_at` is refreshed.
+- New relative path is printed to stdout.
 
-Validation criteria:
+Validation:
 
-The brief description of how to verify that the task is completed successfully,
-or list of specific commands to run that should pass, or both.
+- Unit tests cover moving `closed -> open`.
+- Unit tests cover moving `active -> open`.
+- Invalid source status is rejected before mutation.
 
-Dependencies: None
+### 2. Add dependency append logic
 
-### [ ] T002: Brief summary of task 2 (title)
+Support repeated `--depends-on` values and append them without duplicating existing dependencies.
 
 Expected outcome:
 
-What should be achieved after completing this task.
+- Dependencies are resolved before mutation.
+- Missing dependencies fail the command.
+- Self-dependency is rejected.
+- Existing dependency entries are preserved.
 
-Validation criteria:
+Validation:
 
-Some conditions to meet.
-
-Dependencies: T001
+- `cr ticket deactivate 0007 --depends-on 0012` adds dependency `0012`.
+- Repeating an existing dependency does not duplicate it.
 
 ## References
 

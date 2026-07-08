@@ -13,22 +13,39 @@ If ticket depends on other tickets, use `-d <ticket_id>` option to specify depen
 
 2. Edit the created file and add a brief summary/description.
 
-3. Split the ticket into clear, focused, small, actionable tasks with expected outcomes and validation criteria. Prefer independent, not file overlapping tasks, otherwise define dependencies.
-
+3. Split the ticket into clear, focused, small, actionable tasks with expected outcomes and validation criteria. Prefer independent, not file overlapping tasks.
 Task is horizontal slice within a specific layer of the system of ticket.
 
-Add each task as a checklist item in the ticket file.
+Add tasks as checkbox numbered list under `## Tasks` section. Finished tasks is marked with `[x]` and unfinished tasks with `[ ]`.
+
+```md
+## Tasks
+
+1. [ ] Task 1 title
+2. [ ] Task 2 title
+```
+
+Tasks are ordered by priority, with the most important task first.
+
+Add task details under `## Task details` section.
+
+```md
+## Task details
+
+### 1. Task 1 title
+
+some details about task 1
+```
 
 5. Optionally add any relevant links or references.
 
-## Task
+## Task Detail
 
-- Unique ID within ticket, e.g. T001, T002, etc.
-- Checkbox to indicate completion status, e.g. [ ] for incomplete, [x] for complete.
-- Brief summary of the task.
-- Expected outcome of what should be achieved after completing this task.
-- Validation criteria of how to verify that the task is completed successfully. This can include specific commands to run, tests to pass, or any other measurable criteria.
-- Dependencies the task depends on the completion of other tasks, list those dependencies clearly. If there are no dependencies, just add - None to section.
+- Include numbered order
+- Include title
+- Include brief description
+- List of expected outcomes
+- List of validation criteria
 
 ## Example
 

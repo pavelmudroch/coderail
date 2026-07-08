@@ -20,7 +20,8 @@ Understand the ticket goal and constraints. Clarify any ambiguities before proce
 
 ### 2. Delegate
 
-Find first non completed (unchecked - [ ]) tasks with satisfied dependencies. Delegate these tasks to worker agents when useful, prefer parallel work when multiple tasks with satisfied dependencies are available.
+Find first non completed (unchecked - [ ]) task to work on. Optionally delegate to worker agents when useful.
+All tasks must be done in serial order from first (1.) to last (n.).
 
 ### 3. Review
 
