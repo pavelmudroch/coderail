@@ -63,6 +63,14 @@ assert_command_fails() {
     [ "$status" -ne 0 ] || fail "command unexpectedly succeeded: $*"
 }
 
+assert_equals() {
+    actual=$1
+    expected=$2
+
+    [ "$actual" = "$expected" ] ||
+        fail "expected '$expected', got '$actual'"
+}
+
 create_project() {
     project_dir=$tmp_dir/project-$1
 
@@ -229,6 +237,64 @@ assert_move_refuses_existing_target() {
     assert_file "$target_file"
 }
 
+assert_slugify_title() {
+    slug=$(ticket_slugify_title " Fix   Foo--Bar! ")
+    assert_equals "$slug" "fix-foo-bar"
+
+    assert_command_fails ticket_slugify_title "!!!"
+}
+
+assert_extract_id_and_slug_from_name() {
+    id=$(ticket_id_from_name "/tmp/0012-some-ticket.md")
+    slug=$(ticket_slug_from_name "0012-some-ticket")
+
+    assert_equals "$id" "0012"
+    assert_equals "$slug" "some-ticket"
+    assert_command_fails ticket_id_from_name "some-ticket.md"
+    assert_command_fails ticket_slug_from_name "0012-.md"
+}
+
+assert_resolve_reference_forms() {
+    project_dir=$(create_project resolve-forms)
+    open_file=$project_dir/.coderail/tickets/open/0001-first-ticket.md
+    active_file=$project_dir/.coderail/tickets/active/0010-other-ticket.md
+
+    write_ticket "$open_file" 0001 first-ticket "First Ticket" open ""
+    write_ticket "$active_file" 0010 other-ticket "Other Ticket" active ""
+
+    assert_equals "$(ticket_resolve_reference "$project_dir" 1)" ".coderail/tickets/open/0001-first-ticket.md"
+    assert_equals "$(ticket_resolve_reference "$project_dir" 0001)" ".coderail/tickets/open/0001-first-ticket.md"
+    assert_equals "$(ticket_resolve_reference "$project_dir" 0001-first-ticket)" ".coderail/tickets/open/0001-first-ticket.md"
+    assert_equals "$(ticket_resolve_reference "$project_dir" 0001-first-ticket.md)" ".coderail/tickets/open/0001-first-ticket.md"
+    assert_equals "$(ticket_resolve_reference "$project_dir" "First Ticket")" ".coderail/tickets/open/0001-first-ticket.md"
+    assert_equals "$(ticket_resolve_reference "$project_dir" first-ticket)" ".coderail/tickets/open/0001-first-ticket.md"
+    assert_equals "$(ticket_resolve_reference "$project_dir" ".coderail/tickets/active/0010-other-ticket.md")" ".coderail/tickets/active/0010-other-ticket.md"
+    assert_equals "$(ticket_resolve_reference "$project_dir" "$active_file")" ".coderail/tickets/active/0010-other-ticket.md"
+}
+
+assert_resolve_rejects_ambiguous_reference() {
+    project_dir=$(create_project resolve-ambiguous)
+    open_file=$project_dir/.coderail/tickets/open/0011-duplicate-name.md
+    closed_file=$project_dir/.coderail/tickets/closed/0011-duplicate-name.md
+
+    write_ticket "$open_file" 0011 duplicate-name "Duplicate Name" open ""
+    write_ticket "$closed_file" 0011 duplicate-name "Duplicate Name" closed "close_reason: done
+"
+
+    assert_command_fails ticket_resolve_reference "$project_dir" 11
+    assert_command_fails ticket_resolve_reference "$project_dir" duplicate-name
+}
+
+assert_resolve_rejects_invalid_paths() {
+    project_dir=$(create_project resolve-invalid-paths)
+    outside_file=$project_dir/outside.md
+
+    printf 'outside\n' > "$outside_file"
+
+    assert_command_fails ticket_resolve_reference "$project_dir" "$outside_file"
+    assert_command_fails ticket_resolve_reference "$project_dir" ".coderail/tickets/open/missing.md"
+}
+
 print_tests_header "Ticket Utils Tests"
 test "Validate open ticket" assert_validate_open_ticket
 test "Validate closed duplicate ticket" assert_validate_closed_duplicate_ticket
@@ -240,6 +306,11 @@ test "Move to open removes closed fields" assert_move_to_open_removes_closed_fie
 test "Move does not full validate source" assert_move_does_not_full_validate_source
 test "ticket_is_state checks path and frontmatter" assert_ticket_is_state_requires_path_and_frontmatter
 test "Move refuses existing target" assert_move_refuses_existing_target
+test "Slugify title" assert_slugify_title
+test "Extract id and slug from name" assert_extract_id_and_slug_from_name
+test "Resolve reference forms" assert_resolve_reference_forms
+test "Resolve rejects ambiguous reference" assert_resolve_rejects_ambiguous_reference
+test "Resolve rejects invalid paths" assert_resolve_rejects_invalid_paths
 
 print_tests_summary
 
