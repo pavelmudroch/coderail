@@ -16,5 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **install** command to install custom instructions for selected agentic harness tool.
 - **uninstall** command to uninstall custom instructions for selected agentic harness tool.
 - **test** command to run predefined tests and validations for changed files by agent, providing feedback loop back to agent for improvement.
+- **ticket** command to manage branch-local tickets, including create, next, activate, close, deactivate, reopen, validate, and clean subcommands.
 
 [Unreleased]: https://github.com/pavelmudroch/coderail/tree/main

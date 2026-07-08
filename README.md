@@ -11,10 +11,10 @@ Coderail is not a permanent issue tracker or full project management platform. I
 ## Purpose
 
 Coderail exists to keep agents on rails while they work. And is trying to unify the behavior between different agent tools, currently including:
-- `codex` (OpenAI Codex)
-- `claude` (Anthropic Claude)
-- `copilot` (GitHub Copilot)
-- `gemini` (Google Gemini)
+- [`codex` (OpenAI Codex)](https://developers.openai.com/codex/cli)
+- [`claude` (Anthropic Claude)](https://code.claude.com/docs/en/quickstart#step-1-install-claude-code)
+- [`copilot` (GitHub Copilot)](https://github.com/features/copilot/cli)
+- [`gemini` (Google Gemini)](https://geminicli.com/)
 
 It gives agents a small set of commands for:
 
@@ -201,7 +201,7 @@ Run a repo-local command from another directory:
 cr --cwd /path/to/project test --changed
 ```
 
-This section documents commands that are currently implemented and ready to use: `init`, `install`, `uninstall`, and `test`.
+This section documents commands that are currently implemented and ready to use: `init`, `install`, `uninstall`, `test`, and `ticket`.
 
 ### `cr init`
 
@@ -360,6 +360,60 @@ cr --cwd /path/to/project test --changed
 ```
 
 To collect all possible failures, `cr test` continues running all matching commands for all selected paths, even if some commands fail. The final exit code is non-zero if any command failed.
+
+### `cr ticket`
+
+Manage branch-local tickets under `.coderail/tickets`.
+
+Usage:
+
+```sh
+cr ticket <command> [options]
+```
+
+Tickets move through `open`, `active`, and `closed` states. Ticket arguments accept an ID, name, slug, or path. Use the path when a reference is ambiguous. Run `cr init` before using ticket commands.
+
+Subcommands:
+
+```txt
+create [-d <ticket> ...] <name>                      Create an open ticket
+next [--limit N]                                     List open tickets with satisfied dependencies
+activate <ticket>                                    Move an open ticket to active
+close [--reason <reason>] [--duplicate-of <ticket>] <ticket>
+                                                      Move an active ticket to closed
+deactivate [-d <ticket> ...] <ticket>                Move an active ticket back to open
+reopen [-d <ticket> ...] <ticket>                    Move a closed ticket back to open
+validate [<ticket> ...]                              Validate selected tickets, or all tickets
+clean [--dry-run] [--prune] [--yes]                  Clean up closed tickets
+```
+
+Dependency options accept ticket IDs, names, slugs, or paths and store resolved IDs in the ticket file. `next`, `activate`, and `close --reason done` require dependencies to be satisfied. A dependency is satisfied when it is closed as `done`, or when it is a duplicate whose original is satisfied.
+
+Close reasons:
+
+```txt
+done       Work completed; default.
+duplicate  Duplicate of another ticket; requires --duplicate-of.
+deferred   Valid work, intentionally postponed.
+dismissed  No longer needed.
+```
+
+`cr ticket clean` requires no active tickets. By default it removes closed tickets completed as `done`, plus duplicate tickets whose original is completed, if any open ticket depends on them, these dependecies are removed from open ticket. Use `--dry-run` to preview. Use `--prune` to remove all closed tickets and open tickets depending on unsatisfied closed tickets.
+
+Examples:
+
+```sh
+cr ticket create "Add README examples"
+cr ticket create -d 0001 "Document ticket workflow"
+cr ticket next --limit 3
+cr ticket activate 0002
+cr ticket close 0002
+cr ticket close --reason duplicate --duplicate-of 0001 0003
+cr ticket deactivate -d 0001 0004
+cr ticket reopen 0005
+cr ticket validate
+cr ticket clean --dry-run
+```
 
 ## Inspirations
 
