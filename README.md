@@ -117,7 +117,7 @@ Each command and sub command of installed `cr` tool includes `--help` option to 
 
 General user-local Coderail settings live here.
 
-### `.coderail/config.ini`
+### `.coderail/conf.ini`
 
 General repo local Coderail settings live here. These settings override user-local settings.
 
@@ -149,12 +149,11 @@ deno test tests/config.test.ts
 
 Rules:
 
-```txt
-[default] commands always run.
-Other section names are glob patterns.
-Commands run in file order.
-Execution stops on the first non-zero exit code.
-```
+- [default] commands always run.
+- Other section names are glob patterns.
+- Commands run in file order.
+- A path fails if any matching command exits with a non-zero status, but all commands continue to run and collect output, so all possible failures are reported.
+- All commands are pre-rendered and deduplicated before execution.
 
 Placeholders:
 
@@ -163,6 +162,204 @@ Placeholders:
 ```
 
 ## Usage
+
+`cr` is the Coderail command line tool. It runs repo-local agent workflow commands from the current directory, or from a directory selected with `--cwd`.
+
+Basic form:
+
+```sh
+cr [options] <command>
+```
+
+Global options:
+
+```txt
+-h, --help      Show help and exit
+--version       Show version information and exit
+-v, --verbose   Enable verbose logging
+-q, --quiet     Suppress non-error output
+--cwd <dir>     Run repo-local commands from another directory
+```
+
+`--cwd` is valid for repo-local commands such as `init` and `test`. For user-local installation commands such as `install` and `uninstall` has no effect, because they are not repo-local.
+
+Show top-level help:
+
+```sh
+cr --help
+```
+
+Show the installed version:
+
+```sh
+cr --version
+```
+
+Run a repo-local command from another directory:
+
+```sh
+cr --cwd /path/to/project test --changed
+```
+
+This section documents commands that are currently implemented and ready to use: `init`, `install`, `uninstall`, and `test`.
+
+### `cr init`
+
+Initialize the current working directory for Coderail agent-based development.
+
+This creates the repo-local `.coderail` directory, a ticket directory, and starter configuration files when they do not already exist. Existing files are left untouched.
+
+Usage:
+
+```sh
+cr init
+```
+
+Examples:
+
+```sh
+cr init
+cr --cwd /path/to/project init
+```
+
+Created files and directories:
+
+```txt
+.coderail/
+.coderail/tickets/
+.coderail/conf.ini
+.coderail/test.map
+```
+
+### `cr install`
+
+Install Coderail instructions, skills, and agent files for one or more supported agent tools.
+
+Usage:
+
+```sh
+cr install [options] <tool ...>
+```
+
+Supported tools:
+
+```txt
+codex
+copilot
+claude
+gemini
+```
+
+By default, files are installed into the matching user-local tool directory:
+
+```txt
+codex    ~/.codex
+copilot  ~/.copilot
+claude   ~/.claude
+gemini   ~/.gemini
+```
+
+Target directories can be overridden with environment variables:
+
+```txt
+CODERAIL_CODEX_HOME
+CODERAIL_COPILOT_HOME
+CODERAIL_CLAUDE_HOME
+CODERAIL_GEMINI_HOME
+```
+
+Coderail writes a `.coderail-install` manifest in each target root. On later installs, that manifest is used to update managed files and remove stale managed files. If an existing target file is untracked by Coderail, or a managed file was modified, install refuses to overwrite it unless `--force` is used.
+
+Options:
+
+```txt
+-h, --help   Show help and exit
+-f, --force  Allow overwriting untracked and modified existing installation files
+```
+
+Examples:
+
+```sh
+cr install codex
+cr install codex claude
+cr install --force copilot
+CODERAIL_CODEX_HOME=/tmp/codex-home cr install codex
+```
+
+### `cr uninstall`
+
+Remove files previously installed by `cr install` for one or more supported agent tools.
+
+Usage:
+
+```sh
+cr uninstall [options] <tool ...>
+```
+
+Supported tools:
+
+```txt
+codex
+copilot
+claude
+gemini
+```
+
+Uninstall reads the target root `.coderail-install` manifest and removes only managed files. Empty parent directories created by the install can be removed as cleanup. Modified managed files are preserved by default; use `--force` to remove them anyway.
+
+Options:
+
+```txt
+-h, --help   Show help and exit
+-f, --force  Allow removing modified installation files
+```
+
+Examples:
+
+```sh
+cr uninstall codex
+cr uninstall codex claude
+cr uninstall --force gemini
+CODERAIL_CLAUDE_HOME=/tmp/claude-home cr uninstall claude
+```
+
+### `cr test`
+
+Run validation commands from `.coderail/test.map` for specified files, or for changed files detected by Git.
+
+Usage:
+
+```sh
+cr test [options] [<file> ...]
+```
+
+At least one selector is required:
+
+```txt
+--changed   Run tests for changed files in the current Git repository
+<file>      Run tests for a specific relative file path
+```
+
+`cr test` reads `.coderail/test.map`, finds sections whose glob patterns match each selected path, expands `{path}` placeholders, and runs the resulting commands. The `[default]` section always matches. If any matching command for a path exits non-zero, the final output marks that path as `failed`; otherwise it reports `passed` or `no tests found`.
+
+For inspecting details of failed commands, run with `--verbose` to see the full command output.
+
+```sh
+cr --verbose test --changed
+```
+
+Absolute paths are not supported. Use paths relative to the selected working directory.
+
+Examples:
+
+```sh
+cr test --changed
+cr test README.md
+cr test src/app.ts tests/app.test.ts
+cr --cwd /path/to/project test --changed
+```
+
+To collect all possible failures, `cr test` continues running all matching commands for all selected paths, even if some commands fail. The final exit code is non-zero if any command failed.
 
 ## Inspirations
 
