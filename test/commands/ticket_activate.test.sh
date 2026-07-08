@@ -86,6 +86,24 @@ write_ticket() {
     ticket_status=$5
     ticket_extra=$6
 
+    write_ticket_with_dependencies "$ticket_file" \
+        "$ticket_id" \
+        "$ticket_slug" \
+        "$ticket_title" \
+        "$ticket_status" \
+        "" \
+        "$ticket_extra"
+}
+
+write_ticket_with_dependencies() {
+    ticket_file=$1
+    ticket_id=$2
+    ticket_slug=$3
+    ticket_title=$4
+    ticket_status=$5
+    ticket_dependencies=$6
+    ticket_extra=$7
+
     cat > "$ticket_file" <<EOF
 ---
 id: $ticket_id
@@ -94,7 +112,7 @@ title: $ticket_title
 status: $ticket_status
 created_at: 2024-06-01T12:00:00Z
 updated_at: 2024-06-01T12:00:00Z
-dependencies:
+dependencies: $ticket_dependencies
 $ticket_extra---
 
 # $ticket_title
@@ -210,11 +228,69 @@ assert_non_open_ticket_is_rejected() {
     assert_contains "$active_file" "status: active"
 }
 
+assert_unsatisfied_dependency_is_rejected() {
+    work_dir=$(create_project unsatisfied-dependency)
+    dependency_file=$work_dir/.coderail/tickets/open/0005-blocking-ticket.md
+    open_file=$work_dir/.coderail/tickets/open/0006-dependent-ticket.md
+    active_file=$work_dir/.coderail/tickets/active/0006-dependent-ticket.md
+
+    write_ticket "$dependency_file" 0005 blocking-ticket "Blocking Ticket" open ""
+    write_ticket_with_dependencies \
+        "$open_file" \
+        0006 \
+        dependent-ticket \
+        "Dependent Ticket" \
+        open \
+        "0005" \
+        ""
+
+    run_activate "$work_dir" 6
+
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "error: dependency is not satisfied: 0005"
+    assert_file "$open_file"
+    assert_path_missing "$active_file"
+}
+
+assert_satisfied_duplicate_dependency_is_activated() {
+    work_dir=$(create_project duplicate-dependency)
+    done_file=$work_dir/.coderail/tickets/closed/0007-done-ticket.md
+    duplicate_file=$work_dir/.coderail/tickets/closed/0008-duplicate-ticket.md
+    open_file=$work_dir/.coderail/tickets/open/0009-dependent-ticket.md
+    active_file=$work_dir/.coderail/tickets/active/0009-dependent-ticket.md
+
+    write_ticket "$done_file" 0007 done-ticket "Done Ticket" closed "close_reason: done
+"
+    write_ticket "$duplicate_file" 0008 duplicate-ticket "Duplicate Ticket" closed "close_reason: duplicate
+duplicate_of: 0007
+"
+    write_ticket_with_dependencies \
+        "$open_file" \
+        0009 \
+        dependent-ticket \
+        "Dependent Ticket" \
+        open \
+        "0008" \
+        ""
+
+    run_activate "$work_dir" 9
+
+    assert_success
+    assert_stdout_content ".coderail/tickets/active/0009-dependent-ticket.md"
+    assert_file_empty "$run_stderr"
+    assert_path_missing "$open_file"
+    assert_file "$active_file"
+    assert_contains "$active_file" "status: active"
+}
+
 print_tests_header "Ticket Activate Tests"
 test "Activate open ticket" assert_activate_open_ticket
 test "Activate logs notices" assert_activate_logs_notices
 test "Invalid ticket is not moved" assert_invalid_ticket_is_not_moved
 test "Non-open ticket is rejected" assert_non_open_ticket_is_rejected
+test "Unsatisfied dependency is rejected" assert_unsatisfied_dependency_is_rejected
+test "Satisfied duplicate dependency is activated" assert_satisfied_duplicate_dependency_is_activated
 
 print_tests_summary
 
