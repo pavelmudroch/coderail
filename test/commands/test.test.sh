@@ -64,6 +64,19 @@ run_cr_test() {
     set -e
 }
 
+run_cr_verbose_test() {
+    work_dir=$1
+    shift
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+
+    set +e
+    "$CR" --cwd "$work_dir" --verbose test "$@" > "$run_stdout" 2> "$run_stderr"
+    run_status=$?
+    set -e
+}
+
 assert_success() {
     [ "$run_status" -eq 0 ] || fail "expected success, got status $run_status"
 }
@@ -391,6 +404,34 @@ EOF
 README.md: failed"
 }
 
+assert_verbose_failure_prints_failed_command_output() {
+    work_dir=$(create_work_dir verbose-failure-output)
+
+    create_path "$work_dir/src/fail.sh"
+    create_path "$work_dir/src/pass.sh"
+    write_test_map "$work_dir" <<'EOF'
+[src/*.sh]
+case {path} in *fail.sh) printf 'failed stdout\n'; printf 'failed stderr\n' >&2; exit 7;; esac
+EOF
+
+    run_cr_test "$work_dir" src/fail.sh src/pass.sh
+
+    assert_failure
+    assert_stdout_content "src/fail.sh: failed
+src/pass.sh: passed"
+    assert_file_empty "$run_stderr"
+
+    run_cr_verbose_test "$work_dir" src/fail.sh src/pass.sh
+
+    assert_failure
+    assert_contains "$run_stdout" "failed command output:"
+    assert_contains "$run_stdout" "failed stdout"
+    assert_contains "$run_stdout" "failed stderr"
+    assert_contains "$run_stdout" "src/fail.sh: failed"
+    assert_contains "$run_stdout" "src/pass.sh: passed"
+    assert_file_empty "$run_stderr"
+}
+
 assert_absolute_paths_fail() {
     work_dir=$(create_work_dir absolute-path)
 
@@ -422,6 +463,7 @@ test "Static duplicate across files runs once" assert_static_duplicate_across_fi
 test "Path placeholder quotes spaces" assert_path_placeholder_quotes_spaces
 test "Failures do not stop result collection" assert_failures_do_not_stop_result_collection
 test "Shared static failure marks all files failed" assert_shared_static_failure_marks_all_files_failed
+test "Verbose failure prints failed command output" assert_verbose_failure_prints_failed_command_output
 test "Absolute paths fail" assert_absolute_paths_fail
 
 print_tests_summary
