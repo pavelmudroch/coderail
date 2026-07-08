@@ -11,11 +11,6 @@ ROOT_DIR=$(
 )
 
 . "$ROOT_DIR/lib/utils/log.sh"
-. "$ROOT_DIR/lib/utils/ticket/paths.sh"
-. "$ROOT_DIR/lib/utils/ticket/ids.sh"
-. "$ROOT_DIR/lib/utils/ticket/frontmatter.sh"
-. "$ROOT_DIR/lib/utils/ticket/dependencies.sh"
-. "$ROOT_DIR/lib/utils/ticket/lifecycle.sh"
 
 usage() {
     cat <<'EOF'
@@ -76,9 +71,8 @@ done
 [ "$#" -eq 1 ] || error "unexpected argument: $2"
 reference=$1
 
-if activated_ticket=$(ticket_activate_file . "$reference" 2>&1); then
-    :
-else
+activated_ticket=$(cr ticket activate "$reference" 2>&1)
+if [ ! $? -eq 0 ]; then
     [ -n "$activated_ticket" ] || activated_ticket="unknown error"
     fatal "failed to activate ticket: $activated_ticket"
 fi
@@ -90,10 +84,10 @@ if should_generate_error; then
     fatal "simulated error"
 fi
 
-if closed_ticket=$(ticket_close_file . "$reference" done 2>&1); then
-    printf '%s\n' "$closed_ticket"
-    exit 0
+closed_ticket=$(cr ticket close "$activated_ticket" done 2>&1)
+if [ ! $? -eq 0 ]; then
+    [ -n "$closed_ticket" ] || closed_ticket="unknown error"
+    fatal "failed to close ticket: $closed_ticket"
 fi
 
-[ -n "$closed_ticket" ] || closed_ticket="unknown error"
-fatal "failed to close ticket: $closed_ticket"
+printf '%s\n' "$closed_ticket"
