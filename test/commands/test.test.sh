@@ -213,6 +213,25 @@ EOF
     assert_path_missing "$work_dir/run.log"
 }
 
+assert_changed_omits_coderail_files() {
+    work_dir=$(create_work_dir changed-omits-coderail)
+
+    create_path "$work_dir/src/app.sh"
+    create_path "$work_dir/.coderail/local.txt"
+    write_test_map "$work_dir" <<'EOF'
+[default]
+printf '%s\n' {path} >> run.log
+EOF
+
+    git -C "$work_dir" init >/dev/null 2>&1
+
+    run_cr_test "$work_dir" --changed
+
+    assert_success
+    assert_stdout_content "src/app.sh: passed"
+    assert_file_content "$work_dir/run.log" "src/app.sh"
+}
+
 assert_default_commands_run() {
     work_dir=$(create_work_dir default-only)
 
@@ -362,6 +381,22 @@ EOF
     assert_file_content "$work_dir/run.log" "<docs/my file.md>"
 }
 
+assert_path_metadata_placeholders_render() {
+    work_dir=$(create_work_dir path-metadata-placeholders)
+
+    create_path "$work_dir/some relative/path/file name.ext"
+    write_test_map "$work_dir" <<'EOF'
+[some relative/**/*.ext]
+printf 'path=<%s> name=<%s> ext=<%s> dir=<%s>\n' {path} {name} {ext} {dir} >> run.log
+EOF
+
+    run_cr_test "$work_dir" "./some relative/path/file name.ext"
+
+    assert_success
+    assert_stdout_content "some relative/path/file name.ext: passed"
+    assert_file_content "$work_dir/run.log" "path=<some relative/path/file name.ext> name=<file name> ext=<ext> dir=<some relative/path>"
+}
+
 assert_failures_do_not_stop_result_collection() {
     work_dir=$(create_work_dir collect-failures)
 
@@ -454,6 +489,7 @@ test "Unreadable test map fails" assert_unreadable_test_map_fails
 test "Invalid test maps fail" assert_invalid_test_maps_fail
 test "Empty map reports no tests" assert_empty_map_reports_no_tests
 test "No matching glob reports no tests" assert_no_matching_glob_reports_no_tests
+test "Changed omits coderail files" assert_changed_omits_coderail_files
 test "Default commands run" assert_default_commands_run
 test "Glob commands run without default" assert_glob_commands_run_without_default
 test "Default and glob run in map order" assert_default_and_glob_run_in_map_order
@@ -461,6 +497,7 @@ test "Path globs match expected paths" assert_path_globs_match_expected_paths
 test "Duplicate commands run once" assert_duplicate_commands_run_once
 test "Static duplicate across files runs once" assert_static_duplicate_across_files_runs_once
 test "Path placeholder quotes spaces" assert_path_placeholder_quotes_spaces
+test "Path metadata placeholders render" assert_path_metadata_placeholders_render
 test "Failures do not stop result collection" assert_failures_do_not_stop_result_collection
 test "Shared static failure marks all files failed" assert_shared_static_failure_marks_all_files_failed
 test "Verbose failure prints failed command output" assert_verbose_failure_prints_failed_command_output
