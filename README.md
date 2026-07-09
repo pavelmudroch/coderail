@@ -158,7 +158,10 @@ Rules:
 Placeholders:
 
 ```txt
-{path}   one path; command repeats once per path
+{path}   current relative path; command repeats once per path
+{name}   filename without extension for current path
+{ext}    extension without dot for current path
+{dir}    relative directory containing current path, or . at repo root
 ```
 
 ## Usage
@@ -340,7 +343,7 @@ At least one selector is required:
 <file>      Run tests for a specific relative file path
 ```
 
-`cr test` reads `.coderail/test.map`, finds sections whose glob patterns match each selected path, expands `{path}` placeholders, and runs the resulting commands. The `[default]` section always matches. If any matching command for a path exits non-zero, the final output marks that path as `failed`; otherwise it reports `passed` or `no tests found`.
+`cr test` reads `.coderail/test.map`, finds sections whose glob patterns match each selected path, expands path placeholders, and runs the resulting commands. The `[default]` section always matches. If any matching command for a path exits non-zero, the final output marks that path as `failed`; otherwise it reports `passed` or `no tests found`.
 
 For inspecting details of failed commands, run with `--verbose` to see the full command output.
 

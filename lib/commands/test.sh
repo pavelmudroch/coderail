@@ -184,6 +184,9 @@ add_changed_files() {
 
     while IFS= read -r changed_file || [ -n "$changed_file" ]; do
         [ -n "$changed_file" ] || continue
+        case "$changed_file" in
+            .coderail/*) continue ;;
+        esac
         add_test_file "$changed_file"
     done < "$changed_file_list"
 }
@@ -300,24 +303,74 @@ shell_quote() {
     printf "'"
 }
 
-expand_path_placeholder() {
-    expand_rest=$1
-    expand_path=$(shell_quote "$2")
-    expand_result=
+expand_command_placeholders() {
+    expand_command=$1
+    expand_path_value=$2
 
-    while :; do
-        case "$expand_rest" in
-            *"{path}"*)
-                expand_prefix=${expand_rest%%\{path\}*}
-                expand_result=$expand_result$expand_prefix$expand_path
-                expand_rest=${expand_rest#*\{path\}}
-                ;;
-            *)
-                printf '%s' "$expand_result$expand_rest"
-                return
-                ;;
-        esac
-    done
+    case "$expand_path_value" in
+        */*) expand_dir_value=${expand_path_value%/*} ;;
+        *) expand_dir_value=. ;;
+    esac
+
+    expand_file_name=${expand_path_value##*/}
+    case "$expand_file_name" in
+        *.*)
+            expand_name_value=${expand_file_name%.*}
+            expand_ext_value=${expand_file_name##*.}
+            ;;
+        *)
+            expand_name_value=$expand_file_name
+            expand_ext_value=
+            ;;
+    esac
+
+    {
+        printf '%s\n' "$expand_command"
+        shell_quote "$expand_path_value"; printf '\n'
+        shell_quote "$expand_name_value"; printf '\n'
+        shell_quote "$expand_ext_value"; printf '\n'
+        shell_quote "$expand_dir_value"; printf '\n'
+    } | awk '
+        NR == 1 { command = $0; next }
+        NR == 2 { path = $0; next }
+        NR == 3 { name = $0; next }
+        NR == 4 { ext = $0; next }
+        NR == 5 { dir = $0; next }
+
+        END {
+            tokens[1] = "{path}"
+            tokens[2] = "{name}"
+            tokens[3] = "{ext}"
+            tokens[4] = "{dir}"
+            values["{path}"] = path
+            values["{name}"] = name
+            values["{ext}"] = ext
+            values["{dir}"] = dir
+            rest = command
+
+            while (length(rest) > 0) {
+                token = ""
+                position = 0
+
+                for (i = 1; i <= 4; i++) {
+                    candidate_position = index(rest, tokens[i])
+                    if (candidate_position > 0 &&
+                        (position == 0 || candidate_position < position)) {
+                        token = tokens[i]
+                        position = candidate_position
+                    }
+                }
+
+                if (position == 0) {
+                    printf "%s", rest
+                    exit
+                }
+
+                printf "%s%s", substr(rest, 1, position - 1), values[token]
+                rest = substr(rest, position + length(token))
+            }
+        }
+    '
 }
 
 add_unique_command() {
@@ -343,7 +396,7 @@ collect_commands() {
     while IFS= read -r section && IFS= read -r command; do
         while IFS= read -r path || [ -n "$path" ]; do
             if section_matches_path "$section" "$path"; then
-                expanded_command=$(expand_path_placeholder "$command" "$path")
+                expanded_command=$(expand_command_placeholders "$command" "$path")
                 add_unique_command "$expanded_command"
                 append_unique_line "$command_paths_dir/$command_index" "$path"
                 append_unique_line "$has_commands_file" "$path"
