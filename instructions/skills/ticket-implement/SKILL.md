@@ -33,11 +33,13 @@ Or when git diff was clean you can use `cr test --changed` to run tests on chang
 
 If provided path is directory, this will run tests for all files recursively in that directory.
 
+To see full failed test output run `cr --verbose test <paths ...>` or `cr --verbose test --changed`.
+
 ### 4. Summarize
 
 Summarize the result and verification performed.
 Mention remaining risks or unverified areas.
-Call `tools/ticket.sh close <ticket-id>` script when all tasks are completed and ticket is delivered.
+Call `cr ticket close <ticket-id>` script when all tasks are completed and ticket is delivered.
 Do not close a ticket until verification evidence is recorded in the summary.
 
 ## Rules
@@ -46,3 +48,7 @@ Do not close a ticket until verification evidence is recorded in the summary.
 - Do not expand scope during implementation.
 - Keep user-facing updates concise.
 - If blocked, report blocker and smallest useful next step.
+
+## CR tool
+
+If additional guidance for `cr` tool needed, use <skill>cr</skill>.
