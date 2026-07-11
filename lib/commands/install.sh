@@ -192,7 +192,7 @@ render_skill_file() {
             if (policy == "user-only" && tool == "codex") {
                 print "allow_implicit_invocation: false"
             }
-            if (policy == "user-only" && tool == "claude") {
+            if (policy == "user-only" && (tool == "copilot" || tool == "claude" || tool == "gemini")) {
                 print "disable-model-invocation: true"
             }
             print
