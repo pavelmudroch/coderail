@@ -93,6 +93,8 @@ Use the bootstrap installer to install Coderail.
 curl -fsSL https://github.com/pavelmudroch/coderail/raw/refs/heads/main/INSTALL | sh
 ```
 
+The installer requires a Unix-like shell environment, standard Unix tools, and either `curl` or `wget`. It accepts no arguments; configure it with environment variables.
+
 By default, this installs Coderail into `~/.coderail`.
 
 Supported installer environment variables:
@@ -102,7 +104,9 @@ CODERAIL_INSTALL_DIR       Install directory, defaults to ~/.coderail
 CODERAIL_INSTALL_VERSION   Install version: latest, main, X.Y.Z, or vX.Y.Z
 ```
 
-`CODERAIL_INSTALL_VERSION` defaults to `latest`. `main` installs from the main branch. `X.Y.Z` and `vX.Y.Z` install the matching release tag.
+`CODERAIL_INSTALL_VERSION` defaults to `latest`, which installs the `latest` tag. `main` installs from the main branch. `X.Y.Z` and `vX.Y.Z` install the matching release tag.
+
+The install directory must not exist, or must exist as an empty directory.
 
 After installation, add the install `bin` directory to your `PATH` to make `cr` available in your shell. The installer prints the export command; it does not edit shell startup files.
 
@@ -156,7 +160,7 @@ biome check {path}
 [net/tcp/**/*.ts]
 deno test tests/net/tcp.test.ts
 
-[lib/{rel:**}/{base}.sh]
+[lib/{rel:**}/{base:*}.sh]
 sh test/{rel}/{base}.test.sh
 ```
 
@@ -166,8 +170,12 @@ Rules:
 - Use [default] for commands that do not need the selected path.
 - Other section names are glob patterns and can define captures with `{name:glob}`.
 - Capture names must start with a letter or underscore and contain only letters, digits, and underscores.
+- A capture name can appear only once in a section. The same name can be reused in another section.
+- `*` matches within one path segment. `**` can match across `/`.
 - Literal `{`, `}`, and `\` in section patterns must be escaped as `\{`, `\}`, and `\\`.
+- The first `:` in a capture separates the capture name from its glob. Later `:` characters are part of the glob.
 - Commands can use only captures from the matching section as `{name}` placeholders.
+- Capture placeholder values are shell-quoted before command execution.
 - Commands run in file order.
 - A path fails if any matching command exits with a non-zero status, but all commands continue to run and collect output, so all possible failures are reported.
 - All commands are pre-rendered and deduplicated before execution.
@@ -176,7 +184,7 @@ Capture examples:
 
 ```txt
 [{path:**/*.ts}]          captures the matched path as {path}
-[lib/{rel:**}/{base}.sh]  captures nested dir as {rel} and filename stem as {base}
+[lib/{rel:**}/{base:*}.sh]  captures nested dir as {rel} and filename stem as {base}
 ```
 
 There are no implicit placeholders. `{path}`, `{name}`, `{ext}`, and `{dir}` expand only when the matching section explicitly captures those names. Other brace text stays literal.
@@ -201,7 +209,7 @@ Global options:
 --cwd <dir>     Run repo-local commands from another directory
 ```
 
-`--cwd` is valid for repo-local commands such as `init` and `test`. For user-local installation commands such as `install` and `uninstall` has no effect, because they are not repo-local.
+`--cwd` is valid for repo-local commands such as `init`, `ticket`, and `test`. For install-root commands such as `upgrade`, `install`, and `uninstall`, it is accepted and ignored.
 
 Show top-level help:
 
@@ -221,7 +229,7 @@ Run a repo-local command from another directory:
 cr --cwd /path/to/project test --changed
 ```
 
-This section documents commands that are currently implemented and ready to use: `init`, `install`, `uninstall`, `test`, and `ticket`.
+This section documents commands that are currently implemented and ready to use: `upgrade`, `install`, `uninstall`, `init`, `ticket`, and `test`.
 
 ### Custom Skill Workflow
 
@@ -364,6 +372,35 @@ cr uninstall codex
 cr uninstall codex claude
 cr uninstall --force gemini
 CODERAIL_CLAUDE_HOME=/tmp/claude-home cr uninstall claude
+```
+
+### `cr upgrade`
+
+Upgrade the installed Coderail CLI. By default, upgrade installs the `latest` tag.
+
+Usage:
+
+```sh
+cr upgrade [options]
+```
+
+Options:
+
+```txt
+-h, --help        Show help and exit
+--version X.Y.Z   Upgrade to a release version
+--version vX.Y.Z  Upgrade to a release version
+--canary          Upgrade to the latest build from the main branch
+--force           Replace modified managed files
+```
+
+Examples:
+
+```sh
+cr upgrade
+cr upgrade --version 1.2.3
+cr upgrade --canary
+cr upgrade --force
 ```
 
 ### `cr test`
