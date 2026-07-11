@@ -2,7 +2,7 @@
 name: ticket-implement
 description: Guidance for implementing a project ticket through task decomposition, delegation, verification, and iteration.
 ---
-Call `cr ticket activate <ticket-id>` script when starting implementation.
+Call `cr ticket activate <ticket-id>` when starting implementation.
 Do not move ticket files or edit ticket lifecycle frontmatter by hand.
 
 The <ticket-id> can be:

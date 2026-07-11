@@ -10,7 +10,7 @@ This skill takes the current conversation context and codebase understanding and
 
 1. Explore the repo to understand the current state of the codebase, if you have not already.
 
-Delegate codebase research to a worker agent and assign it the <skill>research-codebase</skill> skill when deeper repository understanding is needed.
+Delegate codebase research to a worker agent and assign it the <skill>research</skill> skill when deeper repository understanding is needed.
 
 2. Identify the major modules that need to be built or modified.
 
@@ -22,7 +22,7 @@ When expectations are unclear, document assumptions in the spec. Ask the user on
 
 3. Write the implementation spec using the template below.
 
-Write the spec to a local file by default. Use `SPEC.md` unless the user names a different local path.
+Write the spec to a local file by default. Use `.coderail/SPEC.md` unless the user names a different local path.
 
 Publish externally only when the user explicitly requests it. Do not create issue-tracker items, apply labels, or perform other external actions unless the user explicitly requests that action.
 

@@ -1,6 +1,6 @@
 ---
 name: cr
-description: Extensive agent guidance for using the `cr` tool.
+description: Use when need help for `cr` tool
 ---
 
 # `cr`
