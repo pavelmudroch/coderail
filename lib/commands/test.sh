@@ -230,7 +230,7 @@ parse_test_map() {
 }
 
 path_matches_glob() {
-    awk -v pattern="$1" -v path="$2" '
+    CR_TEST_PATTERN=$1 CR_TEST_PATH=$2 awk '
         function segment_regex(segment,    i, ch, out) {
             out = ""
 
@@ -282,6 +282,8 @@ path_matches_glob() {
         }
 
         BEGIN {
+            pattern = ENVIRON["CR_TEST_PATTERN"]
+            path = ENVIRON["CR_TEST_PATH"]
             pattern_count = split(pattern, pattern_parts, "/")
             path_count = split(path, path_parts, "/")
             exit match_from(1, 1) ? 0 : 1
@@ -289,12 +291,353 @@ path_matches_glob() {
     '
 }
 
+path_matches_captures() {
+    CR_TEST_PATTERN=$1 CR_TEST_PATH=$2 awk '
+        function add_token(type, text, name, glob) {
+            token_count++
+            token_type[token_count] = type
+            token_text[token_count] = text
+            token_name[token_count] = name
+            token_glob[token_count] = glob
+        }
+
+        function add_literal(text) {
+            if (text == "") {
+                return
+            }
+
+            if (token_count > 0 && token_type[token_count] == "literal") {
+                token_text[token_count] = token_text[token_count] text
+                return
+            }
+
+            add_token("literal", text, "", "")
+        }
+
+        function unescape_literals(value,    i, ch, next_ch, out) {
+            out = ""
+
+            for (i = 1; i <= length(value); ) {
+                ch = substr(value, i, 1)
+
+                if (ch == "\\") {
+                    if (i == length(value)) {
+                        parse_error = 1
+                        return ""
+                    }
+
+                    next_ch = substr(value, i + 1, 1)
+                    if (next_ch != "{" && next_ch != "}" && next_ch != "\\") {
+                        parse_error = 1
+                        return ""
+                    }
+
+                    out = out next_ch
+                    i += 2
+                    continue
+                }
+
+                if (ch == "{" || ch == "}") {
+                    parse_error = 1
+                    return ""
+                }
+
+                out = out ch
+                i++
+            }
+
+            return out
+        }
+
+        function parse_pattern(value,    i, j, ch, current, escaped, start, colon, name, glob_raw, glob, literal_start) {
+            i = 1
+
+            while (i <= length(value)) {
+                ch = substr(value, i, 1)
+
+                if (ch == "{") {
+                    start = i + 1
+                    colon = 0
+
+                    for (j = start; j <= length(value); j++) {
+                        current = substr(value, j, 1)
+
+                        if (current == "}") {
+                            break
+                        }
+
+                        if (current == "\\") {
+                            if (j == length(value)) {
+                                return 0
+                            }
+
+                            escaped = substr(value, j + 1, 1)
+                            if (escaped != "{" && escaped != "}" && escaped != "\\") {
+                                return 0
+                            }
+
+                            j++
+                            continue
+                        }
+
+                        if (current == "{") {
+                            return 0
+                        }
+
+                        if (current == ":" && colon == 0) {
+                            colon = j
+                        }
+                    }
+
+                    if (j > length(value)) {
+                        return 0
+                    }
+
+                    if (colon == 0) {
+                        return 0
+                    }
+
+                    name = substr(value, start, colon - start)
+                    glob_raw = substr(value, colon + 1, j - colon - 1)
+                    parse_error = 0
+                    glob = unescape_literals(glob_raw)
+
+                    if (name == "" || glob == "" ||
+                        name !~ /^[A-Za-z_][A-Za-z0-9_]*$/ ||
+                        parse_error || name in capture_seen) {
+                        return 0
+                    }
+
+                    add_token("capture", "", name, glob)
+                    capture_names[++capture_count] = name
+                    capture_seen[name] = 1
+                    i = j + 1
+                } else if (ch == "\\") {
+                    if (i == length(value)) {
+                        return 0
+                    }
+
+                    escaped = substr(value, i + 1, 1)
+                    if (escaped != "{" && escaped != "}" && escaped != "\\") {
+                        return 0
+                    }
+
+                    add_literal(escaped)
+                    i += 2
+                } else if (ch == "}") {
+                    return 0
+                } else if (ch == "*") {
+                    if (substr(value, i + 1, 1) == "*") {
+                        add_token("globstar", "", "", "")
+                        i += 2
+                    } else {
+                        add_token("star", "", "", "")
+                        i++
+                    }
+                } else {
+                    literal_start = i
+
+                    while (i <= length(value)) {
+                        ch = substr(value, i, 1)
+
+                        if (ch == "{" || ch == "}" || ch == "\\" || ch == "*") {
+                            break
+                        }
+
+                        i++
+                    }
+
+                    add_literal(substr(value, literal_start, i - literal_start))
+                }
+            }
+
+            return 1
+        }
+
+        function segment_glob_matches(pattern_segment, value_segment) {
+            return segment_glob_matches_from(pattern_segment, 1, value_segment, 1)
+        }
+
+        function segment_glob_matches_from(pattern_segment, pattern_index, value_segment, value_index,    ch, next_index) {
+            if (pattern_index > length(pattern_segment)) {
+                return value_index > length(value_segment)
+            }
+
+            ch = substr(pattern_segment, pattern_index, 1)
+
+            if (ch == "*") {
+                for (next_index = value_index; next_index <= length(value_segment) + 1; next_index++) {
+                    if (segment_glob_matches_from(pattern_segment, pattern_index + 1, value_segment, next_index)) {
+                        return 1
+                    }
+                }
+
+                return 0
+            }
+
+            if (value_index > length(value_segment)) {
+                return 0
+            }
+
+            if (substr(value_segment, value_index, 1) != ch) {
+                return 0
+            }
+
+            return segment_glob_matches_from(pattern_segment, pattern_index + 1, value_segment, value_index + 1)
+        }
+
+        function glob_matches(glob, value,    pattern_count, value_count) {
+            pattern_count = split(glob, glob_pattern_parts, "/")
+
+            if (value == "") {
+                value_count = 0
+            } else {
+                value_count = split(value, glob_value_parts, "/")
+            }
+
+            return glob_segments_match_from(1, 1, pattern_count, value_count)
+        }
+
+        function glob_segments_match_from(pattern_index, value_index, pattern_count, value_count) {
+            if (pattern_index > pattern_count) {
+                return value_index > value_count
+            }
+
+            if (glob_pattern_parts[pattern_index] == "**") {
+                if (glob_segments_match_from(pattern_index + 1, value_index, pattern_count, value_count)) {
+                    return 1
+                }
+
+                if (value_index <= value_count) {
+                    return glob_segments_match_from(pattern_index, value_index + 1, pattern_count, value_count)
+                }
+
+                return 0
+            }
+
+            if (value_index > value_count) {
+                return 0
+            }
+
+            if (segment_glob_matches(glob_pattern_parts[pattern_index], glob_value_parts[value_index])) {
+                return glob_segments_match_from(pattern_index + 1, value_index + 1, pattern_count, value_count)
+            }
+
+            return 0
+        }
+
+        function match_from(token_index, path_index,    type, text, name, glob, next_index, value, had_old_value, old_value) {
+            if (token_index > token_count) {
+                return path_index > length(path)
+            }
+
+            type = token_type[token_index]
+
+            if (type == "literal") {
+                text = token_text[token_index]
+
+                if (substr(path, path_index, length(text)) != text) {
+                    return 0
+                }
+
+                return match_from(token_index + 1, path_index + length(text))
+            }
+
+            if (type == "star") {
+                for (next_index = path_index; next_index <= length(path) + 1; next_index++) {
+                    if (next_index > path_index &&
+                        substr(path, next_index - 1, 1) == "/") {
+                        break
+                    }
+
+                    if (match_from(token_index + 1, next_index)) {
+                        return 1
+                    }
+                }
+
+                return 0
+            }
+
+            if (type == "globstar") {
+                for (next_index = path_index; next_index <= length(path) + 1; next_index++) {
+                    if (match_from(token_index + 1, next_index)) {
+                        return 1
+                    }
+                }
+
+                return 0
+            }
+
+            name = token_name[token_index]
+            glob = token_glob[token_index]
+            had_old_value = name in capture_values
+            old_value = capture_values[name]
+
+            for (next_index = path_index; next_index <= length(path) + 1; next_index++) {
+                value = substr(path, path_index, next_index - path_index)
+
+                if (glob_matches(glob, value)) {
+                    capture_values[name] = value
+
+                    if (match_from(token_index + 1, next_index)) {
+                        return 1
+                    }
+                }
+            }
+
+            if (had_old_value) {
+                capture_values[name] = old_value
+            } else {
+                delete capture_values[name]
+            }
+
+            return 0
+        }
+
+        BEGIN {
+            pattern = ENVIRON["CR_TEST_PATTERN"]
+            path = ENVIRON["CR_TEST_PATH"]
+
+            if (!parse_pattern(pattern)) {
+                exit 2
+            }
+
+            if (!match_from(1, 1)) {
+                exit 1
+            }
+
+            for (i = 1; i <= capture_count; i++) {
+                print capture_names[i]
+                print capture_values[capture_names[i]]
+            }
+        }
+    '
+}
+
 section_matches_path() {
     section_matches_section=$1
     section_matches_path_value=$2
+    section_matches_captures_file=$3
 
-    [ "$section_matches_section" = default ] ||
-        path_matches_glob "$section_matches_section" "$section_matches_path_value"
+    : > "$section_matches_captures_file"
+
+    [ "$section_matches_section" = default ] && return 0
+
+    case "$section_matches_section" in
+        *{*|*}*|*\\*)
+            if path_matches_captures "$section_matches_section" "$section_matches_path_value" > "$section_matches_captures_file"; then
+                return 0
+            else
+                section_matches_status=$?
+            fi
+
+            [ "$section_matches_status" -ne 2 ] || invalid_test_map
+            return 1
+            ;;
+        *)
+            path_matches_glob "$section_matches_section" "$section_matches_path_value"
+            ;;
+    esac
 }
 
 shell_quote() {
@@ -305,58 +648,35 @@ shell_quote() {
 
 expand_command_placeholders() {
     expand_command=$1
-    expand_path_value=$2
-
-    case "$expand_path_value" in
-        */*) expand_dir_value=${expand_path_value%/*} ;;
-        *) expand_dir_value=. ;;
-    esac
-
-    expand_file_name=${expand_path_value##*/}
-    case "$expand_file_name" in
-        *.*)
-            expand_name_value=${expand_file_name%.*}
-            expand_ext_value=${expand_file_name##*.}
-            ;;
-        *)
-            expand_name_value=$expand_file_name
-            expand_ext_value=
-            ;;
-    esac
+    expand_captures_file=$2
 
     {
         printf '%s\n' "$expand_command"
-        shell_quote "$expand_path_value"; printf '\n'
-        shell_quote "$expand_name_value"; printf '\n'
-        shell_quote "$expand_ext_value"; printf '\n'
-        shell_quote "$expand_dir_value"; printf '\n'
+
+        while IFS= read -r expand_capture_name &&
+            IFS= read -r expand_capture_value; do
+            printf '%s\n' "$expand_capture_name"
+            shell_quote "$expand_capture_value"
+            printf '\n'
+        done < "$expand_captures_file"
     } | awk '
         NR == 1 { command = $0; next }
-        NR == 2 { path = $0; next }
-        NR == 3 { name = $0; next }
-        NR == 4 { ext = $0; next }
-        NR == 5 { dir = $0; next }
+        NR % 2 == 0 { names[++name_count] = $0; next }
+        { values["{" names[name_count] "}"] = $0; next }
 
         END {
-            tokens[1] = "{path}"
-            tokens[2] = "{name}"
-            tokens[3] = "{ext}"
-            tokens[4] = "{dir}"
-            values["{path}"] = path
-            values["{name}"] = name
-            values["{ext}"] = ext
-            values["{dir}"] = dir
             rest = command
 
             while (length(rest) > 0) {
                 token = ""
                 position = 0
 
-                for (i = 1; i <= 4; i++) {
-                    candidate_position = index(rest, tokens[i])
+                for (i = 1; i <= name_count; i++) {
+                    candidate_token = "{" names[i] "}"
+                    candidate_position = index(rest, candidate_token)
                     if (candidate_position > 0 &&
                         (position == 0 || candidate_position < position)) {
-                        token = tokens[i]
+                        token = candidate_token
                         position = candidate_position
                     }
                 }
@@ -393,10 +713,12 @@ add_unique_command() {
 }
 
 collect_commands() {
+    collect_captures_file=$tmp_dir/captures
+
     while IFS= read -r section && IFS= read -r command; do
         while IFS= read -r path || [ -n "$path" ]; do
-            if section_matches_path "$section" "$path"; then
-                expanded_command=$(expand_command_placeholders "$command" "$path")
+            if section_matches_path "$section" "$path" "$collect_captures_file"; then
+                expanded_command=$(expand_command_placeholders "$command" "$collect_captures_file")
                 add_unique_command "$expanded_command"
                 append_unique_line "$command_paths_dir/$command_index" "$path"
                 append_unique_line "$has_commands_file" "$path"
