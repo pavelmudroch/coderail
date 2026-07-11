@@ -26,6 +26,8 @@ ROOT_DIR=$(
     CDPATH= cd -- "$SCRIPT_DIR/.."
     pwd
 )
+CODERAIL_BIN_PATH=$SCRIPT_DIR/cr
+export CODERAIL_BIN_PATH
 
 . "$ROOT_DIR/lib/utils/log.sh"
 . "$ROOT_DIR/lib/utils/args.sh"

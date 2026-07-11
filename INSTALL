@@ -1,0 +1,205 @@
+#!/usr/bin/env sh
+
+set -eu
+
+CODERAIL_INSTALL_REPO_URL=https://github.com/pavelmudroch/coderail
+
+usage() {
+    cat <<'EOF'
+Usage:
+  sh INSTALL
+
+Environment:
+  CODERAIL_INSTALL_DIR       Install directory, defaults to ~/.coderail
+  CODERAIL_INSTALL_VERSION   Install version: latest, main, X.Y.Z, or vX.Y.Z
+EOF
+}
+
+usage_error() {
+    echo "error: $*" >&2
+    echo >&2
+    usage >&2
+    exit 2
+}
+
+install_error() {
+    echo "error: $*" >&2
+    exit 1
+}
+
+install_is_release_version() {
+    printf '%s\n' "$1" | awk '
+        /^[v]?[0-9]+\.[0-9]+\.[0-9]+$/ { found = 1 }
+        END { exit found ? 0 : 1 }
+    '
+}
+
+install_target_ref() {
+    install_target=$1
+
+    case "$install_target" in
+        latest|main)
+            printf '%s\n' "$install_target"
+            ;;
+        "")
+            usage_error "CODERAIL_INSTALL_VERSION must not be empty"
+            ;;
+        *)
+            if install_is_release_version "$install_target"; then
+                case "$install_target" in
+                    v*) printf '%s\n' "$install_target" ;;
+                    *) printf 'v%s\n' "$install_target" ;;
+                esac
+                return 0
+            fi
+
+            usage_error "unsupported CODERAIL_INSTALL_VERSION: $install_target"
+            ;;
+    esac
+}
+
+install_target_url() {
+    install_ref=$1
+
+    case "$install_ref" in
+        main)
+            printf '%s/archive/refs/heads/main.tar.gz\n' "$CODERAIL_INSTALL_REPO_URL"
+            ;;
+        latest|v*)
+            printf '%s/archive/refs/tags/%s.tar.gz\n' "$CODERAIL_INSTALL_REPO_URL" "$install_ref"
+            ;;
+        *)
+            install_error "unsupported install ref: $install_ref"
+            ;;
+    esac
+}
+
+download_archive() {
+    archive_url=$1
+    archive_file=$2
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$archive_url" -o "$archive_file" ||
+            install_error "failed to download archive: $archive_url"
+        return 0
+    fi
+
+    if command -v wget >/dev/null 2>&1; then
+        wget -q -O "$archive_file" "$archive_url" ||
+            install_error "failed to download archive: $archive_url"
+        return 0
+    fi
+
+    install_error "curl or wget is required"
+}
+
+validate_empty_install_root() {
+    install_root=$1
+
+    [ ! -e "$install_root" ] && return 0
+    [ -d "$install_root" ] ||
+        install_error "install directory exists and is not a directory: $install_root"
+
+    for install_entry in "$install_root"/* "$install_root"/.[!.]* "$install_root"/..?*; do
+        [ -e "$install_entry" ] || continue
+        install_error "install directory is not empty: $install_root"
+    done
+}
+
+validate_source_root() {
+    source_root=$1
+
+    [ -d "$source_root" ] ||
+        install_error "source root is not a directory: $source_root"
+    [ -f "$source_root/bin/cr" ] ||
+        install_error "source root is missing bin/cr"
+    [ -d "$source_root/lib" ] ||
+        install_error "source root is missing lib/"
+    [ -f "$source_root/lib/utils/archive_apply.sh" ] ||
+        install_error "source root is missing lib/utils/archive_apply.sh"
+    [ -d "$source_root/instructions" ] ||
+        install_error "source root is missing instructions/"
+    [ -f "$source_root/README.md" ] ||
+        install_error "source root is missing README.md"
+    [ -f "$source_root/CHANGELOG.md" ] ||
+        install_error "source root is missing CHANGELOG.md"
+    [ -f "$source_root/LICENSE" ] ||
+        install_error "source root is missing LICENSE"
+    [ -f "$source_root/INSTALL" ] ||
+        install_error "source root is missing INSTALL"
+}
+
+extract_source_root() {
+    archive_file=$1
+    extract_dir=$2
+
+    mkdir -p "$extract_dir"
+    tar -xzf "$archive_file" -C "$extract_dir" ||
+        install_error "failed to extract archive: $archive_file"
+
+    source_root=
+    root_count=0
+
+    for source_entry in "$extract_dir"/* "$extract_dir"/.[!.]* "$extract_dir"/..?*; do
+        [ -e "$source_entry" ] || continue
+        root_count=$((root_count + 1))
+
+        [ -d "$source_entry" ] ||
+            install_error "archive must contain one source directory"
+        source_root=$source_entry
+    done
+
+    [ "$root_count" -eq 1 ] ||
+        install_error "archive must contain exactly one source directory"
+
+    validate_source_root "$source_root"
+    printf '%s\n' "$source_root"
+}
+
+cleanup() {
+    if [ -n "${tmp_dir:-}" ]; then
+        rm -rf "$tmp_dir"
+    fi
+}
+
+[ "$#" -eq 0 ] || usage_error "unexpected argument: $1"
+
+if [ "${CODERAIL_INSTALL_DIR+x}" ]; then
+    install_dir=$CODERAIL_INSTALL_DIR
+    [ -n "$install_dir" ] || usage_error "CODERAIL_INSTALL_DIR must not be empty"
+else
+    [ -n "${HOME:-}" ] || install_error "HOME is not set"
+    install_dir=$HOME/.coderail
+fi
+
+if [ "${CODERAIL_INSTALL_VERSION+x}" ]; then
+    install_version=$CODERAIL_INSTALL_VERSION
+else
+    install_version=latest
+fi
+
+install_ref=$(install_target_ref "$install_version")
+archive_url=$(install_target_url "$install_ref")
+
+validate_empty_install_root "$install_dir"
+
+tmp_dir=
+trap cleanup EXIT
+trap 'cleanup; exit 1' HUP INT TERM
+
+TEMP_DIR="${TMPDIR:-/tmp}"
+TEMP_DIR=${TEMP_DIR%/}
+tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-install.XXXXXX")
+archive_file=$tmp_dir/coderail.tar.gz
+extract_dir=$tmp_dir/extract
+
+download_archive "$archive_url" "$archive_file"
+source_root=$(extract_source_root "$archive_file" "$extract_dir")
+
+CODERAIL_ARCHIVE_APPLY_NO_MAIN=1 . "$source_root/lib/utils/archive_apply.sh"
+coderail_archive_apply_source "$source_root" "$install_dir" false ||
+    install_error "failed to install Coderail"
+
+printf 'Coderail installed to: %s\n' "$install_dir"
+printf 'Add Coderail to your PATH:\n'
+printf '  export PATH="%s/bin:$PATH"\n' "$install_dir"
