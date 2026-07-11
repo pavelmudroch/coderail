@@ -44,8 +44,7 @@ Options:
   --version             Show version information and exit
   -v, --verbose         Enable verbose logging
   -q, --quiet           Suppress non-error output
-  --cwd <dir>
-                        Specify the current working directory
+  --cwd <dir>           Specify the current working directory
 
 Commands:
   upgrade       Upgrade this cli tool to a different version
@@ -83,6 +82,16 @@ run_command() {
     [ -d "$work_dir" ] || error "--cwd is not a directory: $work_dir"
 
     cd "$work_dir"
+    sh "$script" "$@"
+}
+
+run_global_command() {
+    command=$1
+    shift
+    script="$ROOT_DIR/lib/commands/$command.sh"
+
+    [ -f "$script" ] || error "$command is not implemented"
+
     sh "$script" "$@"
 }
 
@@ -130,11 +139,10 @@ while [ "$#" -gt 0 ]; do
         upgrade|install|uninstall)
             command=$1
             shift
-            [ "$work_dir_set" -eq 0 ] || error "--cwd is not valid for $command"
-            run_command "$command" "$@"
+            run_global_command "$command" "$@"
             exit 0
             ;;
-        init|ticket|test|check)
+        init|ticket|test)
             command=$1
             shift
             run_command "$command" "$@"

@@ -506,24 +506,26 @@ assert_symlinked_cli_uses_resolved_root() {
     assert_path_missing "$tmp_dir/README.md"
 }
 
-assert_cwd_rejected_for_upgrade() {
+assert_cwd_ignored_for_upgrade() {
     install_root=$tmp_dir/install-cwd
-    work_dir=$tmp_dir/work-cwd
+    work_dir=$tmp_dir/missing-work-cwd
+    archive_file=$tmp_dir/cwd.tar.gz
     fake_dir=$tmp_dir/fake-cwd
     fake_log=$tmp_dir/cwd.log
 
     create_cli_install "$install_root"
-    mkdir "$work_dir"
     mkdir "$fake_dir"
     : > "$fake_log"
+    create_archive "$archive_file" cwd
     write_fake_curl "$fake_dir"
 
-    FAKE_LOG=$fake_log FAKE_ARCHIVE=$tmp_dir/missing.tar.gz PATH="$fake_dir:$PATH" \
+    FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
         run_upgrade_cwd_option "$install_root" "$work_dir"
 
-    assert_status "$run_status" 2
-    assert_file_empty "$fake_log"
-    assert_contains "$run_stderr" "--cwd is not valid for upgrade"
+    assert_status "$run_status" 0
+    assert_contains "$fake_log" "curl https://github.com/pavelmudroch/coderail/archive/refs/tags/latest.tar.gz"
+    assert_contains "$install_root/README.md" "readme cwd"
+    assert_path_missing "$work_dir"
 }
 
 assert_help_documents_supported_options() {
@@ -556,7 +558,7 @@ test "Unexpected arguments fail" assert_unexpected_arguments_fail
 test "Invalid versions fail" assert_invalid_versions_fail
 test "Install root comes from running CLI" assert_install_root_from_running_cli
 test "Symlinked CLI uses resolved root" assert_symlinked_cli_uses_resolved_root
-test "Cwd is rejected for upgrade" assert_cwd_rejected_for_upgrade
+test "Cwd is ignored for upgrade" assert_cwd_ignored_for_upgrade
 test "Help documents supported options" assert_help_documents_supported_options
 
 print_tests_summary

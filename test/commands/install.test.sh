@@ -450,6 +450,18 @@ assert_install_unknown_tool_fails() {
     assert_path_missing "$home_dir/.gemini"
 }
 
+assert_cwd_ignored_for_install() {
+    home_dir=$tmp_dir/home-cwd
+    work_dir=$tmp_dir/missing-work-cwd
+
+    mkdir "$home_dir"
+
+    HOME=$home_dir "$CR" --cwd "$work_dir" install codex >/dev/null
+
+    assert_installed_files_in_home "$home_dir" codex
+    assert_path_missing "$work_dir"
+}
+
 assert_multi_tool_install() {
     home_dir=$tmp_dir/home-multiple-tools
 
@@ -646,6 +658,7 @@ assert_conflicting_policy_fails() {
 
 print_tests_header "Installation Tests"
 test "Install unknown tool fails" assert_install_unknown_tool_fails
+test "Cwd is ignored for install" assert_cwd_ignored_for_install
 test "Install multiple tools" assert_multi_tool_install
 test "Policy keys normalize per tool" assert_policy_key_normalization
 test "Conflicting policy fails" assert_conflicting_policy_fails

@@ -185,6 +185,19 @@ assert_uninstall_unknown_tool_fails() {
     assert_path_missing "$home_dir/.gemini"
 }
 
+assert_cwd_ignored_for_uninstall() {
+    home_dir=$tmp_dir/home-cwd
+    work_dir=$tmp_dir/missing-work-cwd
+
+    mkdir "$home_dir"
+    assert_install_succeeds "$home_dir" codex
+
+    HOME=$home_dir "$CR" --cwd "$work_dir" uninstall codex >/dev/null
+
+    assert_tool_uninstalled "$home_dir" codex
+    assert_path_missing "$work_dir"
+}
+
 assert_clean_uninstall() {
     tool=$1
     home_dir=$(home_dir_for_case_tool clean "$tool")
@@ -341,6 +354,7 @@ assert_tool_home_override() {
 
 print_tests_header "Uninstallation Tests"
 test "Uninstall unknown tool fails" assert_uninstall_unknown_tool_fails
+test "Cwd is ignored for uninstall" assert_cwd_ignored_for_uninstall
 test "Uninstall multiple tools" assert_multi_tool_uninstall
 test "Uninstall preserves unselected tool" assert_uninstall_preserves_unselected_tool
 
