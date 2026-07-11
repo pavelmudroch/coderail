@@ -1,0 +1,3 @@
+# characters after '#' are comments
+[lib/{path:**}/{name:*}.sh]
+test/{path}/{name}.test.sh
