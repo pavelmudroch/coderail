@@ -94,8 +94,11 @@ assert_clean_init() {
     assert_file_content "$work_dir/.coderail/test.map" "# characters after '#' are comments
 
 [default]
-# Add commands that run always
-# biome lint {path} - use dynamic {path} for substitution of current test file path"
+# Add path-independent commands that always run
+
+# Use captures in section patterns for commands that need selected path
+# [{path:**}]
+# shellcheck {path}"
 }
 
 assert_init_preserves_existing_files() {
@@ -113,8 +116,11 @@ assert_init_preserves_existing_files() {
     assert_file_content "$work_dir/.coderail/test.map" "# characters after '#' are comments
 
 [default]
-# Add commands that run always
-# biome lint {path} - use dynamic {path} for substitution of current test file path"
+# Add path-independent commands that always run
+
+# Use captures in section patterns for commands that need selected path
+# [{path:**}]
+# shellcheck {path}"
 }
 
 assert_init_without_write_permission_fails() {

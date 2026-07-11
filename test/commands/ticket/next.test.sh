@@ -8,7 +8,7 @@ SCRIPT_DIR=$(
 )
 
 ROOT_DIR=$(
-    CDPATH= cd -- "$SCRIPT_DIR/../.."
+    CDPATH= cd -- "$SCRIPT_DIR/../../.."
     pwd
 )
 

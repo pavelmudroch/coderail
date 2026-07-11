@@ -616,7 +616,7 @@ assert_policy_key_normalization() {
     assert_contains "$codex_skill" '$ticket-pick'
 
     assert_not_contains "$copilot_skill" 'allow_implicit_invocation'
-    assert_not_contains "$copilot_skill" 'disable-model-invocation'
+    assert_contains "$copilot_skill" 'disable-model-invocation: true'
     assert_contains "$copilot_skill" '/ticket-pick'
 
     assert_contains "$claude_skill" 'disable-model-invocation: true'
@@ -624,7 +624,7 @@ assert_policy_key_normalization() {
     assert_contains "$claude_skill" '/ticket-pick'
 
     assert_not_contains "$gemini_skill" 'allow_implicit_invocation'
-    assert_not_contains "$gemini_skill" 'disable-model-invocation'
+    assert_contains "$gemini_skill" 'disable-model-invocation: true'
     assert_contains "$gemini_skill" '/ticket-pick'
 }
 

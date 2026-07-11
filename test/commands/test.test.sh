@@ -180,6 +180,54 @@ assert_invalid_test_maps_fail() {
     assert_failure
     assert_file_empty "$run_stdout"
     assert_stderr_contains "error: invalid .coderail/test.map"
+
+    work_dir=$(create_work_dir invalid-capture-missing-name)
+    create_path "$work_dir/src/app.sh"
+    printf '[src/{:*.sh}]\ntrue\n' > "$work_dir/.coderail/test.map"
+    run_cr_test "$work_dir" src/app.sh
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: invalid .coderail/test.map"
+
+    work_dir=$(create_work_dir invalid-capture-missing-colon)
+    create_path "$work_dir/src/app.sh"
+    printf '[src/{name}.sh]\ntrue\n' > "$work_dir/.coderail/test.map"
+    run_cr_test "$work_dir" src/app.sh
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: invalid .coderail/test.map"
+
+    work_dir=$(create_work_dir invalid-capture-missing-glob)
+    create_path "$work_dir/src/app.sh"
+    printf '[src/{name:}.sh]\ntrue\n' > "$work_dir/.coderail/test.map"
+    run_cr_test "$work_dir" src/app.sh
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: invalid .coderail/test.map"
+
+    work_dir=$(create_work_dir invalid-capture-missing-close)
+    create_path "$work_dir/src/app.sh"
+    printf '[src/{name:*.sh]\ntrue\n' > "$work_dir/.coderail/test.map"
+    run_cr_test "$work_dir" src/app.sh
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: invalid .coderail/test.map"
+
+    work_dir=$(create_work_dir invalid-capture-name)
+    create_path "$work_dir/src/app.sh"
+    printf '[src/{1name:*}.sh]\ntrue\n' > "$work_dir/.coderail/test.map"
+    run_cr_test "$work_dir" src/app.sh
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: invalid .coderail/test.map"
+
+    work_dir=$(create_work_dir invalid-unescaped-close-brace)
+    create_path "$work_dir/src/app}.sh"
+    printf '[src/app}.sh]\ntrue\n' > "$work_dir/.coderail/test.map"
+    run_cr_test "$work_dir" 'src/app}.sh'
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: invalid .coderail/test.map"
 }
 
 assert_empty_map_reports_no_tests() {
@@ -219,7 +267,7 @@ assert_changed_omits_coderail_files() {
     create_path "$work_dir/src/app.sh"
     create_path "$work_dir/.coderail/local.txt"
     write_test_map "$work_dir" <<'EOF'
-[default]
+[{path:**}]
 printf '%s\n' {path} >> run.log
 EOF
 
@@ -291,19 +339,19 @@ assert_path_globs_match_expected_paths() {
     create_path "$work_dir/lib/root.sh"
     create_path "$work_dir/lib/commands/test.sh"
     write_test_map "$work_dir" <<'EOF'
-[README.md]
+[{path:README.md}]
 printf 'exact %s\n' {path} >> run.log
 
-[*.md]
+[{path:*.md}]
 printf 'root-md %s\n' {path} >> run.log
 
-[lib/*.sh]
+[{path:lib/*.sh}]
 printf 'single %s\n' {path} >> run.log
 
-[lib/**/*.sh]
+[{path:lib/**/*.sh}]
 printf 'recursive %s\n' {path} >> run.log
 
-[**/*.sh]
+[{path:**/*.sh}]
 printf 'all-sh %s\n' {path} >> run.log
 EOF
 
@@ -320,6 +368,72 @@ recursive lib/root.sh
 recursive lib/commands/test.sh
 all-sh lib/root.sh
 all-sh lib/commands/test.sh"
+}
+
+assert_path_capture_commands_run() {
+    work_dir=$(create_work_dir path-capture)
+
+    create_path "$work_dir/src/app.sh"
+    write_test_map "$work_dir" <<'EOF'
+[{path:src/*.sh}]
+printf 'path %s\n' {path} >> run.log
+EOF
+
+    run_cr_test "$work_dir" src/app.sh
+
+    assert_success
+    assert_stdout_content "src/app.sh: passed"
+    assert_file_content "$work_dir/run.log" "path src/app.sh"
+}
+
+assert_nested_capture_maps_source_to_test() {
+    work_dir=$(create_work_dir nested-capture)
+
+    create_path "$work_dir/lib/commands/install.sh"
+    mkdir -p "$work_dir/test/commands"
+    printf "printf 'mapped install\n' >> run.log\n" > "$work_dir/test/commands/install.test.sh"
+    write_test_map "$work_dir" <<'EOF'
+[lib/{rel:**}/{base:*}.sh]
+sh test/{rel}/{base}.test.sh
+EOF
+
+    run_cr_test "$work_dir" lib/commands/install.sh
+
+    assert_success
+    assert_stdout_content "lib/commands/install.sh: passed"
+    assert_file_content "$work_dir/run.log" "mapped install"
+}
+
+assert_missing_mapped_test_file_fails() {
+    work_dir=$(create_work_dir missing-mapped-test)
+
+    create_path "$work_dir/lib/commands/missing.sh"
+    write_test_map "$work_dir" <<'EOF'
+[lib/{rel:**}/{base:*}.sh]
+sh test/{rel}/{base}.test.sh
+EOF
+
+    run_cr_test "$work_dir" lib/commands/missing.sh
+
+    assert_failure
+    assert_stdout_content "lib/commands/missing.sh: failed"
+    assert_file_empty "$run_stderr"
+}
+
+assert_default_path_placeholder_stays_literal() {
+    work_dir=$(create_work_dir default-path-literal)
+
+    create_path "$work_dir/src/app.sh"
+    write_test_map "$work_dir" <<'EOF'
+[default]
+printf '%s\n' {path} >> run.log
+EOF
+
+    run_cr_test "$work_dir" src/app.sh
+
+    assert_success
+    assert_stdout_content "src/app.sh: passed"
+    assert_file_content "$work_dir/run.log" "{path}"
 }
 
 assert_duplicate_commands_run_once() {
@@ -352,6 +466,8 @@ assert_static_duplicate_across_files_runs_once() {
     write_test_map "$work_dir" <<'EOF'
 [default]
 printf 'repo\n' >> run.log
+
+[{path:src/*.sh}]
 printf 'path %s\n' {path} >> run.log
 EOF
 
@@ -370,7 +486,7 @@ assert_path_placeholder_quotes_spaces() {
 
     create_path "$work_dir/docs/my file.md"
     write_test_map "$work_dir" <<'EOF'
-[docs/**/*.md]
+[{path:docs/**/*.md}]
 printf '<%s>\n' {path} >> run.log
 EOF
 
@@ -381,20 +497,93 @@ EOF
     assert_file_content "$work_dir/run.log" "<docs/my file.md>"
 }
 
-assert_path_metadata_placeholders_render() {
-    work_dir=$(create_work_dir path-metadata-placeholders)
+assert_capture_placeholders_render() {
+    work_dir=$(create_work_dir capture-placeholders)
 
     create_path "$work_dir/some relative/path/file name.ext"
     write_test_map "$work_dir" <<'EOF'
-[some relative/**/*.ext]
-printf 'path=<%s> name=<%s> ext=<%s> dir=<%s>\n' {path} {name} {ext} {dir} >> run.log
+[some relative/{dir:**}/{name:*}.{ext:*}]
+printf 'dir=<%s> name=<%s> ext=<%s>\n' {dir} {name} {ext} >> run.log
 EOF
 
     run_cr_test "$work_dir" "./some relative/path/file name.ext"
 
     assert_success
     assert_stdout_content "some relative/path/file name.ext: passed"
-    assert_file_content "$work_dir/run.log" "path=<some relative/path/file name.ext> name=<file name> ext=<ext> dir=<some relative/path>"
+    assert_file_content "$work_dir/run.log" "dir=<path> name=<file name> ext=<ext>"
+}
+
+assert_duplicate_capture_names_fail() {
+    work_dir=$(create_work_dir duplicate-capture-name)
+
+    create_path "$work_dir/src/one/two.sh"
+    write_test_map "$work_dir" <<'EOF'
+[src/{name:*}/{name:*}.sh]
+true
+EOF
+
+    run_cr_test "$work_dir" src/one/two.sh
+
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: invalid .coderail/test.map"
+}
+
+assert_capture_names_can_repeat_across_sections() {
+    work_dir=$(create_work_dir repeated-captures-across-sections)
+
+    create_path "$work_dir/src/app.sh"
+    write_test_map "$work_dir" <<'EOF'
+[src/{name:*}.sh]
+printf 'src %s\n' {name} >> run.log
+
+[test/{name:*}.test.sh]
+printf 'test %s\n' {name} >> run.log
+EOF
+
+    run_cr_test "$work_dir" src/app.sh
+
+    assert_success
+    assert_stdout_content "src/app.sh: passed"
+    assert_file_content "$work_dir/run.log" "src app"
+}
+
+assert_escaped_pattern_characters_match_literals() {
+    work_dir=$(create_work_dir escaped-pattern-characters)
+
+    create_path "$work_dir/src/{literal}.sh"
+    create_path "$work_dir/src/name:part.sh"
+    create_path "$work_dir/src/cap:name.sh"
+    create_path "$work_dir/src/back\\slash.sh"
+    write_test_map "$work_dir" <<'EOF'
+[src/\{literal\}.sh]
+printf 'braces\n' >> run.log
+
+[src/name:part.sh]
+printf 'colon\n' >> run.log
+
+[src/{name:cap:name}.sh]
+printf 'capture-colon %s\n' {name} >> run.log
+
+[src/back\\slash.sh]
+printf 'backslash\n' >> run.log
+EOF
+
+    run_cr_test "$work_dir" \
+        'src/{literal}.sh' \
+        'src/name:part.sh' \
+        'src/cap:name.sh' \
+        "src/back\\slash.sh"
+
+    assert_success
+    assert_stdout_content "src/{literal}.sh: passed
+src/name:part.sh: passed
+src/cap:name.sh: passed
+src/back\\slash.sh: passed"
+    assert_file_content "$work_dir/run.log" "braces
+colon
+capture-colon cap:name
+backslash"
 }
 
 assert_failures_do_not_stop_result_collection() {
@@ -445,7 +634,7 @@ assert_verbose_failure_prints_failed_command_output() {
     create_path "$work_dir/src/fail.sh"
     create_path "$work_dir/src/pass.sh"
     write_test_map "$work_dir" <<'EOF'
-[src/*.sh]
+[{path:src/*.sh}]
 case {path} in *fail.sh) printf 'failed stdout\n'; printf 'failed stderr\n' >&2; exit 7;; esac
 EOF
 
@@ -494,10 +683,17 @@ test "Default commands run" assert_default_commands_run
 test "Glob commands run without default" assert_glob_commands_run_without_default
 test "Default and glob run in map order" assert_default_and_glob_run_in_map_order
 test "Path globs match expected paths" assert_path_globs_match_expected_paths
+test "Path capture commands run" assert_path_capture_commands_run
+test "Nested capture maps source to test" assert_nested_capture_maps_source_to_test
+test "Missing mapped test file fails" assert_missing_mapped_test_file_fails
+test "Default path placeholder stays literal" assert_default_path_placeholder_stays_literal
 test "Duplicate commands run once" assert_duplicate_commands_run_once
 test "Static duplicate across files runs once" assert_static_duplicate_across_files_runs_once
 test "Path placeholder quotes spaces" assert_path_placeholder_quotes_spaces
-test "Path metadata placeholders render" assert_path_metadata_placeholders_render
+test "Capture placeholders render" assert_capture_placeholders_render
+test "Duplicate capture names fail" assert_duplicate_capture_names_fail
+test "Capture names can repeat across sections" assert_capture_names_can_repeat_across_sections
+test "Escaped pattern characters match literals" assert_escaped_pattern_characters_match_literals
 test "Failures do not stop result collection" assert_failures_do_not_stop_result_collection
 test "Shared static failure marks all files failed" assert_shared_static_failure_marks_all_files_failed
 test "Verbose failure prints failed command output" assert_verbose_failure_prints_failed_command_output
