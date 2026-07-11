@@ -41,6 +41,11 @@ Coderail is:
 * a way to reduce agent context pollution
 * a way to avoid teaching every agent every project-specific test command
 * branch-scoped scaffolding for coding work
+* a tiny guidance rails for agentic engineering
+    - research and pick approach
+    - create specification plan
+    - split specs into actionable tickets
+    - implement tickets
 
 A typical flow:
 
@@ -68,10 +73,6 @@ Coderail is not:
 * a database of every past decision
 * a place to satisfy every possible future use case
 
-If a feature does not help agents safely complete branch-local work, it probably does not belong in the first version.
-
-Tiny tools survive. Platforms grow dashboards and then everyone suffers.
-
 ## Supported Systems
 
 Coderail is intended for Unix-like environments:
@@ -86,17 +87,26 @@ Native Windows support outside WSL is not a primary target.
 
 ## Installation
 
-Use shell command to download a bootstrap installation script to install Coderail.
+Use the bootstrap installer to install Coderail.
 
 ```sh
 curl -fsSL https://github.com/pavelmudroch/coderail/raw/refs/heads/main/INSTALL | sh
 ```
 
-By default, this installs Coderail into your home directory under `~/.coderail`. You can change the installation directory by setting the `CODERAIL_INSTALL_DIR` environment variable before running the install script.
+By default, this installs Coderail into `~/.coderail`.
 
-After installation, add the `.coderail/bin` directory to your `PATH` environment variable to make the `cr` command available in your shell.
+Supported installer environment variables:
 
-Example of default installation under `~/.coderail`:
+```txt
+CODERAIL_INSTALL_DIR       Install directory, defaults to ~/.coderail
+CODERAIL_INSTALL_VERSION   Install version: latest, main, X.Y.Z, or vX.Y.Z
+```
+
+`CODERAIL_INSTALL_VERSION` defaults to `latest`. `main` installs from the main branch. `X.Y.Z` and `vX.Y.Z` install the matching release tag.
+
+After installation, add the install `bin` directory to your `PATH` to make `cr` available in your shell. The installer prints the export command; it does not edit shell startup files.
+
+Example for the default install directory:
 
 ```sh
 export PATH="$HOME/.coderail/bin:$PATH"
@@ -137,32 +147,39 @@ Example:
 
 ```ini
 [default]
+deno fmt --check
+
+[{path:**/*.ts}]
 biome format {path}
 biome check {path}
 
 [net/tcp/**/*.ts]
 deno test tests/net/tcp.test.ts
 
-[config/**/*.ts]
-deno test tests/config.test.ts
+[lib/{rel:**}/{base}.sh]
+sh test/{rel}/{base}.test.sh
 ```
 
 Rules:
 
-- [default] commands always run.
-- Other section names are glob patterns.
+- [default] commands always run, but define no captures.
+- Use [default] for commands that do not need the selected path.
+- Other section names are glob patterns and can define captures with `{name:glob}`.
+- Capture names must start with a letter or underscore and contain only letters, digits, and underscores.
+- Literal `{`, `}`, and `\` in section patterns must be escaped as `\{`, `\}`, and `\\`.
+- Commands can use only captures from the matching section as `{name}` placeholders.
 - Commands run in file order.
 - A path fails if any matching command exits with a non-zero status, but all commands continue to run and collect output, so all possible failures are reported.
 - All commands are pre-rendered and deduplicated before execution.
 
-Placeholders:
+Capture examples:
 
 ```txt
-{path}   current relative path; command repeats once per path
-{name}   filename without extension for current path
-{ext}    extension without dot for current path
-{dir}    relative directory containing current path, or . at repo root
+[{path:**/*.ts}]          captures the matched path as {path}
+[lib/{rel:**}/{base}.sh]  captures nested dir as {rel} and filename stem as {base}
 ```
+
+There are no implicit placeholders. `{path}`, `{name}`, `{ext}`, and `{dir}` expand only when the matching section explicitly captures those names. Other brace text stays literal.
 
 ## Usage
 
@@ -205,6 +222,29 @@ cr --cwd /path/to/project test --changed
 ```
 
 This section documents commands that are currently implemented and ready to use: `init`, `install`, `uninstall`, `test`, and `ticket`.
+
+### Custom Skill Workflow
+
+Coderail includes custom skills under `instructions/skills` to guide agent work from rough intent to verified tickets.
+
+Typical flow for larger work:
+
+```txt
+scope
+→ to-spec
+→ tickets-from-spec
+→ ticket-pick or ticket-implement
+→ cr test <changed paths>
+→ cr ticket close <ticket>
+```
+
+Use `scope` first when the problem, boundaries, trade-offs, or preferred direction are not yet clear. It keeps the current direction in `.coderail/SCOPE.md` and intentionally stops before implementation planning.
+
+Use `to-spec` when the direction is ready to become an implementation spec. It turns the known context into `.coderail/SPEC.md`, including requirements, implementation decisions, testing decisions, assumptions, and out-of-scope items.
+
+Use `tickets-from-spec` to split `.coderail/SPEC.md` into smaller local tickets. Then use `ticket-pick` to select the next ready ticket, or `ticket-implement` for manual ticket selection.
+
+For small updates, straightforward bug fixes, or simple documentation work, `scope` and `to-spec` can be skipped. In those cases, make a short plan and use `ticket-from-plan` to create one ticket. If the plan grows too large for one ticket, switch back to `to-spec` and `tickets-from-spec`.
 
 ### `cr init`
 
@@ -343,7 +383,7 @@ At least one selector is required:
 <file>      Run tests for a specific relative file path
 ```
 
-`cr test` reads `.coderail/test.map`, finds sections whose glob patterns match each selected path, expands path placeholders, and runs the resulting commands. The `[default]` section always matches. If any matching command for a path exits non-zero, the final output marks that path as `failed`; otherwise it reports `passed` or `no tests found`.
+`cr test` reads `.coderail/test.map`, finds sections whose glob patterns match each selected path, expands capture placeholders, and runs the resulting commands. The `[default]` section always matches without captures. If any matching command for a path exits non-zero, the final output marks that path as `failed`; otherwise it reports `passed` or `no tests found`.
 
 For inspecting details of failed commands, run with `--verbose` to see the full command output.
 
