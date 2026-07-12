@@ -510,6 +510,173 @@ assert_force_removes_modified_stale_file() {
     assert_file "$install_root/lib/commands/example.sh"
 }
 
+assert_upgrade_replaces_modified_managed_file() {
+    source_v1=$tmp_dir/source-upgrade-modified-v1
+    source_v2=$tmp_dir/source-upgrade-modified-v2
+    install_root=$tmp_dir/install-upgrade-modified
+
+    create_source_tree "$source_v1" upgrade-modified-v1
+    create_source_tree "$source_v2" upgrade-modified-v2
+    coderail_archive_apply_source "$source_v1" "$install_root" false
+    printf 'local modification\n' >> "$install_root/lib/commands/example.sh"
+
+    coderail_archive_apply_source_policy "$source_v2" "$install_root" upgrade
+
+    assert_contains "$install_root/lib/commands/example.sh" "upgrade-modified-v2"
+    assert_not_contains "$install_root/lib/commands/example.sh" "local modification"
+}
+
+assert_upgrade_refuses_untracked_collision() {
+    source_v1=$tmp_dir/source-upgrade-collision-v1
+    source_v2=$tmp_dir/source-upgrade-collision-v2
+    install_root=$tmp_dir/install-upgrade-collision
+
+    create_source_tree "$source_v1" upgrade-collision-v1
+    create_source_tree "$source_v2" upgrade-collision-v2
+    coderail_archive_apply_source "$source_v1" "$install_root" false
+    printf 'new managed file\n' > "$source_v2/lib/commands/new.sh"
+    printf 'user file\n' > "$install_root/lib/commands/new.sh"
+
+    assert_command_fails \
+        coderail_archive_apply_source_policy "$source_v2" "$install_root" upgrade
+
+    assert_contains "$install_root/lib/commands/new.sh" "user file"
+    assert_contains "$install_root/lib/commands/example.sh" "upgrade-collision-v1"
+}
+
+assert_upgrade_removes_modified_stale_file() {
+    source_v1=$tmp_dir/source-upgrade-stale-v1
+    source_v2=$tmp_dir/source-upgrade-stale-v2
+    install_root=$tmp_dir/install-upgrade-stale
+
+    create_source_tree "$source_v1" upgrade-stale-v1
+    printf 'stale\n' > "$source_v1/lib/commands/stale.sh"
+    create_source_tree "$source_v2" upgrade-stale-v2
+    coderail_archive_apply_source "$source_v1" "$install_root" false
+    printf 'local stale modification\n' >> "$install_root/lib/commands/stale.sh"
+
+    coderail_archive_apply_source_policy "$source_v2" "$install_root" upgrade
+
+    assert_path_missing "$install_root/lib/commands/stale.sh"
+    assert_not_contains "$install_root/.coderail-install" "lib/commands/stale.sh"
+}
+
+assert_validate_upgrade_install_accepts_checksum_mismatch() {
+    source_root=$tmp_dir/source-validate-upgrade
+    install_root=$tmp_dir/install-validate-upgrade
+
+    create_source_tree "$source_root" validate-upgrade
+    coderail_archive_apply_source "$source_root" "$install_root" false
+    printf 'modified\n' >> "$install_root/bin/cr"
+
+    run_helper validate-upgrade-install "$install_root"
+
+    assert_success
+}
+
+assert_invalid_upgrade_manifest() {
+    manifest_case=$1
+    expected_error=$2
+    install_root=$tmp_dir/install-invalid-upgrade-$manifest_case
+    fake_dir=$tmp_dir/fake-invalid-upgrade-$manifest_case
+    fake_log=$tmp_dir/invalid-upgrade-$manifest_case.log
+
+    mkdir -p "$install_root/bin" "$fake_dir"
+    printf 'existing cli\n' > "$install_root/bin/cr"
+    : > "$fake_log"
+    write_fake_curl "$fake_dir"
+
+    case "$manifest_case" in
+        missing)
+            ;;
+        malformed)
+            printf 'malformed\n' > "$install_root/.coderail-install"
+            ;;
+        empty)
+            : > "$install_root/.coderail-install"
+            ;;
+        missing-bin)
+            printf 'user file\n' > "$install_root/user.txt"
+            (
+                cd "$install_root" && cksum user.txt
+            ) > "$install_root/.coderail-install"
+            ;;
+    esac
+
+    FAKE_LOG=$fake_log PATH="$fake_dir:$PATH" \
+        run_helper upgrade-target latest "$install_root"
+
+    assert_failure
+    [ ! -s "$fake_log" ] || fail "invalid install triggered a download"
+    assert_contains "$run_stderr" "$expected_error"
+    assert_contains "$install_root/bin/cr" "existing cli"
+}
+
+assert_upgrade_target_applies_owned_changes() {
+    source_v1=$tmp_dir/source-upgrade-target-v1
+    archive_file=$tmp_dir/upgrade-target.tar.gz
+    install_root=$tmp_dir/install-upgrade-target
+    fake_dir=$tmp_dir/fake-upgrade-target
+    fake_log=$tmp_dir/upgrade-target.log
+
+    create_source_tree "$source_v1" upgrade-target-v1
+    printf 'stale\n' > "$source_v1/lib/commands/stale.sh"
+    coderail_archive_apply_source "$source_v1" "$install_root" false
+    printf 'local modification\n' >> "$install_root/lib/commands/example.sh"
+    printf 'local stale modification\n' >> "$install_root/lib/commands/stale.sh"
+    printf 'user data\n' > "$install_root/user.txt"
+
+    mkdir "$fake_dir"
+    : > "$fake_log"
+    create_archive "$archive_file" upgrade-target-v2
+    write_fake_curl "$fake_dir"
+
+    FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
+        run_helper upgrade-target latest "$install_root"
+
+    assert_success
+    assert_contains "$install_root/lib/commands/example.sh" "upgrade-target-v2"
+    assert_not_contains "$install_root/lib/commands/example.sh" "local modification"
+    assert_path_missing "$install_root/lib/commands/stale.sh"
+    assert_not_contains "$install_root/.coderail-install" "lib/commands/stale.sh"
+    assert_contains "$install_root/user.txt" "user data"
+    assert_executable "$install_root/bin/cr"
+}
+
+assert_upgrade_target_rejects_untracked_collision() {
+    source_v1=$tmp_dir/source-upgrade-target-collision-v1
+    archive_file=$tmp_dir/upgrade-target-collision.tar.gz
+    install_root=$tmp_dir/install-upgrade-target-collision
+    old_manifest=$tmp_dir/upgrade-target-collision.manifest
+    fake_dir=$tmp_dir/fake-upgrade-target-collision
+    fake_log=$tmp_dir/upgrade-target-collision.log
+
+    create_source_tree "$source_v1" upgrade-target-collision-v1
+    coderail_archive_apply_source "$source_v1" "$install_root" false
+    printf 'user file\n' > "$install_root/lib/commands/new.sh"
+    cp "$install_root/.coderail-install" "$old_manifest"
+
+    mkdir "$fake_dir"
+    : > "$fake_log"
+    create_archive "$archive_file" upgrade-target-collision-v2
+    printf 'new managed file\n' > "$archive_root/lib/commands/new.sh"
+    (
+        cd "$archive_parent" &&
+            tar -czf "$archive_file" "coderail-upgrade-target-collision-v2"
+    )
+    write_fake_curl "$fake_dir"
+
+    FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
+        run_helper upgrade-target latest "$install_root"
+
+    assert_failure
+    assert_contains "$run_stderr" "refusing to overwrite untracked file"
+    assert_contains "$install_root/lib/commands/new.sh" "user file"
+    assert_contains "$install_root/lib/commands/example.sh" "upgrade-target-collision-v1"
+    cmp -s "$old_manifest" "$install_root/.coderail-install" ||
+        fail "upgrade collision changed the manifest"
+}
+
 print_tests_header "Archive Apply Helper Tests"
 test "Resolve archive targets" assert_target_resolution
 test "Stage managed file set" assert_stage_managed_file_set
@@ -527,6 +694,20 @@ test "Invalid manifest path blocks apply" assert_invalid_manifest_path_blocks_ap
 test "Stale file detection and removal" assert_stale_file_detection_and_removal
 test "Modified stale file requires force" assert_modified_stale_file_requires_force
 test "Force removes modified stale file" assert_force_removes_modified_stale_file
+test "Upgrade replaces modified managed file" assert_upgrade_replaces_modified_managed_file
+test "Upgrade refuses untracked collision" assert_upgrade_refuses_untracked_collision
+test "Upgrade removes modified stale file" assert_upgrade_removes_modified_stale_file
+test "Upgrade validation ignores checksum mismatch" assert_validate_upgrade_install_accepts_checksum_mismatch
+test "Upgrade rejects missing manifest before download" \
+    assert_invalid_upgrade_manifest missing "not a regular file"
+test "Upgrade rejects malformed manifest before download" \
+    assert_invalid_upgrade_manifest malformed "invalid install manifest line"
+test "Upgrade rejects empty manifest before download" \
+    assert_invalid_upgrade_manifest empty "manifest is empty"
+test "Upgrade rejects manifest without bin/cr before download" \
+    assert_invalid_upgrade_manifest missing-bin "does not track bin/cr"
+test "Upgrade target applies owned changes" assert_upgrade_target_applies_owned_changes
+test "Upgrade target rejects untracked collision" assert_upgrade_target_rejects_untracked_collision
 
 print_tests_summary
 

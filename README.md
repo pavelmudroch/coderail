@@ -391,7 +391,6 @@ Options:
 --version X.Y.Z   Upgrade to a release version
 --version vX.Y.Z  Upgrade to a release version
 --canary          Upgrade to the latest build from the main branch
---force           Replace modified managed files
 ```
 
 Examples:
@@ -400,7 +399,6 @@ Examples:
 cr upgrade
 cr upgrade --version 1.2.3
 cr upgrade --canary
-cr upgrade --force
 ```
 
 ### `cr test`

@@ -14,8 +14,10 @@ Usage:
   archive_apply.sh download-archive <target> <archive-file>
   archive_apply.sh extract-source <archive-file> <extract-dir>
   archive_apply.sh stage-source <source-root> <stage-dir> <manifest-file>
+  archive_apply.sh validate-upgrade-install <install-root>
   archive_apply.sh apply-source <source-root> <install-root> <force>
   archive_apply.sh apply-target <target> <install-root> <force>
+  archive_apply.sh upgrade-target <target> <install-root>
 EOF
 }
 
@@ -32,6 +34,26 @@ coderail_archive_validate_force() {
             ;;
         *)
             coderail_archive_error "force must be true or false"
+            ;;
+    esac
+}
+
+coderail_archive_policy_from_force() {
+    coderail_archive_validate_force "$1" || return 1
+
+    if [ "$1" = true ]; then
+        printf '%s\n' force
+    else
+        printf '%s\n' safe
+    fi
+}
+
+coderail_archive_validate_policy() {
+    case "$1" in
+        safe|force|upgrade)
+            ;;
+        *)
+            coderail_archive_error "archive policy must be safe, force, or upgrade"
             ;;
     esac
 }
@@ -382,6 +404,25 @@ coderail_archive_manifest_path_exists() {
     coderail_archive_manifest_line_for_path "$1" "$2" >/dev/null 2>&1
 }
 
+coderail_archive_validate_upgrade_install() {
+    coderail_archive_install_root=$1
+    coderail_archive_manifest_file=$coderail_archive_install_root/.coderail-install
+
+    [ -d "$coderail_archive_install_root" ] ||
+        coderail_archive_error "upgrade install root is not a directory: $coderail_archive_install_root" ||
+        return 1
+    [ -f "$coderail_archive_manifest_file" ] ||
+        coderail_archive_error "upgrade install manifest is not a regular file: $coderail_archive_manifest_file" ||
+        return 1
+    coderail_archive_validate_manifest_file "$coderail_archive_manifest_file" || return 1
+    [ -s "$coderail_archive_manifest_file" ] ||
+        coderail_archive_error "upgrade install manifest is empty: $coderail_archive_manifest_file" ||
+        return 1
+    coderail_archive_manifest_path_exists "$coderail_archive_manifest_file" bin/cr ||
+        coderail_archive_error "upgrade install manifest does not track bin/cr: $coderail_archive_manifest_file" ||
+        return 1
+}
+
 coderail_archive_checksum_line() {
     coderail_archive_root=$1
     coderail_archive_rel_path=$2
@@ -396,7 +437,7 @@ coderail_archive_validate_target_file() {
     coderail_archive_install_root=$1
     coderail_archive_old_manifest=$2
     coderail_archive_rel_path=$3
-    coderail_archive_force=$4
+    coderail_archive_policy=$4
     coderail_archive_target_file=$coderail_archive_install_root/$coderail_archive_rel_path
 
     coderail_archive_validate_manifest_path "$coderail_archive_rel_path" || return 1
@@ -417,7 +458,7 @@ coderail_archive_validate_target_file() {
         ) || return 1
 
         if [ "$coderail_archive_current_line" != "$coderail_archive_old_line" ] &&
-            [ "$coderail_archive_force" != true ]
+            [ "$coderail_archive_policy" = safe ]
         then
             coderail_archive_error "refusing to overwrite modified managed file: $coderail_archive_target_file"
             return 1
@@ -425,7 +466,7 @@ coderail_archive_validate_target_file() {
         return 0
     fi
 
-    [ "$coderail_archive_force" = true ] ||
+    [ "$coderail_archive_policy" = force ] ||
         coderail_archive_error "refusing to overwrite untracked file: $coderail_archive_target_file" ||
         return 1
 }
@@ -455,7 +496,7 @@ coderail_archive_validate_stale_file() {
     coderail_archive_install_root=$1
     coderail_archive_old_manifest=$2
     coderail_archive_rel_path=$3
-    coderail_archive_force=$4
+    coderail_archive_policy=$4
     coderail_archive_target_file=$coderail_archive_install_root/$coderail_archive_rel_path
 
     coderail_archive_validate_manifest_path "$coderail_archive_rel_path" || return 1
@@ -473,7 +514,7 @@ coderail_archive_validate_stale_file() {
     ) || return 1
 
     if [ "$coderail_archive_current_line" != "$coderail_archive_old_line" ] &&
-        [ "$coderail_archive_force" != true ]
+        [ "$coderail_archive_policy" = safe ]
     then
         coderail_archive_error "refusing to remove modified managed file: $coderail_archive_target_file"
         return 1
@@ -484,12 +525,12 @@ coderail_archive_validate_apply() {
     coderail_archive_install_root=$1
     coderail_archive_stage_dir=$2
     coderail_archive_new_manifest=$3
-    coderail_archive_force=$4
+    coderail_archive_policy=$4
     coderail_archive_old_manifest=$coderail_archive_install_root/.coderail-install
     coderail_archive_list_file=$(mktemp "${TMPDIR:-/tmp}/coderail-archive-files.XXXXXX") || return 1
     coderail_archive_status=0
 
-    coderail_archive_validate_force "$coderail_archive_force" || return 1
+    coderail_archive_validate_policy "$coderail_archive_policy" || return 1
     coderail_archive_validate_manifest_file "$coderail_archive_new_manifest" || return 1
 
     [ ! -e "$coderail_archive_install_root" ] || [ -d "$coderail_archive_install_root" ] ||
@@ -517,7 +558,7 @@ coderail_archive_validate_apply() {
             "$coderail_archive_install_root" \
             "$coderail_archive_old_manifest" \
             "$coderail_archive_rel_path" \
-            "$coderail_archive_force" ||
+            "$coderail_archive_policy" ||
             coderail_archive_status=1
     done < "$coderail_archive_list_file"
 
@@ -533,7 +574,7 @@ coderail_archive_validate_apply() {
                 "$coderail_archive_install_root" \
                 "$coderail_archive_old_manifest" \
                 "$coderail_archive_rel_path" \
-                "$coderail_archive_force" || exit 1
+                "$coderail_archive_policy" || exit 1
         done
 }
 
@@ -627,14 +668,14 @@ coderail_archive_apply_staged() {
     coderail_archive_stage_dir=$1
     coderail_archive_new_manifest=$2
     coderail_archive_install_root=$3
-    coderail_archive_force=$4
+    coderail_archive_policy=$4
     coderail_archive_old_manifest=$coderail_archive_install_root/.coderail-install
 
     coderail_archive_validate_apply \
         "$coderail_archive_install_root" \
         "$coderail_archive_stage_dir" \
         "$coderail_archive_new_manifest" \
-        "$coderail_archive_force" ||
+        "$coderail_archive_policy" ||
         return 1
 
     mkdir -p "$coderail_archive_install_root" || return 1
@@ -648,10 +689,10 @@ coderail_archive_apply_staged() {
     coderail_archive_write_manifest "$coderail_archive_install_root" "$coderail_archive_new_manifest"
 }
 
-coderail_archive_apply_source() {
+coderail_archive_apply_source_policy() {
     coderail_archive_source_root=$1
     coderail_archive_install_root=$2
-    coderail_archive_force=$3
+    coderail_archive_policy=$3
     coderail_archive_work_dir=$(mktemp -d "${TMPDIR:-/tmp}/coderail-archive-apply.XXXXXX") || return 1
     coderail_archive_stage_dir=$coderail_archive_work_dir/stage
     coderail_archive_new_manifest=$coderail_archive_work_dir/manifest
@@ -674,12 +715,17 @@ coderail_archive_apply_source() {
             "$coderail_archive_stage_dir" \
             "$coderail_archive_new_manifest" \
             "$coderail_archive_install_root" \
-            "$coderail_archive_force" ||
+            "$coderail_archive_policy" ||
             coderail_archive_status=1
     fi
 
     rm -rf "$coderail_archive_work_dir"
     return "$coderail_archive_status"
+}
+
+coderail_archive_apply_source() {
+    coderail_archive_policy=$(coderail_archive_policy_from_force "$3") || return 1
+    coderail_archive_apply_source_policy "$1" "$2" "$coderail_archive_policy"
 }
 
 coderail_archive_apply_target_cleanup() {
@@ -688,13 +734,14 @@ coderail_archive_apply_target_cleanup() {
     fi
 }
 
-coderail_archive_apply_target() {
+coderail_archive_apply_target_policy() {
     (
         set -eu
 
         coderail_archive_target=$1
         coderail_archive_install_root=$2
-        coderail_archive_force=$3
+        coderail_archive_policy=$3
+        coderail_archive_validate_policy "$coderail_archive_policy"
         coderail_archive_target_work_dir=$(mktemp -d "${TMPDIR:-/tmp}/coderail-archive-target.XXXXXX")
         coderail_archive_archive_file=$coderail_archive_target_work_dir/archive.tar.gz
         coderail_archive_extract_dir=$coderail_archive_target_work_dir/extract
@@ -709,11 +756,21 @@ coderail_archive_apply_target() {
                 "$coderail_archive_archive_file" \
                 "$coderail_archive_extract_dir"
         )
-        coderail_archive_apply_source \
+        coderail_archive_apply_source_policy \
             "$coderail_archive_source_root" \
             "$coderail_archive_install_root" \
-            "$coderail_archive_force"
+            "$coderail_archive_policy"
     )
+}
+
+coderail_archive_apply_target() {
+    coderail_archive_policy=$(coderail_archive_policy_from_force "$3") || return 1
+    coderail_archive_apply_target_policy "$1" "$2" "$coderail_archive_policy"
+}
+
+coderail_archive_upgrade_target() {
+    coderail_archive_validate_upgrade_install "$2" || return 1
+    coderail_archive_apply_target_policy "$1" "$2" upgrade
 }
 
 coderail_archive_main() {
@@ -757,6 +814,13 @@ coderail_archive_main() {
             coderail_archive_stage_source "$1" "$2" || return 1
             coderail_archive_build_manifest "$2" "$3"
             ;;
+        validate-upgrade-install)
+            [ "$#" -eq 1 ] || {
+                coderail_archive_usage_error "validate-upgrade-install requires <install-root>"
+                return 2
+            }
+            coderail_archive_validate_upgrade_install "$1"
+            ;;
         apply-source)
             [ "$#" -eq 3 ] || {
                 coderail_archive_usage_error "apply-source requires <source-root> <install-root> <force>"
@@ -770,6 +834,13 @@ coderail_archive_main() {
                 return 2
             }
             coderail_archive_apply_target "$1" "$2" "$3"
+            ;;
+        upgrade-target)
+            [ "$#" -eq 2 ] || {
+                coderail_archive_usage_error "upgrade-target requires <target> <install-root>"
+                return 2
+            }
+            coderail_archive_upgrade_target "$1" "$2"
             ;;
         -h|--help)
             [ "$#" -eq 0 ] || {

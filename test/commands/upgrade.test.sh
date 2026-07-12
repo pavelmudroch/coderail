@@ -341,26 +341,128 @@ assert_canary_target() {
         --canary
 }
 
-assert_force_replaces_modified_file() {
-    install_root=$tmp_dir/install-force
-    archive_file=$tmp_dir/force.tar.gz
-    fake_dir=$tmp_dir/fake-force
-    fake_log=$tmp_dir/force.log
+assert_upgrade_replaces_modified_file() {
+    install_root=$tmp_dir/install-modified
+    archive_file=$tmp_dir/modified.tar.gz
+    fake_dir=$tmp_dir/fake-modified
+    fake_log=$tmp_dir/modified.log
 
     create_cli_install "$install_root"
-    printf 'modified\n' >> "$install_root/bin/cr"
+    printf 'local modification\n' >> "$install_root/bin/cr"
+    printf 'user data\n' > "$install_root/user.txt"
     mkdir "$fake_dir"
     : > "$fake_log"
-    create_archive "$archive_file" force
+    create_archive "$archive_file" upgraded
     write_fake_curl "$fake_dir"
 
     FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
-        run_upgrade "$install_root" --force
+        run_upgrade "$install_root"
 
     assert_status "$run_status" 0
     assert_contains "$fake_log" "curl https://github.com/pavelmudroch/coderail/archive/refs/tags/latest.tar.gz"
-    assert_contains "$install_root/bin/cr" "force"
-    assert_not_contains "$install_root/bin/cr" "modified"
+    assert_contains "$install_root/bin/cr" "upgraded"
+    assert_not_contains "$install_root/bin/cr" "local modification"
+    assert_contains "$install_root/user.txt" "user data"
+}
+
+assert_upgrade_removes_modified_stale_file() {
+    install_root=$tmp_dir/install-stale
+    archive_file=$tmp_dir/stale.tar.gz
+    fake_dir=$tmp_dir/fake-stale
+    fake_log=$tmp_dir/stale.log
+
+    create_cli_install "$install_root"
+    printf 'stale\n' > "$install_root/lib/commands/stale.sh"
+    write_manifest "$install_root"
+    printf 'local stale modification\n' >> "$install_root/lib/commands/stale.sh"
+    mkdir "$fake_dir"
+    : > "$fake_log"
+    create_archive "$archive_file" stale
+    write_fake_curl "$fake_dir"
+
+    FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
+        run_upgrade "$install_root"
+
+    assert_status "$run_status" 0
+    assert_path_missing "$install_root/lib/commands/stale.sh"
+    assert_not_contains "$install_root/.coderail-install" "lib/commands/stale.sh"
+}
+
+assert_invalid_upgrade_manifest() {
+    manifest_case=$1
+    expected_error=$2
+    install_root=$tmp_dir/install-invalid-manifest-$manifest_case
+    archive_file=$tmp_dir/invalid-manifest-$manifest_case.tar.gz
+    original_bin=$tmp_dir/invalid-manifest-$manifest_case.bin
+    fake_dir=$tmp_dir/fake-invalid-manifest-$manifest_case
+    fake_log=$tmp_dir/invalid-manifest-$manifest_case.log
+
+    create_cli_install "$install_root"
+    cp "$install_root/bin/cr" "$original_bin"
+
+    case "$manifest_case" in
+        missing)
+            rm "$install_root/.coderail-install"
+            ;;
+        malformed)
+            printf 'malformed\n' > "$install_root/.coderail-install"
+            ;;
+        empty)
+            : > "$install_root/.coderail-install"
+            ;;
+        missing-bin)
+            grep -v ' bin/cr$' "$install_root/.coderail-install" > "$tmp_dir/manifest-without-bin"
+            mv "$tmp_dir/manifest-without-bin" "$install_root/.coderail-install"
+            ;;
+    esac
+
+    mkdir "$fake_dir"
+    : > "$fake_log"
+    create_archive "$archive_file" "invalid-manifest-$manifest_case"
+    write_fake_curl "$fake_dir"
+
+    FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
+        run_upgrade "$install_root"
+
+    assert_status "$run_status" 1
+    assert_file_empty "$fake_log"
+    assert_contains "$run_stderr" "$expected_error"
+    cmp -s "$original_bin" "$install_root/bin/cr" ||
+        fail "invalid manifest changed bin/cr"
+}
+
+assert_upgrade_rejects_untracked_collision() {
+    install_root=$tmp_dir/install-untracked-collision
+    archive_file=$tmp_dir/untracked-collision.tar.gz
+    original_bin=$tmp_dir/untracked-collision.bin
+    original_manifest=$tmp_dir/untracked-collision.manifest
+    fake_dir=$tmp_dir/fake-untracked-collision
+    fake_log=$tmp_dir/untracked-collision.log
+
+    create_cli_install "$install_root"
+    printf 'user file\n' > "$install_root/lib/commands/new.sh"
+    cp "$install_root/bin/cr" "$original_bin"
+    cp "$install_root/.coderail-install" "$original_manifest"
+    mkdir "$fake_dir"
+    : > "$fake_log"
+    create_archive "$archive_file" untracked-collision
+    printf 'new managed file\n' > "$archive_root/lib/commands/new.sh"
+    (
+        cd "$archive_parent" &&
+            tar -czf "$archive_file" coderail-untracked-collision
+    )
+    write_fake_curl "$fake_dir"
+
+    FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
+        run_upgrade "$install_root"
+
+    assert_status "$run_status" 1
+    assert_contains "$run_stderr" "refusing to overwrite untracked file"
+    assert_contains "$install_root/lib/commands/new.sh" "user file"
+    cmp -s "$original_bin" "$install_root/bin/cr" ||
+        fail "collision changed bin/cr"
+    cmp -s "$original_manifest" "$install_root/.coderail-install" ||
+        fail "collision changed the manifest"
 }
 
 assert_wget_fallback_applies_upgrade() {
@@ -436,7 +538,11 @@ assert_usage_failure() {
 assert_duplicate_options_fail() {
     assert_usage_failure duplicate-version --version 1.2.3 --version 1.2.4
     assert_usage_failure duplicate-canary --canary --canary
-    assert_usage_failure duplicate-force --force --force
+}
+
+assert_force_option_fails() {
+    assert_usage_failure force --force
+    assert_contains "$run_stderr" "unknown option: --force"
 }
 
 assert_conflicting_options_fail() {
@@ -539,7 +645,7 @@ assert_help_documents_supported_options() {
     assert_contains "$run_stdout" "--version X.Y.Z"
     assert_contains "$run_stdout" "--version vX.Y.Z"
     assert_contains "$run_stdout" "--canary"
-    assert_contains "$run_stdout" "--force"
+    assert_not_contains "$run_stdout" "--force"
     assert_contains "$run_stdout" "Mutually exclusive with --version"
     assert_not_contains "$run_stdout" "--cwd"
     assert_file_empty "$run_stderr"
@@ -549,10 +655,21 @@ print_tests_header "Upgrade Command Tests"
 test "Default target uses latest" assert_default_target
 test "Version targets normalize to tags" assert_version_targets
 test "Canary target uses main" assert_canary_target
-test "Force replaces modified managed file" assert_force_replaces_modified_file
+test "Upgrade replaces modified managed file" assert_upgrade_replaces_modified_file
+test "Upgrade removes modified stale file" assert_upgrade_removes_modified_stale_file
+test "Missing manifest fails before download" \
+    assert_invalid_upgrade_manifest missing "not a regular file"
+test "Malformed manifest fails before download" \
+    assert_invalid_upgrade_manifest malformed "invalid install manifest line"
+test "Empty manifest fails before download" \
+    assert_invalid_upgrade_manifest empty "manifest is empty"
+test "Manifest without bin/cr fails before download" \
+    assert_invalid_upgrade_manifest missing-bin "does not track bin/cr"
+test "Upgrade rejects untracked collision" assert_upgrade_rejects_untracked_collision
 test "Wget fallback applies upgrade" assert_wget_fallback_applies_upgrade
 test "Invalid archive layout fails" assert_invalid_archive_layout_fails
 test "Duplicate options fail" assert_duplicate_options_fail
+test "Force option fails" assert_force_option_fails
 test "Conflicting options fail" assert_conflicting_options_fail
 test "Unexpected arguments fail" assert_unexpected_arguments_fail
 test "Invalid versions fail" assert_invalid_versions_fail

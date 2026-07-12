@@ -15,7 +15,6 @@ Options:
   --version vX.Y.Z      Upgrade to a release version
   --canary              Upgrade to the latest build from main branch
                         Mutually exclusive with --version
-  --force               Replace modified managed files
 EOF
 }
 
@@ -79,8 +78,6 @@ upgrade_target_ref() {
 upgrade_version=latest
 upgrade_version_set=false
 upgrade_canary=false
-upgrade_force=false
-upgrade_force_set=false
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -115,12 +112,6 @@ while [ "$#" -gt 0 ]; do
             upgrade_version=main
             shift
             ;;
-        --force)
-            [ "$upgrade_force_set" = false ] || usage_error "--force provided multiple times"
-            upgrade_force=true
-            upgrade_force_set=true
-            shift
-            ;;
         --)
             shift
             break
@@ -142,4 +133,4 @@ done
 upgrade_target=$(upgrade_target_ref "$upgrade_version")
 install_root=$(upgrade_install_root)
 
-coderail_archive_apply_target "$upgrade_target" "$install_root" "$upgrade_force"
+coderail_archive_upgrade_target "$upgrade_target" "$install_root"
