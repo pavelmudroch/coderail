@@ -15,11 +15,12 @@ ROOT_DIR=$(
 )
 
 . "$ROOT_DIR/lib/utils/log.sh"
+. "$ROOT_DIR/lib/utils/config.sh"
 
 usage() {
     cat <<'EOF'
 Usage:
-  cr uninstall [options] <tool ...>
+  cr uninstall [options] [<tool> ...]
 
   Uninstall instructions for selected agent-based tool.
 
@@ -263,7 +264,11 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-[ "$tool_count" -gt 0 ] || error "missing tool"
+if [ "$tool_count" -eq 0 ]; then
+    load_default_tool
+    [ -n "$default_tool" ] || error "missing tool"
+    add_tool "$default_tool"
+fi
 
 for tool in $tools; do
     uninstall_tool "$tool"

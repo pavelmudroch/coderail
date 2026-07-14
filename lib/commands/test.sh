@@ -19,10 +19,10 @@ ROOT_DIR=$(
 usage() {
     cat <<'EOF'
 Usage:
-  cr test [options] [<file> ...]
+  cr test [options] [<file|dir> ...]
 
-  Run configured test commands for specified or changed files. At least one
-  selector --changed or <file> -- must be provided.
+  Run configured test commands for specified paths or changed files. At least
+  one selector --changed or <file|dir> -- must be provided.
 
 Options:
   -h, --help            Show this help message and exit
@@ -30,7 +30,7 @@ Options:
                         in the current working directory
 
 Arguments:
-  <file>                Path to a file to run the tests for
+  <file|dir>            Path to a file, or directory to test recursively
 EOF
 }
 
@@ -163,24 +163,71 @@ normalize_path() {
     done
 
     [ -n "$normalize_path_value" ] || fatal "empty paths are not supported"
+
+    case "$normalize_path_value" in
+        ..|../*|*/..|*/../*)
+            fatal "parent-directory traversal is not supported"
+            ;;
+    esac
+
     printf '%s\n' "$normalize_path_value"
+}
+
+add_selected_test_file() {
+    printf '%s\n' "$1" >> "$paths_file"
+}
+
+add_directory_test_files() {
+    directory_path=$1
+    directory_paths=$tmp_dir/directory-paths
+
+    find "./$directory_path" -type f -print | sort > "$directory_paths"
+
+    while IFS= read -r directory_file || [ -n "$directory_file" ]; do
+        add_selected_test_file "$(normalize_path "$directory_file")"
+    done < "$directory_paths"
 }
 
 add_normalized_test_file() {
     normalized_path=$(normalize_path "$1")
-    printf '%s\n' "$normalized_path" >> "$paths_file"
+
+    if [ -d "$normalized_path" ]; then
+        add_directory_test_files "$normalized_path"
+    else
+        add_selected_test_file "$normalized_path"
+    fi
+}
+
+append_changed_files() {
+    append_changed_files_source=$1
+
+    while IFS= read -r append_changed_file || [ -n "$append_changed_file" ]; do
+        [ -n "$append_changed_file" ] || continue
+        append_unique_line "$changed_file_list" "$append_changed_file"
+    done < "$append_changed_files_source"
 }
 
 add_changed_files() {
     changed_file_list=$tmp_dir/changed-files
+    changed_file_chunk=$tmp_dir/changed-file-chunk
     : > "$changed_file_list"
 
     git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
         fatal "--changed requires a git repository"
 
-    git diff --name-only --diff-filter=ACMRTUXB HEAD > "$changed_file_list" 2>/dev/null ||
-        git diff --name-only --diff-filter=ACMRTUXB > "$changed_file_list"
-    git ls-files --others --exclude-standard >> "$changed_file_list"
+    if git rev-parse --verify HEAD >/dev/null 2>&1; then
+        git diff --name-only --diff-filter=ACMRTUXB HEAD > "$changed_file_chunk"
+        append_changed_files "$changed_file_chunk"
+    else
+        git diff --cached --name-only --diff-filter=ACMRTUXB > "$changed_file_chunk"
+        append_changed_files "$changed_file_chunk"
+
+        git diff --name-only --diff-filter=ACMRTUXB > "$changed_file_chunk"
+        append_changed_files "$changed_file_chunk"
+    fi
+
+    git ls-files --others --exclude-standard > "$changed_file_chunk"
+    append_changed_files "$changed_file_chunk"
 
     while IFS= read -r changed_file || [ -n "$changed_file" ]; do
         [ -n "$changed_file" ] || continue

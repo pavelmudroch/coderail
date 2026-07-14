@@ -15,6 +15,7 @@ ROOT_DIR=$(
 )
 
 . "$ROOT_DIR/lib/utils/log.sh"
+. "$ROOT_DIR/lib/utils/config.sh"
 
 TEMP_DIR="${TMPDIR:-/tmp}"
 TEMP_DIR=${TEMP_DIR%/}
@@ -29,7 +30,7 @@ trap cleanup EXIT HUP INT TERM
 usage() {
     cat <<'EOF'
 Usage:
-  cr install [options] <tool ...>
+  cr install [options] [<tool> ...]
 
   Install instructions for specific agent-based tool.
 
@@ -124,12 +125,26 @@ root_instruction_file_name() {
     esac
 }
 
+validate_manifest_path() {
+    rel_path=$1
+
+    case "$rel_path" in
+        ""|/*|.|..|../*|*/..|*/../*|./*|*/./*|*/.)
+            install_error "invalid install manifest path: $rel_path"
+            ;;
+    esac
+}
+
 relative_path() {
     path=$1
     base=$2
 
     case "$path" in
-        "$base"/*) printf '%s\n' "${path#"$base"/}" ;;
+        "$base"/*)
+            rel_path=${path#"$base"/}
+            validate_manifest_path "$rel_path"
+            printf '%s\n' "$rel_path"
+            ;;
         *) install_error "$path is not under $base" ;;
     esac
 }
@@ -406,54 +421,74 @@ build_manifest() {
             cksum "$rel_path"
         ) >> "$manifest_file"
     done
+
+    validate_manifest_file "$manifest_file"
+}
+
+manifest_path_from_line() {
+    manifest_line=$1
+    rel_path=$(printf '%s\n' "$manifest_line" | sed 's/^[0-9][0-9]* [0-9][0-9]* //')
+
+    [ "$rel_path" != "$manifest_line" ] ||
+        install_error "invalid install manifest line: $manifest_line"
+
+    validate_manifest_path "$rel_path"
+    printf '%s\n' "$rel_path"
 }
 
 manifest_path_exists() {
     manifest_file=$1
     rel_path=$2
 
-    [ -f "$manifest_file" ] || return 1
-
-    awk -v rel_path="$rel_path" '
-        {
-            path = $0
-            sub(/^[0-9][0-9]* [0-9][0-9]* /, "", path)
-            if (path == rel_path) {
-                found = 1
-            }
-        }
-
-        END {
-            exit found ? 0 : 1
-        }
-    ' "$manifest_file"
+    manifest_line_for_path "$manifest_file" "$rel_path" >/dev/null
 }
 
 manifest_line_for_path() {
     manifest_file=$1
     rel_path=$2
 
-    awk -v rel_path="$rel_path" '
-        {
-            path = $0
-            sub(/^[0-9][0-9]* [0-9][0-9]* /, "", path)
-            if (path == rel_path) {
-                print
-                exit
-            }
-        }
-    ' "$manifest_file"
+    validate_manifest_path "$rel_path"
+    [ -f "$manifest_file" ] || return 1
+
+    while IFS= read -r manifest_line || [ -n "$manifest_line" ]; do
+        [ -n "$manifest_line" ] || continue
+        current_path=$(manifest_path_from_line "$manifest_line") || return 1
+
+        if [ "$current_path" = "$rel_path" ]; then
+            printf '%s\n' "$manifest_line"
+            return 0
+        fi
+    done < "$manifest_file"
+
+    return 1
 }
 
 manifest_paths() {
     manifest_file=$1
 
-    sed 's/^[0-9][0-9]* [0-9][0-9]* //' "$manifest_file"
+    while IFS= read -r manifest_line || [ -n "$manifest_line" ]; do
+        [ -n "$manifest_line" ] || continue
+        manifest_path_from_line "$manifest_line"
+    done < "$manifest_file"
+}
+
+validate_manifest_file() {
+    manifest_file=$1
+
+    [ -f "$manifest_file" ] ||
+        install_error "install manifest does not exist: $manifest_file"
+
+    while IFS= read -r manifest_line || [ -n "$manifest_line" ]; do
+        [ -n "$manifest_line" ] || continue
+        manifest_path_from_line "$manifest_line" >/dev/null
+    done < "$manifest_file"
 }
 
 checksum_line() {
     root_dir=$1
     rel_path=$2
+
+    validate_manifest_path "$rel_path"
 
     (
         cd "$root_dir"
@@ -465,6 +500,9 @@ validate_target_file() {
     tool_root=$1
     old_manifest=$2
     rel_path=$3
+
+    validate_manifest_path "$rel_path"
+
     target_file=$tool_root/$rel_path
 
     [ -e "$target_file" ] || return 0
@@ -489,6 +527,9 @@ validate_stale_file() {
     old_manifest=$2
     new_manifest=$3
     rel_path=$4
+
+    validate_manifest_path "$rel_path"
+
     target_file=$tool_root/$rel_path
 
     manifest_path_exists "$new_manifest" "$rel_path" && return 0
@@ -514,6 +555,11 @@ validate_install() {
     [ ! -e "$tool_root" ] || [ -d "$tool_root" ] ||
         install_error "tool root exists and is not a directory: $tool_root"
 
+    validate_manifest_file "$new_manifest"
+    if [ -f "$old_manifest" ]; then
+        validate_manifest_file "$old_manifest"
+    fi
+
     find "$stage_dir" -type f | sort | while IFS= read -r source_file; do
         rel_path=$(relative_path "$source_file" "$stage_dir")
         validate_target_file "$tool_root" "$old_manifest" "$rel_path"
@@ -533,6 +579,9 @@ remove_stale_files() {
     old_manifest=$tool_root/.coderail-install
 
     [ -f "$old_manifest" ] || return 0
+
+    validate_manifest_file "$old_manifest"
+    validate_manifest_file "$new_manifest"
 
     manifest_paths "$old_manifest" | while IFS= read -r rel_path; do
         [ -n "$rel_path" ] || continue
@@ -562,6 +611,7 @@ write_manifest() {
     new_manifest=$2
     manifest_tmp=$tool_root/.coderail-install.tmp.$$
 
+    validate_manifest_file "$new_manifest"
     cp "$new_manifest" "$manifest_tmp"
     mv "$manifest_tmp" "$tool_root/.coderail-install"
 }
@@ -623,7 +673,11 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
-[ "$tool_count" -gt 0 ] || error "missing tool"
+if [ "$tool_count" -eq 0 ]; then
+    load_default_tool
+    [ -n "$default_tool" ] || error "missing tool"
+    add_tool "$default_tool"
+fi
 
 for tool in $tools; do
     install_tool "$tool"

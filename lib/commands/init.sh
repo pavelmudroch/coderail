@@ -91,7 +91,7 @@ create_file .coderail/conf.ini <<'EOF'
 # default_tool = codex # set the default tool for cr
 EOF
 create_file .coderail/test.map <<'EOF'
-# characters after '#' are comments
+# first '#' starts a Coderail comment, even inside quoted shell text
 
 [default]
 # Add path-independent commands that always run

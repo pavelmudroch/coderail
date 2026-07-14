@@ -299,13 +299,14 @@ check_done_dependencies() {
     done < "$tmp_dir/dependencies"
 }
 
-rewrite_closed_ticket() {
-    rewrite_closed_file=$1
-    rewrite_closed_updated_at=$2
-    rewrite_closed_tmp=$rewrite_closed_file.tmp.$$
+write_closed_ticket() {
+    write_closed_source=$1
+    write_closed_target=$2
+    write_closed_target_path=$3
+    write_closed_updated_at=$4
 
     if ! awk \
-        -v updated_at="$rewrite_closed_updated_at" \
+        -v updated_at="$write_closed_updated_at" \
         -v close_reason="$close_reason" \
         -v duplicate_of_id="$duplicate_of_id" '
             NR == 1 && $0 == "---" {
@@ -344,35 +345,52 @@ rewrite_closed_ticket() {
                     exit 1
                 }
             }
-        ' "$rewrite_closed_file" > "$rewrite_closed_tmp"
+        ' "$write_closed_source" > "$write_closed_target"
     then
-        rm -f "$rewrite_closed_tmp"
-        fatal "ticket lifecycle fields are not writable: $ticket_path"
+        rm -f "$write_closed_target"
+        fatal "failed to write ticket to $write_closed_target_path"
     fi
+}
 
-    if ! mv "$rewrite_closed_tmp" "$rewrite_closed_file"; then
-        rm -f "$rewrite_closed_tmp"
-        fatal "failed to update ticket file: $ticket_path"
-    fi
+validate_closed_ticket() {
+    validate_closed_source=$1
+    validate_closed_base=$2
+    validate_closed_root=$tmp_dir/closed-validation
+    validate_closed_file=$validate_closed_root/.coderail/tickets/closed/$validate_closed_base
+
+    mkdir -p "$validate_closed_root/.coderail/tickets/closed" || return 1
+    cp "$validate_closed_source" "$validate_closed_file" || return 1
+    ticket_validate_file "$validate_closed_root" "$validate_closed_file"
 }
 
 close_ticket() {
     close_ticket_base=$(basename "$ticket_file")
     closed_ticket_path=.coderail/tickets/closed/$close_ticket_base
     closed_ticket_file=$project_dir/$closed_ticket_path
+    closed_ticket_tmp=$closed_ticket_file.tmp.$$
 
     mkdir -p "$closed_tickets_dir" ||
         fatal "failed to create ticket directory: .coderail/tickets/closed"
 
     [ ! -e "$closed_ticket_file" ] ||
         fatal "target ticket already exists: $closed_ticket_path"
+    [ ! -e "$closed_ticket_tmp" ] ||
+        fatal "temporary ticket already exists: $closed_ticket_path.tmp.$$"
 
-    rewrite_closed_ticket "$ticket_file" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    write_closed_ticket "$ticket_file" "$closed_ticket_tmp" "$closed_ticket_path" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
-    mv "$ticket_file" "$closed_ticket_file" ||
+    if ! validate_closed_ticket "$closed_ticket_tmp" "$close_ticket_base"; then
+        rm -f "$closed_ticket_tmp"
+        fatal "closed ticket validation failed: $closed_ticket_path"
+    fi
+
+    if ! mv "$closed_ticket_tmp" "$closed_ticket_file"; then
+        rm -f "$closed_ticket_tmp"
         fatal "failed to move ticket to $closed_ticket_path"
+    fi
 
-    ticket_validate_file "$project_dir" "$closed_ticket_file"
+    rm "$ticket_file" ||
+        fatal "failed to remove ticket: $ticket_path"
 
     printf '%s\n' "$closed_ticket_path"
 }

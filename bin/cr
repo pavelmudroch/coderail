@@ -43,7 +43,7 @@ Options:
   -h, --help            Show this help message and exit
   --version             Show version information and exit
   -v, --verbose         Enable verbose logging
-  -q, --quiet           Suppress non-error output
+  -q, --quiet           Suppress notices and log output
   --cwd <dir>           Specify the current working directory
 
 Commands:
