@@ -280,6 +280,72 @@ EOF
     assert_file_content "$work_dir/run.log" "src/app.sh"
 }
 
+assert_changed_includes_staged_unborn_files() {
+    work_dir=$(create_work_dir changed-staged-unborn)
+
+    create_path "$work_dir/src/app.sh"
+    write_test_map "$work_dir" <<'EOF'
+[{path:src/*.sh}]
+printf '%s\n' {path} >> run.log
+EOF
+
+    git -C "$work_dir" init >/dev/null 2>&1
+    git -C "$work_dir" add src/app.sh
+
+    run_cr_test "$work_dir" --changed
+
+    assert_success
+    assert_stdout_content "src/app.sh: passed"
+    assert_file_content "$work_dir/run.log" "src/app.sh"
+}
+
+assert_directory_arguments_expand_recursively() {
+    work_dir=$(create_work_dir directory-recursion)
+
+    create_path "$work_dir/lib/a.sh"
+    create_path "$work_dir/lib/nested/b.sh"
+    write_test_map "$work_dir" <<'EOF'
+[{path:lib/**/*.sh}]
+printf '%s\n' {path} >> run.log
+EOF
+
+    run_cr_test "$work_dir" lib
+
+    assert_success
+    assert_stdout_content "lib/a.sh: passed
+lib/nested/b.sh: passed"
+    assert_file_content "$work_dir/run.log" "lib/a.sh
+lib/nested/b.sh"
+}
+
+assert_traversal_paths_fail() {
+    work_dir=$(create_work_dir traversal-paths)
+
+    create_path "$work_dir/b.txt"
+    write_test_map "$work_dir" <<'EOF'
+[default]
+printf 'ran\n' >> run.log
+EOF
+
+    run_cr_test "$work_dir" ..
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: parent-directory traversal is not supported"
+    assert_path_missing "$work_dir/run.log"
+
+    run_cr_test "$work_dir" ../outside.txt
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: parent-directory traversal is not supported"
+    assert_path_missing "$work_dir/run.log"
+
+    run_cr_test "$work_dir" a/../b.txt
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_stderr_contains "error: parent-directory traversal is not supported"
+    assert_path_missing "$work_dir/run.log"
+}
+
 assert_default_commands_run() {
     work_dir=$(create_work_dir default-only)
 
@@ -679,6 +745,9 @@ test "Invalid test maps fail" assert_invalid_test_maps_fail
 test "Empty map reports no tests" assert_empty_map_reports_no_tests
 test "No matching glob reports no tests" assert_no_matching_glob_reports_no_tests
 test "Changed omits coderail files" assert_changed_omits_coderail_files
+test "Changed includes staged unborn files" assert_changed_includes_staged_unborn_files
+test "Directory arguments expand recursively" assert_directory_arguments_expand_recursively
+test "Traversal paths fail" assert_traversal_paths_fail
 test "Default commands run" assert_default_commands_run
 test "Glob commands run without default" assert_glob_commands_run_without_default
 test "Default and glob run in map order" assert_default_and_glob_run_in_map_order

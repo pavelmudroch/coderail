@@ -121,6 +121,17 @@ assert_uninstall_succeeds() {
     HOME=$home_dir "$CR" uninstall "$@" >/dev/null
 }
 
+assert_uninstall_succeeds_from_dir() {
+    work_dir=$1
+    home_dir=$2
+    shift 2
+
+    (
+        cd "$work_dir"
+        HOME=$home_dir "$CR" uninstall "$@" >/dev/null
+    )
+}
+
 assert_uninstall_fails() {
     home_dir=$1
     shift
@@ -131,6 +142,22 @@ assert_uninstall_fails() {
     set -e
 
     [ "$status" -ne 0 ] || fail "uninstall unexpectedly succeeded: cr uninstall $*"
+}
+
+write_user_config() {
+    home_dir=$1
+    shift
+
+    mkdir -p "$home_dir/.coderail"
+    printf '%s\n' "$@" > "$home_dir/.coderail/config.ini"
+}
+
+write_repo_config() {
+    work_dir=$1
+    shift
+
+    mkdir -p "$work_dir/.coderail"
+    printf '%s\n' "$@" > "$work_dir/.coderail/conf.ini"
 }
 
 assert_tool_installed() {
@@ -310,6 +337,48 @@ assert_multi_tool_uninstall() {
     assert_tool_uninstalled "$home_dir" gemini
 }
 
+assert_user_default_tool_uninstall() {
+    home_dir=$tmp_dir/home-default-user
+    work_dir=$tmp_dir/work-default-user
+
+    mkdir "$home_dir" "$work_dir"
+    assert_install_succeeds "$home_dir" codex
+    write_user_config "$home_dir" "default_tool = codex"
+
+    assert_uninstall_succeeds_from_dir "$work_dir" "$home_dir"
+
+    assert_tool_uninstalled "$home_dir" codex
+}
+
+assert_repo_default_tool_overrides_user_uninstall() {
+    home_dir=$tmp_dir/home-default-override
+    work_dir=$tmp_dir/work-default-override
+
+    mkdir "$home_dir" "$work_dir"
+    assert_install_succeeds "$home_dir" codex claude
+    write_user_config "$home_dir" "default_tool = codex"
+    write_repo_config "$work_dir" "default_tool = claude"
+
+    assert_uninstall_succeeds_from_dir "$work_dir" "$home_dir"
+
+    assert_tool_installed "$home_dir" codex
+    assert_tool_uninstalled "$home_dir" claude
+}
+
+assert_explicit_tools_ignore_invalid_default_uninstall() {
+    home_dir=$tmp_dir/home-default-explicit
+    work_dir=$tmp_dir/work-default-explicit
+
+    mkdir "$home_dir" "$work_dir"
+    assert_install_succeeds "$home_dir" codex
+    write_user_config "$home_dir" "default_tool = unknown-user"
+    write_repo_config "$work_dir" "default_tool = unknown-repo"
+
+    assert_uninstall_succeeds_from_dir "$work_dir" "$home_dir" codex
+
+    assert_tool_uninstalled "$home_dir" codex
+}
+
 assert_uninstall_preserves_unselected_tool() {
     home_dir=$tmp_dir/home-selected-tool
 
@@ -356,6 +425,9 @@ print_tests_header "Uninstallation Tests"
 test "Uninstall unknown tool fails" assert_uninstall_unknown_tool_fails
 test "Cwd is ignored for uninstall" assert_cwd_ignored_for_uninstall
 test "Uninstall multiple tools" assert_multi_tool_uninstall
+test "Uninstall uses user default tool" assert_user_default_tool_uninstall
+test "Repo default tool overrides user default for uninstall" assert_repo_default_tool_overrides_user_uninstall
+test "Explicit uninstall tools ignore invalid default" assert_explicit_tools_ignore_invalid_default_uninstall
 test "Uninstall preserves unselected tool" assert_uninstall_preserves_unselected_tool
 
 for tool in codex copilot claude gemini; do

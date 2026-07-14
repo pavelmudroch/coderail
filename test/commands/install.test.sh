@@ -196,6 +196,17 @@ assert_install_succeeds() {
     HOME=$home_dir "$CR" install "$@" >/dev/null
 }
 
+assert_install_succeeds_from_dir() {
+    work_dir=$1
+    home_dir=$2
+    shift 2
+
+    (
+        cd "$work_dir"
+        HOME=$home_dir "$CR" install "$@" >/dev/null
+    )
+}
+
 assert_install_fails() {
     home_dir=$1
     shift
@@ -206,6 +217,22 @@ assert_install_fails() {
     set -e
 
     [ "$status" -ne 0 ] || fail "install unexpectedly succeeded: cr install $*"
+}
+
+write_user_config() {
+    home_dir=$1
+    shift
+
+    mkdir -p "$home_dir/.coderail"
+    printf '%s\n' "$@" > "$home_dir/.coderail/config.ini"
+}
+
+write_repo_config() {
+    work_dir=$1
+    shift
+
+    mkdir -p "$work_dir/.coderail"
+    printf '%s\n' "$@" > "$work_dir/.coderail/conf.ini"
 }
 
 assert_root_instruction() {
@@ -438,6 +465,65 @@ assert_force_removes_modified_stale_managed_file() {
     assert_marker_checksums "$tool_dir"
 }
 
+assert_invalid_old_manifest_paths_are_refused() {
+    index=0
+
+    for invalid_path in "" /absolute . .. ../outside dir/.. dir/../outside ./file dir/./file dir/.; do
+        index=$((index + 1))
+        home_dir=$tmp_dir/home-invalid-manifest-$index
+        tool_dir=$(tool_dir_for_home_tool "$home_dir" codex)
+        error_file=$tmp_dir/invalid-manifest-$index.err
+        before_file=$tmp_dir/invalid-manifest-$index.before
+        outside_file=$home_dir/outside
+
+        mkdir "$home_dir"
+        mkdir "$tool_dir"
+        printf 'outside content %s\n' "$index" > "$outside_file"
+        printf '1 1 %s\n' "$invalid_path" > "$tool_dir/.coderail-install"
+        cp "$tool_dir/.coderail-install" "$before_file"
+
+        set +e
+        HOME=$home_dir "$CR" install codex >/dev/null 2>"$error_file"
+        status=$?
+        set -e
+
+        [ "$status" -ne 0 ] ||
+            fail "install unexpectedly succeeded with invalid manifest path: $invalid_path"
+        assert_contains "$error_file" "invalid install manifest path:"
+        assert_contains "$outside_file" "outside content $index"
+        assert_same_file "$before_file" "$tool_dir/.coderail-install"
+        assert_path_missing "$tool_dir/AGENTS.md"
+    done
+}
+
+assert_malicious_old_manifest_path_is_refused() {
+    home_dir=$tmp_dir/home-malicious-manifest
+    tool_dir=$(tool_dir_for_home_tool "$home_dir" codex)
+    error_file=$tmp_dir/malicious-manifest.err
+    before_file=$tmp_dir/malicious-manifest.before
+    outside_file=$home_dir/outside
+
+    mkdir "$home_dir"
+    mkdir "$tool_dir"
+    printf 'outside content\n' > "$outside_file"
+    (
+        cd "$tool_dir"
+        cksum ../outside
+    ) > "$tool_dir/.coderail-install"
+    cp "$tool_dir/.coderail-install" "$before_file"
+
+    set +e
+    HOME=$home_dir "$CR" install codex >/dev/null 2>"$error_file"
+    status=$?
+    set -e
+
+    [ "$status" -ne 0 ] || fail "install unexpectedly succeeded with malicious manifest"
+    assert_contains "$error_file" "invalid install manifest path: ../outside"
+    assert_contains "$outside_file" "outside content"
+    assert_same_file "$before_file" "$tool_dir/.coderail-install"
+    assert_path_missing "$tool_dir/AGENTS.md"
+}
+
 assert_install_unknown_tool_fails() {
     home_dir=$tmp_dir/home-unknown-tool
 
@@ -473,6 +559,98 @@ assert_multi_tool_install() {
     assert_installed_files_in_home "$home_dir" copilot
     assert_installed_files_in_home "$home_dir" claude
     assert_installed_files_in_home "$home_dir" gemini
+}
+
+assert_user_default_tool_install() {
+    home_dir=$tmp_dir/home-default-user
+    work_dir=$tmp_dir/work-default-user
+
+    mkdir "$home_dir" "$work_dir"
+    write_user_config "$home_dir" "default_tool = codex"
+
+    assert_install_succeeds_from_dir "$work_dir" "$home_dir"
+
+    assert_installed_files_in_home "$home_dir" codex
+}
+
+assert_repo_default_tool_overrides_user_install() {
+    home_dir=$tmp_dir/home-default-override
+    work_dir=$tmp_dir/work-default-override
+
+    mkdir "$home_dir" "$work_dir"
+    write_user_config "$home_dir" "default_tool = codex"
+    write_repo_config "$work_dir" "default_tool = claude"
+
+    assert_install_succeeds_from_dir "$work_dir" "$home_dir"
+
+    assert_path_missing "$home_dir/.codex"
+    assert_installed_files_in_home "$home_dir" claude
+}
+
+assert_default_tool_comments_install() {
+    home_dir=$tmp_dir/home-default-comments
+    work_dir=$tmp_dir/work-default-comments
+
+    mkdir "$home_dir" "$work_dir"
+    write_user_config "$home_dir" \
+        "# default_tool = codex" \
+        " default_tool = gemini # inline comment"
+
+    assert_install_succeeds_from_dir "$work_dir" "$home_dir"
+
+    assert_installed_files_in_home "$home_dir" gemini
+}
+
+assert_invalid_default_tool_install_fails() {
+    home_dir=$tmp_dir/home-default-invalid
+    work_dir=$tmp_dir/work-default-invalid
+    error_file=$tmp_dir/default-invalid.err
+
+    mkdir "$home_dir" "$work_dir"
+    write_user_config "$home_dir" "default_tool = unknown"
+
+    set +e
+    (
+        cd "$work_dir"
+        HOME=$home_dir "$CR" install
+    ) >/dev/null 2>"$error_file"
+    status=$?
+    set -e
+
+    [ "$status" -ne 0 ] || fail "install unexpectedly succeeded with invalid default tool"
+    assert_contains "$error_file" "unknown tool: unknown"
+    assert_path_missing "$home_dir/.unknown"
+}
+
+assert_explicit_tools_ignore_invalid_default_install() {
+    home_dir=$tmp_dir/home-default-explicit
+    work_dir=$tmp_dir/work-default-explicit
+
+    mkdir "$home_dir" "$work_dir"
+    write_user_config "$home_dir" "default_tool = unknown-user"
+    write_repo_config "$work_dir" "default_tool = unknown-repo"
+
+    assert_install_succeeds_from_dir "$work_dir" "$home_dir" codex claude
+
+    assert_installed_files_in_home "$home_dir" codex
+    assert_installed_files_in_home "$home_dir" claude
+}
+
+assert_default_tool_home_override_install() {
+    home_dir=$tmp_dir/home-default-target
+    work_dir=$tmp_dir/work-default-target
+    override_dir=$tmp_dir/override-default-codex
+
+    mkdir "$home_dir" "$work_dir"
+    write_user_config "$home_dir" "default_tool = codex"
+
+    (
+        cd "$work_dir"
+        HOME=$home_dir CODERAIL_CODEX_HOME=$override_dir "$CR" install >/dev/null
+    )
+
+    assert_installed_files_in_tool_dir "$override_dir" codex
+    assert_path_missing "$home_dir/.codex"
 }
 
 assert_install_without_write_permission_fails() {
@@ -572,6 +750,7 @@ copy_project_for_install_case() {
     cp "$ROOT_DIR/lib/commands/install.sh" "$case_root/lib/commands/install.sh"
     cp "$ROOT_DIR/lib/utils/log.sh" "$case_root/lib/utils/log.sh"
     cp "$ROOT_DIR/lib/utils/args.sh" "$case_root/lib/utils/args.sh"
+    cp "$ROOT_DIR/lib/utils/config.sh" "$case_root/lib/utils/config.sh"
     cp -R "$ROOT_DIR/instructions/." "$case_root/instructions"
     chmod +x "$case_root/bin/cr"
 
@@ -660,8 +839,16 @@ print_tests_header "Installation Tests"
 test "Install unknown tool fails" assert_install_unknown_tool_fails
 test "Cwd is ignored for install" assert_cwd_ignored_for_install
 test "Install multiple tools" assert_multi_tool_install
+test "Install uses user default tool" assert_user_default_tool_install
+test "Repo default tool overrides user default for install" assert_repo_default_tool_overrides_user_install
+test "Default tool install handles comments" assert_default_tool_comments_install
+test "Invalid default tool fails install" assert_invalid_default_tool_install_fails
+test "Explicit install tools ignore invalid default" assert_explicit_tools_ignore_invalid_default_install
+test "Default tool install honors target override" assert_default_tool_home_override_install
 test "Policy keys normalize per tool" assert_policy_key_normalization
 test "Conflicting policy fails" assert_conflicting_policy_fails
+test "Invalid old install manifest paths are refused" assert_invalid_old_manifest_paths_are_refused
+test "Malicious old install manifest path cannot remove outside file" assert_malicious_old_manifest_path_is_refused
 
 for tool in codex copilot claude gemini; do
     test "Clean install for $tool tool" assert_clean_install "$tool"

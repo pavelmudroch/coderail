@@ -84,7 +84,7 @@ if should_generate_error; then
     fatal "simulated error"
 fi
 
-closed_ticket=$(cr ticket close "$activated_ticket" done 2>&1)
+closed_ticket=$(cr ticket close --reason done "$activated_ticket" 2>&1)
 if [ ! $? -eq 0 ]; then
     [ -n "$closed_ticket" ] || closed_ticket="unknown error"
     fatal "failed to close ticket: $closed_ticket"

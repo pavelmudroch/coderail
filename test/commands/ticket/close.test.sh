@@ -38,6 +38,17 @@ assert_path_missing() {
     [ ! -e "$1" ] || fail "path should not exist: $1"
 }
 
+assert_directory_empty() {
+    directory=$1
+
+    [ -d "$directory" ] || fail "missing directory: $directory"
+
+    for path in "$directory"/* "$directory"/.[!.]* "$directory"/..?*; do
+        [ -e "$path" ] || continue
+        fail "$directory should be empty"
+    done
+}
+
 assert_file_empty() {
     [ ! -s "$1" ] || fail "$1 should be empty"
 }
@@ -129,6 +140,22 @@ run_verbose_close() {
     "$CR" --cwd "$work_dir" --verbose ticket close "$@" > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
+}
+
+write_final_move_failing_mv() {
+    fake_dir=$1
+
+    cat > "$fake_dir/mv" <<'EOF'
+#!/usr/bin/env sh
+set -eu
+
+if [ "$#" -eq 2 ] && [ "$2" = "$FAILING_MV_TARGET" ]; then
+    exit 1
+fi
+
+exec "$REAL_MV" "$@"
+EOF
+    chmod +x "$fake_dir/mv"
 }
 
 assert_close_active_ticket() {
@@ -267,6 +294,39 @@ assert_duplicate_close_writes_duplicate_of() {
     assert_contains "$closed_file" "duplicate_of: 0001"
 }
 
+assert_close_preserves_active_ticket_when_final_move_fails() {
+    work_dir=$(create_project final-move-failure)
+    active_file=$work_dir/.coderail/tickets/active/0009-move-failure-ticket.md
+    closed_dir=$work_dir/.coderail/tickets/closed
+    closed_file=$closed_dir/0009-move-failure-ticket.md
+    fake_dir=$tmp_dir/fake-final-mv
+    failing_target=./.coderail/tickets/closed/0009-move-failure-ticket.md
+
+    write_ticket "$active_file" 0009 move-failure-ticket "Move Failure Ticket" active "" ""
+    mkdir "$fake_dir"
+    write_final_move_failing_mv "$fake_dir"
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+    real_mv=$(command -v mv)
+
+    set +e
+    FAILING_MV_TARGET=$failing_target REAL_MV=$real_mv PATH="$fake_dir:$PATH" \
+        "$CR" --cwd "$work_dir" ticket close 9 > "$run_stdout" 2> "$run_stderr"
+    run_status=$?
+    set -e
+
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "error: failed to move ticket to .coderail/tickets/closed/0009-move-failure-ticket.md"
+    assert_file "$active_file"
+    assert_contains "$active_file" "status: active"
+    assert_not_contains "$active_file" "status: closed"
+    assert_not_contains "$active_file" "close_reason:"
+    assert_path_missing "$closed_file"
+    assert_directory_empty "$closed_dir"
+}
+
 assert_missing_ticket_directory_suggests_init() {
     work_dir=$tmp_dir/missing-tickets
 
@@ -304,6 +364,7 @@ test "Done close requires satisfied dependencies" assert_done_requires_satisfied
 test "Done close accepts recursive duplicate dependency" assert_done_accepts_recursive_duplicate_dependency
 test "Duplicate close requires duplicate_of" assert_duplicate_close_requires_duplicate_of
 test "Duplicate close writes duplicate_of" assert_duplicate_close_writes_duplicate_of
+test "Close preserves active ticket when final move fails" assert_close_preserves_active_ticket_when_final_move_fails
 test "Missing ticket directory suggests init" assert_missing_ticket_directory_suggests_init
 test "Close logs notices" assert_close_logs_notices
 

@@ -91,7 +91,7 @@ assert_clean_init() {
     assert_empty_dir "$work_dir/.coderail/tickets"
     assert_file_content "$work_dir/.coderail/conf.ini" "# characters after '#' are comments
 # default_tool = codex # set the default tool for cr"
-    assert_file_content "$work_dir/.coderail/test.map" "# characters after '#' are comments
+    assert_file_content "$work_dir/.coderail/test.map" "# first '#' starts a Coderail comment, even inside quoted shell text
 
 [default]
 # Add path-independent commands that always run
@@ -113,7 +113,7 @@ assert_init_preserves_existing_files() {
     assert_file_content "$work_dir/.coderail/conf.ini" "user conf"
     assert_file_content "$work_dir/project.txt" "project file"
     assert_empty_dir "$work_dir/.coderail/tickets"
-    assert_file_content "$work_dir/.coderail/test.map" "# characters after '#' are comments
+    assert_file_content "$work_dir/.coderail/test.map" "# first '#' starts a Coderail comment, even inside quoted shell text
 
 [default]
 # Add path-independent commands that always run
