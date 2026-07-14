@@ -1,3 +1,6 @@
 # first '#' starts a Coderail comment, even inside quoted shell text
 [lib/{path:**}/{name:*}.sh]
 test/{path}/{name}.test.sh
+
+[build/release.sh]
+sh test/build/release.test.sh

@@ -61,7 +61,8 @@ error() {
 }
 
 version() {
-    log_info "cr version 1.0.0"
+    . "$ROOT_DIR/lib/version.sh"
+    log_info "cr version $coderail_version"
 }
 
 set_work_dir() {
