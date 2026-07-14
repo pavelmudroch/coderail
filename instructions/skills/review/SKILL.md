@@ -1,7 +1,7 @@
 ---
 name: review
 description: Review repository changes for correctness, regressions, security, compatibility, and test coverage. Produce verified findings without modifying the repository.
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---
 
 # Code Review
 

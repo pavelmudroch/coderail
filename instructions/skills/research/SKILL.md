@@ -1,7 +1,7 @@
 ---
 name: research
 description: Select an appropriate research strategy, execute or delegate research tasks, and synthesize verified findings.
----------------------------------------------------------------------------------------------------------------------------
+---
 
 Write the final research output to `.coderail/RESEARCH.md` unless instructed otherwise.
 

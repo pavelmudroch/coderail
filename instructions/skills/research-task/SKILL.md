@@ -1,7 +1,7 @@
 ---
 name: research-task
 description: Investigate a defined research question and return an evidence-based report.
------------------------------------------------------------------------------------------
+---
 
 Research only the assigned scope.
 
