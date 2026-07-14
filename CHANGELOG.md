@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `build/release.sh` helper for guarded stable release publishing.
+- Logging behavior for INSTALL script and upgrade command.
 
 ### Changed
 

@@ -245,6 +245,19 @@ run_upgrade() {
     set -e
 }
 
+run_cr_command() {
+    install_root=$1
+    shift
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+
+    set +e
+    "$install_root/bin/cr" "$@" > "$run_stdout" 2> "$run_stderr"
+    run_status=$?
+    set -e
+}
+
 run_upgrade_with_env() {
     install_root=$1
     install_dir_override=$2
@@ -339,6 +352,46 @@ assert_canary_target() {
     assert_upgrade_succeeds canary \
         https://github.com/pavelmudroch/coderail/archive/refs/heads/main.tar.gz \
         --canary
+}
+
+assert_upgrade_logs_target_and_root() {
+    install_root=$tmp_dir/install-logs
+    archive_file=$tmp_dir/logs.tar.gz
+    fake_dir=$tmp_dir/fake-logs
+    fake_log=$tmp_dir/logs.log
+
+    create_cli_install "$install_root"
+    mkdir "$fake_dir"
+    : > "$fake_log"
+    create_archive "$archive_file" logs
+    write_fake_curl "$fake_dir"
+
+    FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
+        run_cr_command "$install_root" -v upgrade --canary
+
+    assert_status "$run_status" 0
+    assert_contains "$run_stdout" "Upgrading Coderail to main"
+    assert_contains "$run_stdout" "install root: $install_root"
+    assert_contains "$run_stdout" "Installing managed files"
+}
+
+assert_upgrade_quiet_suppresses_logs() {
+    install_root=$tmp_dir/install-quiet-logs
+    archive_file=$tmp_dir/quiet-logs.tar.gz
+    fake_dir=$tmp_dir/fake-quiet-logs
+    fake_log=$tmp_dir/quiet-logs.log
+
+    create_cli_install "$install_root"
+    mkdir "$fake_dir"
+    : > "$fake_log"
+    create_archive "$archive_file" quiet-logs
+    write_fake_curl "$fake_dir"
+
+    FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
+        run_cr_command "$install_root" -q upgrade
+
+    assert_status "$run_status" 0
+    assert_file_empty "$run_stdout"
 }
 
 assert_upgrade_replaces_modified_file() {
@@ -532,6 +585,8 @@ assert_usage_failure() {
 
     assert_status "$run_status" 2
     assert_file_empty "$fake_log"
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "error:"
     assert_contains "$run_stderr" "Usage:"
 }
 
@@ -655,6 +710,8 @@ print_tests_header "Upgrade Command Tests"
 test "Default target uses latest" assert_default_target
 test "Version targets normalize to tags" assert_version_targets
 test "Canary target uses main" assert_canary_target
+test "Upgrade logs target and root" assert_upgrade_logs_target_and_root
+test "Upgrade quiet suppresses logs" assert_upgrade_quiet_suppresses_logs
 test "Upgrade replaces modified managed file" assert_upgrade_replaces_modified_file
 test "Upgrade removes modified stale file" assert_upgrade_removes_modified_stale_file
 test "Missing manifest fails before download" \

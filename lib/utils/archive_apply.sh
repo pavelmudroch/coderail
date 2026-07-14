@@ -2,8 +2,36 @@
 
 CODERAIL_ARCHIVE_REPO_URL=https://github.com/pavelmudroch/coderail
 
+coderail_archive_load_log() {
+    if command -v log_error >/dev/null 2>&1; then
+        return 0
+    fi
+
+    coderail_archive_log_dir=$(
+        CDPATH= cd -- "$(dirname "$0")"
+        pwd
+    ) || return 1
+
+    if [ -f "$coderail_archive_log_dir/log.sh" ]; then
+        . "$coderail_archive_log_dir/log.sh"
+        return 0
+    fi
+
+    if [ -f "$coderail_archive_log_dir/lib/utils/log.sh" ]; then
+        . "$coderail_archive_log_dir/lib/utils/log.sh"
+        return 0
+    fi
+
+    printf 'error: log utility was not found\n' >&2
+    return 1
+}
+
+coderail_archive_load_log || {
+    return 1 2>/dev/null || exit 1
+}
+
 coderail_archive_error() {
-    echo "error: $*" >&2
+    log_error "$@"
     return 1
 }
 
@@ -22,8 +50,8 @@ EOF
 }
 
 coderail_archive_usage_error() {
-    echo "error: $*" >&2
-    echo >&2
+    log_error "$@"
+    printf '\n' >&2
     coderail_archive_usage >&2
     return 2
 }
@@ -125,6 +153,10 @@ coderail_archive_download_url() {
 }
 
 coderail_archive_download() {
+    log_info "Downloading archive"
+    log_notice "archive target: $1"
+    log_notice "archive file: $2"
+
     coderail_archive_url=$(coderail_archive_target_url "$1") || return 1
     coderail_archive_download_url "$coderail_archive_url" "$2"
 }
@@ -298,6 +330,10 @@ coderail_archive_stage_source() {
     coderail_archive_source_root=$1
     coderail_archive_stage_dir=$2
 
+    log_info "Staging source files"
+    log_notice "source root: $coderail_archive_source_root"
+    log_notice "stage directory: $coderail_archive_stage_dir"
+
     coderail_archive_validate_source_root "$coderail_archive_source_root" || return 1
     mkdir -p "$coderail_archive_stage_dir" || return 1
 
@@ -316,6 +352,9 @@ coderail_archive_build_manifest() {
     coderail_archive_manifest_file=$2
     coderail_archive_list_file=$(mktemp "${TMPDIR:-/tmp}/coderail-archive-files.XXXXXX") || return 1
     coderail_archive_status=0
+
+    log_info "Building install manifest"
+    log_notice "manifest file: $coderail_archive_manifest_file"
 
     : > "$coderail_archive_manifest_file" || {
         rm -f "$coderail_archive_list_file"
@@ -530,6 +569,9 @@ coderail_archive_validate_apply() {
     coderail_archive_list_file=$(mktemp "${TMPDIR:-/tmp}/coderail-archive-files.XXXXXX") || return 1
     coderail_archive_status=0
 
+    log_info "Validating install"
+    log_notice "install root: $coderail_archive_install_root"
+
     coderail_archive_validate_policy "$coderail_archive_policy" || return 1
     coderail_archive_validate_manifest_file "$coderail_archive_new_manifest" || return 1
 
@@ -584,6 +626,8 @@ coderail_archive_copy_staged_files() {
     coderail_archive_list_file=$(mktemp "${TMPDIR:-/tmp}/coderail-archive-files.XXXXXX") || return 1
     coderail_archive_status=0
 
+    log_info "Installing managed files"
+
     find "$coderail_archive_stage_dir" -type f | sort > "$coderail_archive_list_file" ||
         coderail_archive_status=1
 
@@ -598,6 +642,7 @@ coderail_archive_copy_staged_files() {
         }
 
         coderail_archive_target_file=$coderail_archive_install_root/$coderail_archive_rel_path
+        log_notice "installing $coderail_archive_rel_path"
         mkdir -p "$(dirname "$coderail_archive_target_file")" || {
             coderail_archive_status=1
             break
@@ -645,6 +690,7 @@ coderail_archive_remove_stale_files() {
             coderail_archive_target_file=$coderail_archive_install_root/$coderail_archive_rel_path
 
             if [ -e "$coderail_archive_target_file" ]; then
+                log_notice "removing stale managed file: $coderail_archive_rel_path"
                 rm -f "$coderail_archive_target_file" || exit 1
             fi
 
@@ -658,6 +704,9 @@ coderail_archive_write_manifest() {
     coderail_archive_install_root=$1
     coderail_archive_new_manifest=$2
     coderail_archive_manifest_tmp=$coderail_archive_install_root/.coderail-install.tmp.$$
+
+    log_info "Writing install manifest"
+    log_notice "manifest target: $coderail_archive_install_root/.coderail-install"
 
     coderail_archive_validate_manifest_file "$coderail_archive_new_manifest" || return 1
     cp "$coderail_archive_new_manifest" "$coderail_archive_manifest_tmp" || return 1
@@ -749,13 +798,19 @@ coderail_archive_apply_target_policy() {
         trap coderail_archive_apply_target_cleanup EXIT
         trap 'coderail_archive_apply_target_cleanup; exit 1' HUP INT TERM
 
+        log_notice "archive target: $coderail_archive_target"
+        log_notice "install root: $coderail_archive_install_root"
+
         mkdir "$coderail_archive_extract_dir"
         coderail_archive_download "$coderail_archive_target" "$coderail_archive_archive_file"
+        log_info "Extracting archive"
+        log_notice "extract directory: $coderail_archive_extract_dir"
         coderail_archive_source_root=$(
             coderail_archive_extract_source_root \
                 "$coderail_archive_archive_file" \
                 "$coderail_archive_extract_dir"
         )
+        log_notice "extracted source root: $coderail_archive_source_root"
         coderail_archive_apply_source_policy \
             "$coderail_archive_source_root" \
             "$coderail_archive_install_root" \

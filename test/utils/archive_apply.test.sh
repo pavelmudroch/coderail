@@ -18,6 +18,7 @@ TEMP_DIR=${TEMP_DIR%/}
 tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-archive-apply-test.XXXXXX")
 
 . "$PROJECT_ROOT/test/suite.sh"
+. "$PROJECT_ROOT/lib/utils/log.sh"
 CODERAIL_ARCHIVE_APPLY_NO_MAIN=1 . "$HELPER"
 unset CODERAIL_ARCHIVE_APPLY_NO_MAIN
 
@@ -56,6 +57,10 @@ assert_not_contains() {
     ! grep -F "$2" "$1" >/dev/null || fail "$1 contains: $2"
 }
 
+assert_file_empty() {
+    [ ! -s "$1" ] || fail "$1 should be empty"
+}
+
 assert_equals() {
     actual=$1
     expected=$2
@@ -87,6 +92,21 @@ run_helper() {
 
     set +e
     sh "$HELPER" "$@" > "$run_stdout" 2> "$run_stderr"
+    run_status=$?
+    set -e
+}
+
+run_helper_with_log_flags() {
+    run_log_verbose=$1
+    run_log_quiet=$2
+    shift 2
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+
+    set +e
+    log_verbose=$run_log_verbose log_quiet=$run_log_quiet \
+        sh "$HELPER" "$@" > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
 }
@@ -362,6 +382,66 @@ assert_apply_source_preserves_user_files() {
     assert_not_contains "$install_root/.coderail-install" "config.ini"
     assert_not_contains "$install_root/.coderail-install" ".coderail/"
     assert_not_contains "$install_root/.coderail-install" "test/"
+}
+
+assert_apply_source_logs_scope() {
+    source_root=$tmp_dir/source-logs-scope
+    install_root=$tmp_dir/install-logs-scope
+
+    create_source_tree "$source_root" logs-scope
+
+    run_helper apply-source "$source_root" "$install_root" false
+
+    assert_success
+    assert_contains "$run_stdout" "Staging source files"
+    assert_contains "$run_stdout" "Building install manifest"
+    assert_contains "$run_stdout" "Validating install"
+    assert_contains "$run_stdout" "Installing managed files"
+    assert_contains "$run_stdout" "Writing install manifest"
+    assert_not_contains "$run_stdout" "installing bin/cr"
+}
+
+assert_apply_source_verbose_logs_installed_files() {
+    source_root=$tmp_dir/source-logs-installed
+    install_root=$tmp_dir/install-logs-installed
+
+    create_source_tree "$source_root" logs-installed
+
+    run_helper_with_log_flags 1 0 apply-source "$source_root" "$install_root" false
+
+    assert_success
+    assert_contains "$run_stdout" "installing bin/cr"
+    assert_contains "$run_stdout" "installing lib/commands/example.sh"
+    assert_contains "$run_stdout" "installing lib/utils/example.sh"
+    assert_contains "$run_stdout" "installing instructions/skills/example/SKILL.md"
+}
+
+assert_apply_source_quiet_suppresses_logs() {
+    source_root=$tmp_dir/source-logs-quiet
+    install_root=$tmp_dir/install-logs-quiet
+
+    create_source_tree "$source_root" logs-quiet
+
+    run_helper_with_log_flags 0 1 apply-source "$source_root" "$install_root" false
+
+    assert_success
+    assert_file_empty "$run_stdout"
+}
+
+assert_apply_source_verbose_logs_stale_cleanup() {
+    source_v1=$tmp_dir/source-logs-stale-v1
+    source_v2=$tmp_dir/source-logs-stale-v2
+    install_root=$tmp_dir/install-logs-stale
+
+    create_source_tree "$source_v1" logs-stale-v1
+    printf 'stale\n' > "$source_v1/lib/commands/stale.sh"
+    create_source_tree "$source_v2" logs-stale-v2
+
+    coderail_archive_apply_source "$source_v1" "$install_root" false
+    run_helper_with_log_flags 1 0 apply-source "$source_v2" "$install_root" false
+
+    assert_success
+    assert_contains "$run_stdout" "removing stale managed file: lib/commands/stale.sh"
 }
 
 assert_apply_refuses_untracked_collision() {
@@ -643,6 +723,31 @@ assert_upgrade_target_applies_owned_changes() {
     assert_executable "$install_root/bin/cr"
 }
 
+assert_upgrade_target_logs_scope() {
+    source_v1=$tmp_dir/source-upgrade-target-logs-v1
+    archive_file=$tmp_dir/upgrade-target-logs.tar.gz
+    install_root=$tmp_dir/install-upgrade-target-logs
+    fake_dir=$tmp_dir/fake-upgrade-target-logs
+    fake_log=$tmp_dir/upgrade-target-logs.log
+
+    create_source_tree "$source_v1" upgrade-target-logs-v1
+    coderail_archive_apply_source "$source_v1" "$install_root" false
+
+    mkdir "$fake_dir"
+    : > "$fake_log"
+    create_archive "$archive_file" upgrade-target-logs-v2
+    write_fake_curl "$fake_dir"
+
+    FAKE_LOG=$fake_log FAKE_ARCHIVE=$archive_file PATH="$fake_dir:$PATH" \
+        run_helper upgrade-target latest "$install_root"
+
+    assert_success
+    assert_contains "$run_stdout" "Downloading archive"
+    assert_contains "$run_stdout" "Extracting archive"
+    assert_contains "$run_stdout" "Staging source files"
+    assert_contains "$run_stdout" "Installing managed files"
+}
+
 assert_upgrade_target_rejects_untracked_collision() {
     source_v1=$tmp_dir/source-upgrade-target-collision-v1
     archive_file=$tmp_dir/upgrade-target-collision.tar.gz
@@ -685,6 +790,10 @@ test "Download falls back to wget" assert_download_falls_back_to_wget
 test "Apply target uses downloaded archive" assert_apply_target_uses_downloaded_archive
 test "Invalid archive layout fails" assert_invalid_archive_layout_fails
 test "Apply source preserves user files" assert_apply_source_preserves_user_files
+test "Apply source logs scope" assert_apply_source_logs_scope
+test "Apply source verbose logs installed files" assert_apply_source_verbose_logs_installed_files
+test "Apply source quiet suppresses logs" assert_apply_source_quiet_suppresses_logs
+test "Apply source verbose logs stale cleanup" assert_apply_source_verbose_logs_stale_cleanup
 test "Apply refuses untracked collision" assert_apply_refuses_untracked_collision
 test "Apply force replaces untracked collision" assert_apply_force_replaces_untracked_collision
 test "Apply refuses modified managed file" assert_apply_refuses_modified_managed_file
@@ -707,6 +816,7 @@ test "Upgrade rejects empty manifest before download" \
 test "Upgrade rejects manifest without bin/cr before download" \
     assert_invalid_upgrade_manifest missing-bin "does not track bin/cr"
 test "Upgrade target applies owned changes" assert_upgrade_target_applies_owned_changes
+test "Upgrade target logs scope" assert_upgrade_target_logs_scope
 test "Upgrade target rejects untracked collision" assert_upgrade_target_rejects_untracked_collision
 
 print_tests_summary

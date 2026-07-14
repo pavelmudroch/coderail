@@ -117,6 +117,8 @@ validate_source_root() {
         install_error "source root is missing lib/"
     [ -f "$source_root/lib/utils/archive_apply.sh" ] ||
         install_error "source root is missing lib/utils/archive_apply.sh"
+    [ -f "$source_root/lib/utils/log.sh" ] ||
+        install_error "source root is missing lib/utils/log.sh"
     [ -d "$source_root/instructions" ] ||
         install_error "source root is missing instructions/"
     [ -f "$source_root/README.md" ] ||
@@ -196,6 +198,7 @@ extract_dir=$tmp_dir/extract
 download_archive "$archive_url" "$archive_file"
 source_root=$(extract_source_root "$archive_file" "$extract_dir")
 
+. "$source_root/lib/utils/log.sh"
 CODERAIL_ARCHIVE_APPLY_NO_MAIN=1 . "$source_root/lib/utils/archive_apply.sh"
 coderail_archive_apply_source "$source_root" "$install_dir" false ||
     install_error "failed to install Coderail"

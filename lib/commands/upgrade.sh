@@ -19,14 +19,11 @@ EOF
 }
 
 usage_error() {
-    echo "error: $*" >&2
-    echo >&2
-    usage >&2
-    exit 2
+    log_usage_error "$@"
 }
 
 upgrade_error() {
-    echo "error: $*" >&2
+    log_error "$@"
     exit 1
 }
 
@@ -40,6 +37,7 @@ ROOT_DIR=$(
     pwd
 )
 
+. "$ROOT_DIR/lib/utils/log.sh"
 CODERAIL_ARCHIVE_APPLY_NO_MAIN=1 . "$ROOT_DIR/lib/utils/archive_apply.sh"
 
 upgrade_install_root() {
@@ -132,5 +130,8 @@ done
 
 upgrade_target=$(upgrade_target_ref "$upgrade_version")
 install_root=$(upgrade_install_root)
+
+log_info "Upgrading Coderail to $upgrade_target"
+log_notice "install root: $install_root"
 
 coderail_archive_upgrade_target "$upgrade_target" "$install_root"
