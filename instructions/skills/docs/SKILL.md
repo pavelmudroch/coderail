@@ -7,7 +7,7 @@ description: Use for guidance when updating base docs (README, CHANGELOG) files.
 
 Use for `README.md` and `CHANGELOG.md`. Keep docs concise, accurate to repo behavior, and in existing style. Verify commands/files before documenting. Do not invent features, claims, badges, or roadmap.
 
-If not specified otherwise, update docs based on changed files `git diff --name-only HEAD^ HEAD` and commit messages. If a change is not user-facing, do not document it.
+If not specified otherwise, update docs based on changed files `git diff --name-only HEAD^ HEAD`. If a change is not user-facing, do not document it.
 Especially read the SPEC, REVIEW or RESEARCH markdown files, optionally any closed tickets. Read changed source code only if absolutely needed.
 
 ## CHANGELOG.md
@@ -27,19 +27,3 @@ Follow Keep a Changelog 1.1.0: https://keepachangelog.com/en/1.1.0/
 - Installation: list prerequisites and exact commands.
 - Usage: show minimal quickstart and common examples; include expected output/paths when helpful.
 - Prefer short sections and links to deeper docs. Remove or update stale text touched by the change.
-
-### Semantic Commits
-When README documents commit style, prefer `type(scope): summary`; scope is optional, summary is imperative and lowercase unless proper noun.
-
-- `feat` - user-facing feature.
-- `fix` - bug fix.
-- `docs` - documentation only.
-- `style` - formatting only; no behavior change.
-- `refactor` - code change without feature or bug fix.
-- `perf` - performance improvement.
-- `test` - tests only.
-- `build` - build system or dependency change.
-- `ci` - CI configuration.
-- `chore` - maintenance with no product/runtime effect.
-- `revert` - revert previous commit.
-- Breaking changes: use `!` after type/scope or `BREAKING CHANGE:` footer.
