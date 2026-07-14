@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `build/release.sh` helper for guarded stable release publishing.
+
+### Changed
+
+- `cr --version` now reads the version from `lib/version.sh`.
+
 ## [v1.0.0] - 2026-07-14
 
 ### Added

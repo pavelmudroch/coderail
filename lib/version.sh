@@ -1,1 +1,1 @@
-coderail_version="1.0.0"
+coderail_version="canary"

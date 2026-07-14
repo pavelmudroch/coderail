@@ -502,6 +502,37 @@ cr ticket validate
 cr ticket clean --dry-run
 ```
 
+## Development
+
+Run the full test suite:
+
+```sh
+sh test/all.sh
+```
+
+Run the release helper tests directly, or through the repo test map:
+
+```sh
+sh test/build/release.test.sh
+cr test build/release.sh
+```
+
+### Release Helper
+
+Maintainers publish stable releases with `build/release.sh`.
+
+```sh
+./build/release.sh --patch
+./build/release.sh --minor
+./build/release.sh --major
+```
+
+The helper derives the next stable version from the highest `vX.Y.Z` tag visible locally or on `origin`. Before creating or pushing tags, it requires `main`, a clean worktree, matching `lib/version.sh` metadata, and a matching `CHANGELOG.md` release section and links.
+
+Running the helper is the publish action. It creates the annotated version tag, moves the annotated `latest` tag, and pushes both tag updates to `origin` atomically.
+
+This approach keeps the release process simple, atomic, and predictable. No jumps between semver versions.
+
 ## Inspirations
 
 Big thanks belong to Matt Pocock, and his `skills` project, which helped shape the idea that agents behave better when they are given explicit, reusable skills and operational rails instead of giant one-off prompts.
