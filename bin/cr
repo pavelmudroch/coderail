@@ -61,7 +61,7 @@ error() {
 }
 
 version() {
-    log_info "cr version 0.1.0"
+    log_info "cr version 1.0.0"
 }
 
 set_work_dir() {

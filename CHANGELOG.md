@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.0] - 2026-07-14
+
 ### Added
 
 - Custom instructions including skills, custom agents and global agent instruction file.
@@ -22,4 +24,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `default_tool` config support for `cr install` and `cr uninstall` when no tool argument is provided.
 - Directory selectors for `cr test`, expanded recursively to regular files.
 
-[Unreleased]: https://github.com/pavelmudroch/coderail/tree/main
+[Unreleased]: https://github.com/pavelmudroch/coderail/compare/v1.0.0...HEAD
+[v1.0.0]: https://github.com/pavelmudroch/coderail/releases/tag/v1.0.0
