@@ -22,9 +22,7 @@ Use focused discussion to:
 * select and refine one coherent direction
 
 Let <skill>grill-me</skill> control the interrogation style, focused on decisions affecting scope.
-
-Ask one or a few high-value questions at a time. Challenge vague, conflicting, risky, or overcomplicated ideas without forcing premature decisions.
-Validate each answer before moving on, inform about possible trade-offs and alternatives if any.
+Validate each answer, and suggest alternatives, refinments or explain trade-offs if any.
 
 ## Scope File
 

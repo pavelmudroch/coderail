@@ -48,6 +48,7 @@ Do not close a ticket until verification evidence is recorded in the summary.
 - Do not expand scope during implementation.
 - Keep user-facing updates concise.
 - If blocked, report blocker and smallest useful next step.
+- Add additional test if needed to verify implementation.
 
 ## CR tool
 

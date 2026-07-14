@@ -10,7 +10,7 @@ Scope for agents: only `test` and ticket commands below.
 
 ## Test
 - `cr test --changed` - run checks for git-changed and untracked files.
-- `cr test <file> [...]` - run checks mapped for relative file paths. Absolute paths unsupported.
+- `cr test <file|dir> [...]` - run checks mapped for relative file paths; directories expand recursively. Absolute paths unsupported.
 - Output per path: `passed`, `failed`, or `no tests found`. Use `cr -v test ...` to see failed command output.
 - Requires `.coderail/test.map`; if missing, use repo-native tests instead of creating config unless asked.
 

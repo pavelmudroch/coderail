@@ -7,6 +7,9 @@ description: Use for guidance when updating base docs (README, CHANGELOG) files.
 
 Use for `README.md` and `CHANGELOG.md`. Keep docs concise, accurate to repo behavior, and in existing style. Verify commands/files before documenting. Do not invent features, claims, badges, or roadmap.
 
+If not specified otherwise, update docs based on changed files `git diff --name-only HEAD^ HEAD` and commit messages. If a change is not user-facing, do not document it.
+Especially read the SPEC, REVIEW or RESEARCH markdown files, optionally any closed tickets. Read changed source code only if absolutely needed.
+
 ## CHANGELOG.md
 Follow Keep a Changelog 1.1.0: https://keepachangelog.com/en/1.1.0/
 

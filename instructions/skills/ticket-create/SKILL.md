@@ -15,6 +15,7 @@ If ticket depends on other tickets, use `-d <ticket_id>` option to specify depen
 
 3. Split the ticket into clear, focused, small, actionable tasks with expected outcomes and validation criteria. Prefer independent, not file overlapping tasks.
 Task is horizontal slice within a specific layer of the system of ticket.
+Prefer test tasks before implementation tasks.
 
 Add tasks as checkbox numbered list under `## Tasks` section. Finished tasks is marked with `[x]` and unfinished tasks with `[ ]`.
 
