@@ -201,5 +201,11 @@ coderail_archive_apply_source "$source_root" "$install_dir" false ||
     install_error "failed to install Coderail"
 
 printf 'Coderail installed to: %s\n' "$install_dir"
-printf 'Add Coderail to your PATH:\n'
-printf '  export PATH="%s/bin:$PATH"\n' "$install_dir"
+
+case ":$PATH:" in
+    *":$install_dir/bin:"*) ;;
+    *)
+        printf 'Add Coderail to your PATH:\n'
+        printf '  export PATH="%s/bin:$PATH"\n' "$install_dir"
+        ;;
+esac
