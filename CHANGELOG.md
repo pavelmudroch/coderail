@@ -19,5 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ticket** command to manage branch-local tickets, including create, next, activate, close, deactivate, reopen, validate, and clean subcommands.
 - **upgrade** command to upgrade the coderail tool to the latest, or specified version.
 - **INSTALL** an installation POSIX shell script for installing coderail.
+- `default_tool` config support for `cr install` and `cr uninstall` when no tool argument is provided.
+- Directory selectors for `cr test`, expanded recursively to regular files.
 
 [Unreleased]: https://github.com/pavelmudroch/coderail/tree/main

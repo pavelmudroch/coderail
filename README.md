@@ -141,6 +141,9 @@ Example:
 default_tool = codex
 ```
 
+When no tool argument is provided, `cr install` and `cr uninstall` use `default_tool`.
+Repo-local config overrides user-local config.
+
 ### `.coderail/test.map`
 
 The test map tells Coderail which commands to run for changed files.
@@ -166,6 +169,8 @@ sh test/{rel}/{base}.test.sh
 
 Rules:
 
+- The first `#` starts a Coderail comment, even inside quoted shell text.
+- Comment parsing is Coderail syntax, not shell-aware parsing.
 - [default] commands always run, but define no captures.
 - Use [default] for commands that do not need the selected path.
 - Other section names are glob patterns and can define captures with `{name:glob}`.
@@ -205,9 +210,11 @@ Global options:
 -h, --help      Show help and exit
 --version       Show version information and exit
 -v, --verbose   Enable verbose logging
--q, --quiet     Suppress non-error output
+-q, --quiet     Suppress notices and log output
 --cwd <dir>     Run repo-local commands from another directory
 ```
+
+`--quiet` does not suppress command result stdout such as created ticket paths or `cr test` result lines.
 
 `--cwd` is valid for repo-local commands such as `init`, `ticket`, and `test`. For install-root commands such as `upgrade`, `install`, and `uninstall`, it is accepted and ignored.
 
@@ -284,12 +291,13 @@ Created files and directories:
 
 ### `cr install`
 
-Install Coderail instructions, skills, and agent files for one or more supported agent tools.
+Install Coderail root instructions and skills for one or more supported agent tools.
+Codex, Copilot, and Claude also receive agent files. Gemini does not receive agent files.
 
 Usage:
 
 ```sh
-cr install [options] <tool ...>
+cr install [options] [<tool> ...]
 ```
 
 Supported tools:
@@ -319,7 +327,7 @@ CODERAIL_CLAUDE_HOME
 CODERAIL_GEMINI_HOME
 ```
 
-Coderail writes a `.coderail-install` manifest in each target root. On later installs, that manifest is used to update managed files and remove stale managed files. If an existing target file is untracked by Coderail, or a managed file was modified, install refuses to overwrite it unless `--force` is used.
+Coderail writes a `.coderail-install` manifest in each target root. On later installs, that manifest is used to update managed files and remove stale managed files. Manifest entries are validated as relative paths under the target root before Coderail checks, updates, or removes managed files. If an existing target file is untracked by Coderail, or a managed file was modified, install refuses to overwrite it unless `--force` is used.
 
 Options:
 
@@ -344,7 +352,7 @@ Remove files previously installed by `cr install` for one or more supported agen
 Usage:
 
 ```sh
-cr uninstall [options] <tool ...>
+cr uninstall [options] [<tool> ...]
 ```
 
 Supported tools:
@@ -403,22 +411,22 @@ cr upgrade --canary
 
 ### `cr test`
 
-Run validation commands from `.coderail/test.map` for specified files, or for changed files detected by Git.
+Run validation commands from `.coderail/test.map` for specified files or directories, or for changed files detected by Git.
 
 Usage:
 
 ```sh
-cr test [options] [<file> ...]
+cr test [options] [<file|dir> ...]
 ```
 
 At least one selector is required:
 
 ```txt
 --changed   Run tests for changed files in the current Git repository
-<file>      Run tests for a specific relative file path
+<file|dir>  Run tests for a relative file path, or recursively for a directory
 ```
 
-`cr test` reads `.coderail/test.map`, finds sections whose glob patterns match each selected path, expands capture placeholders, and runs the resulting commands. The `[default]` section always matches without captures. If any matching command for a path exits non-zero, the final output marks that path as `failed`; otherwise it reports `passed` or `no tests found`.
+`cr test` reads `.coderail/test.map`, finds sections whose glob patterns match each selected path, expands capture placeholders, and runs the resulting commands. Directory selectors expand recursively to regular files before matching. The `[default]` section always matches without captures. If any matching command for a path exits non-zero, the final output marks that path as `failed`; otherwise it reports `passed` or `no tests found`.
 
 For inspecting details of failed commands, run with `--verbose` to see the full command output.
 
@@ -426,13 +434,14 @@ For inspecting details of failed commands, run with `--verbose` to see the full 
 cr --verbose test --changed
 ```
 
-Absolute paths are not supported. Use paths relative to the selected working directory.
+Absolute paths and parent-directory traversal are not supported. Use paths relative to the selected working directory.
 
 Examples:
 
 ```sh
 cr test --changed
 cr test README.md
+cr test lib
 cr test src/app.ts tests/app.test.ts
 cr --cwd /path/to/project test --changed
 ```
