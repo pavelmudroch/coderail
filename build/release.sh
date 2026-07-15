@@ -274,13 +274,19 @@ validate_version_file() {
 validate_changelog() {
     changelog=$ROOT_DIR/CHANGELOG.md
     release_link="[$target_tag]: https://github.com/pavelmudroch/coderail/releases/tag/$target_tag"
+    release_compare_link="[$target_tag]: https://github.com/pavelmudroch/coderail/compare/v$previous_version...$target_tag"
     unreleased_link="[Unreleased]: https://github.com/pavelmudroch/coderail/compare/$target_tag...HEAD"
 
     [ -f "$changelog" ] || fatal "expected CHANGELOG.md to document $target_tag"
     grep -F "## [$target_tag] - " "$changelog" >/dev/null 2>&1 ||
         fatal "expected CHANGELOG.md release section for $target_tag"
-    grep -Fx "$release_link" "$changelog" >/dev/null 2>&1 ||
-        fatal "expected CHANGELOG.md release link: $release_link"
+    if [ "$previous_version" != "" ]; then
+        grep -Fx "$release_compare_link" "$changelog" >/dev/null 2>&1 ||
+            fatal "expected CHANGELOG.md release compare link: $release_compare_link"
+    else
+        grep -Fx "$release_link" "$changelog" >/dev/null 2>&1 ||
+            fatal "expected CHANGELOG.md release link: $release_link"
+    fi
     grep -Fx "$unreleased_link" "$changelog" >/dev/null 2>&1 ||
         fatal "expected CHANGELOG.md [Unreleased] link: $unreleased_link"
 }
