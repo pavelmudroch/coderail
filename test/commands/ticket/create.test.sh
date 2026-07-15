@@ -34,6 +34,10 @@ assert_file() {
     [ -f "$1" ] || fail "missing file: $1"
 }
 
+assert_dir() {
+    [ -d "$1" ] || fail "missing directory: $1"
+}
+
 assert_path_missing() {
     [ ! -e "$1" ] || fail "path should not exist: $1"
 }
@@ -186,16 +190,32 @@ assert_create_without_write_permission_fails() {
     assert_path_missing "$work_dir/.coderail/tickets/open/0001-cannot-write.md"
 }
 
-assert_missing_ticket_directory_suggests_init() {
+assert_create_ticket_without_tickets_directory() {
     work_dir=$tmp_dir/missing-tickets
 
-    mkdir "$work_dir"
+    mkdir -p "$work_dir/.coderail"
 
     run_create "$work_dir" "Missing Tickets"
 
+    ticket_file=$work_dir/.coderail/tickets/open/0001-missing-tickets.md
+
+    assert_success
+    assert_stdout_content ".coderail/tickets/open/0001-missing-tickets.md"
+    assert_file_empty "$run_stderr"
+    assert_dir "$work_dir/.coderail/tickets"
+    assert_file "$ticket_file"
+}
+
+assert_missing_coderail_directory_suggests_init() {
+    work_dir=$tmp_dir/missing-coderail
+
+    mkdir "$work_dir"
+
+    run_create "$work_dir" "Missing Coderail"
+
     assert_failure
     assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "error: ticket directory not found: .coderail/tickets; run cr init before proceeding"
+    assert_contains "$run_stderr" "error: coderail directory not found: .coderail; run cr init before proceeding"
     assert_path_missing "$work_dir/.coderail"
 }
 
@@ -203,7 +223,8 @@ print_tests_header "Ticket Create Tests"
 test "Create ticket" assert_create_ticket
 test "Create ticket with dependencies" assert_create_ticket_with_dependencies
 test "Create without write permission fails" assert_create_without_write_permission_fails
-test "Missing ticket directory suggests init" assert_missing_ticket_directory_suggests_init
+test "Create ticket without tickets directory" assert_create_ticket_without_tickets_directory
+test "Missing coderail directory suggests init" assert_missing_coderail_directory_suggests_init
 
 print_tests_summary
 

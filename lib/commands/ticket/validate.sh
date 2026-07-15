@@ -444,8 +444,10 @@ print_ticket_result() {
 }
 
 collect_all_tickets() {
-    [ -d "$tickets_dir" ] ||
-        fatal "ticket directory not found: .coderail/tickets; run cr init before proceeding"
+    [ -d "$project_dir/.coderail" ] ||
+        fatal "coderail directory not found: .coderail; run cr init before proceeding"
+
+    [ -d "$tickets_dir" ] || return 0
 
     for ticket_state in open active closed; do
         ticket_state_dir=$tickets_dir/$ticket_state

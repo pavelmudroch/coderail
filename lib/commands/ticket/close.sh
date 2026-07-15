@@ -215,9 +215,9 @@ ticket_dependencies() {
         done
 }
 
-require_ticket_directory() {
-    [ -d "$tickets_dir" ] ||
-        fatal "ticket directory not found: .coderail/tickets; run cr init before proceeding"
+require_coderail_directory() {
+    [ -d "$project_dir/.coderail" ] ||
+        fatal "coderail directory not found: .coderail; run cr init before proceeding"
 }
 
 resolve_ticket_id() {
@@ -397,7 +397,7 @@ close_ticket() {
 
 duplicate_of_id=
 
-require_ticket_directory
+require_coderail_directory
 
 log_notice "locating ticket: $ticket_reference"
 ticket_path=$(ticket_resolve_reference "$project_dir" "$ticket_reference")

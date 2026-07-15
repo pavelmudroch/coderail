@@ -236,7 +236,7 @@ Run a repo-local command from another directory:
 cr --cwd /path/to/project test --changed
 ```
 
-This section documents commands that are currently implemented and ready to use: `upgrade`, `install`, `uninstall`, `init`, `ticket`, and `test`.
+This section documents commands that are currently implemented and ready to use: `upgrade`, `install`, `uninstall`, `init`, `clean`, `ticket`, and `test`.
 
 ### Custom Skill Workflow
 
@@ -448,6 +448,30 @@ cr --cwd /path/to/project test --changed
 
 To collect all possible failures, `cr test` continues running all matching commands for all selected paths, even if some commands fail. The final exit code is non-zero if any command failed.
 
+### `cr clean`
+
+Clean stale Coderail workflow files from the current repository after branch work is complete. It preserves `.coderail/conf.ini` and `.coderail/test.map`, and requires ticket files to be resolved before removing stale files.
+
+Usage:
+
+```sh
+cr clean [options]
+```
+
+Options:
+
+```txt
+-h, --help   Show help and exit
+--dry-run    Print planned removals without mutating files
+```
+
+Examples:
+
+```sh
+cr clean --dry-run
+cr clean
+```
+
 ### `cr ticket`
 
 Manage branch-local tickets under `.coderail/tickets`.
@@ -471,7 +495,7 @@ close [--reason <reason>] [--duplicate-of <ticket>] <ticket>
 deactivate [-d <ticket> ...] <ticket>                Move an active ticket back to open
 reopen [-d <ticket> ...] <ticket>                    Move a closed ticket back to open
 validate [<ticket> ...]                              Validate selected tickets, or all tickets
-clean [--dry-run] [--prune] [--yes]                  Clean up closed tickets
+clean [--dry-run] [--prune] [--yes]                  Clean up closed tickets (deprecated; use cr clean)
 ```
 
 Dependency options accept ticket IDs, names, slugs, or paths and store resolved IDs in the ticket file. `next`, `activate`, and `close --reason done` require dependencies to be satisfied. A dependency is satisfied when it is closed as `done`, or when it is a duplicate whose original is satisfied.
@@ -485,7 +509,7 @@ deferred   Valid work, intentionally postponed.
 dismissed  No longer needed.
 ```
 
-`cr ticket clean` requires no active tickets. By default it removes closed tickets completed as `done`, plus duplicate tickets whose original is completed, if any open ticket depends on them, these dependecies are removed from open ticket. Use `--dry-run` to preview. Use `--prune` to remove all closed tickets and open tickets depending on unsatisfied closed tickets.
+`cr ticket clean` is deprecated; use `cr clean` for branch cleanup. The legacy command remains available and requires no active tickets. By default it removes closed tickets completed as `done`, plus duplicate tickets whose original is completed, if any open ticket depends on them, these dependecies are removed from open ticket. Use `--dry-run` to preview. Use `--prune` to remove all closed tickets and open tickets depending on unsatisfied closed tickets.
 
 Examples:
 

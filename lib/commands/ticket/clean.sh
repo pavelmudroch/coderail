@@ -22,6 +22,8 @@ usage() {
 Usage:
   cr ticket clean [options]
 
+  Deprecated: use cr clean instead.
+
   Clean up tickets for the current repository. Usefull for cleaning up a branch
   befor merging, or checking what tickets are still relevant and what is left
   to be done. Also removing dependencies for deleted closed tickets form open
@@ -47,6 +49,12 @@ error() {
     echo >&2
     usage >&2
     exit 2
+}
+
+warn_deprecated_command() {
+    [ "$log_quiet" = 1 ] && return
+
+    echo "warning: cr ticket clean is deprecated; use cr clean next time" >&2
 }
 
 dry_run=false
@@ -91,6 +99,8 @@ done
 
 [ "$#" -eq 0 ] || error "unexpected argument: $1"
 
+warn_deprecated_command
+
 fatal() {
     log_error "$@"
     exit 1
@@ -133,9 +143,9 @@ append_unique_line() {
         printf '%s\n' "$append_unique_value" >> "$append_unique_file"
 }
 
-require_ticket_directory() {
-    [ -d "$tickets_dir" ] ||
-        fatal "ticket directory not found: .coderail/tickets; run cr init before proceeding"
+require_coderail_directory() {
+    [ -d "$project_dir/.coderail" ] ||
+        fatal "coderail directory not found: .coderail; run cr init before proceeding"
 }
 
 ticket_path_from_file() {
@@ -479,7 +489,7 @@ apply_plan() {
     done < "$removed_file"
 }
 
-require_ticket_directory
+require_coderail_directory
 
 active_tickets_file=$tmp_dir/active-tickets
 open_tickets_file=$tmp_dir/open-tickets

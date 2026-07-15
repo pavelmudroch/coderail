@@ -102,12 +102,12 @@ project_dir=.
 tickets_dir=$project_dir/.coderail/tickets
 open_tickets_dir=$tickets_dir/open
 
-require_ticket_directory() {
-    [ -d "$tickets_dir" ] ||
-        fatal "ticket directory not found: .coderail/tickets; run cr init before proceeding"
+require_coderail_directory() {
+    [ -d "$project_dir/.coderail" ] ||
+        fatal "coderail directory not found: .coderail; run cr init before proceeding"
 }
 
-require_ticket_directory
+require_coderail_directory
 
 TEMP_DIR="${TMPDIR:-/tmp}"
 TEMP_DIR=${TEMP_DIR%/}

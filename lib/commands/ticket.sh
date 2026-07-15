@@ -20,7 +20,7 @@ Commands:
   deactivate            Deactivate an active ticket
   reopen                Reopen a closed ticket
   validate              Validate tickets format
-  clean                 Clean up tickets
+  clean                 Clean up tickets (deprecated; use cr clean)
 EOF
 }
 

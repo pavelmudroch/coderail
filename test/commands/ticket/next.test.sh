@@ -111,7 +111,7 @@ run_next() {
     set -e
 }
 
-assert_next_requires_ticket_directory() {
+assert_next_requires_coderail_directory() {
     work_dir=$tmp_dir/missing-directory
     mkdir -p "$work_dir"
 
@@ -119,7 +119,19 @@ assert_next_requires_ticket_directory() {
 
     assert_failure
     assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "error: ticket directory not found: .coderail/tickets; run cr init before proceeding"
+    assert_contains "$run_stderr" "error: coderail directory not found: .coderail; run cr init before proceeding"
+}
+
+assert_next_without_tickets_directory_reports_no_available_tickets() {
+    work_dir=$tmp_dir/missing-tickets
+
+    mkdir -p "$work_dir/.coderail"
+
+    run_next "$work_dir"
+
+    assert_failure
+    assert_stdout_content "no available tickets"
+    assert_file_empty "$run_stderr"
 }
 
 assert_next_reports_no_available_tickets() {
@@ -199,7 +211,8 @@ assert_next_fails_on_missing_dependency() {
 }
 
 print_tests_header "Ticket Next Tests"
-test "Next requires ticket directory" assert_next_requires_ticket_directory
+test "Next requires coderail directory" assert_next_requires_coderail_directory
+test "Next without tickets directory reports no available tickets" assert_next_without_tickets_directory_reports_no_available_tickets
 test "Next reports no available tickets" assert_next_reports_no_available_tickets
 test "Next lists open tickets without dependencies" assert_next_lists_open_tickets_without_dependencies
 test "Next filters by satisfied dependencies" assert_next_filters_by_satisfied_dependencies

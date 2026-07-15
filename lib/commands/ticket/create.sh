@@ -154,8 +154,8 @@ append_unique_line() {
 }
 
 require_ticket_directory() {
-    [ -d "$tickets_dir" ] ||
-        fatal "ticket directory not found: .coderail/tickets; run cr init before proceeding"
+    [ -d "$project_dir/.coderail" ] ||
+        fatal "coderail directory not found: .coderail; run cr init before proceeding"
 
     mkdir -p "$open_tickets_dir" ||
         fatal "failed to create ticket directory: .coderail/tickets/open"

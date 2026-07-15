@@ -327,8 +327,8 @@ assert_close_preserves_active_ticket_when_final_move_fails() {
     assert_directory_empty "$closed_dir"
 }
 
-assert_missing_ticket_directory_suggests_init() {
-    work_dir=$tmp_dir/missing-tickets
+assert_missing_coderail_directory_suggests_init() {
+    work_dir=$tmp_dir/missing-coderail
 
     mkdir "$work_dir"
 
@@ -336,7 +336,19 @@ assert_missing_ticket_directory_suggests_init() {
 
     assert_failure
     assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "error: ticket directory not found: .coderail/tickets; run cr init before proceeding"
+    assert_contains "$run_stderr" "error: coderail directory not found: .coderail; run cr init before proceeding"
+}
+
+assert_missing_tickets_directory_reports_missing_ticket() {
+    work_dir=$tmp_dir/missing-tickets
+
+    mkdir -p "$work_dir/.coderail"
+
+    run_close "$work_dir" 1
+
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "error: ticket reference not found: 1"
 }
 
 assert_close_logs_notices() {
@@ -365,7 +377,8 @@ test "Done close accepts recursive duplicate dependency" assert_done_accepts_rec
 test "Duplicate close requires duplicate_of" assert_duplicate_close_requires_duplicate_of
 test "Duplicate close writes duplicate_of" assert_duplicate_close_writes_duplicate_of
 test "Close preserves active ticket when final move fails" assert_close_preserves_active_ticket_when_final_move_fails
-test "Missing ticket directory suggests init" assert_missing_ticket_directory_suggests_init
+test "Missing coderail directory suggests init" assert_missing_coderail_directory_suggests_init
+test "Missing tickets directory reports missing ticket" assert_missing_tickets_directory_reports_missing_ticket
 test "Close logs notices" assert_close_logs_notices
 
 print_tests_summary

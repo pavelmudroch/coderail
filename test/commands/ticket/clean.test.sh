@@ -13,6 +13,7 @@ ROOT_DIR=$(
 )
 
 CR=$ROOT_DIR/bin/cr
+DEPRECATION_NOTICE="warning: cr ticket clean is deprecated; use cr clean next time"
 TEMP_DIR="${TMPDIR:-/tmp}"
 TEMP_DIR=${TEMP_DIR%/}
 tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-ticket-clean-test.XXXXXX")
@@ -62,6 +63,14 @@ assert_file_content() {
 
 assert_stdout_content() {
     assert_file_content "$run_stdout" "$1"
+}
+
+assert_stderr_content() {
+    assert_file_content "$run_stderr" "$1"
+}
+
+assert_stderr_deprecation_notice() {
+    assert_stderr_content "$DEPRECATION_NOTICE"
 }
 
 assert_success() {
@@ -119,6 +128,19 @@ run_clean() {
     set -e
 }
 
+run_quiet_clean() {
+    work_dir=$1
+    shift
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+
+    set +e
+    "$CR" --quiet --cwd "$work_dir" ticket clean "$@" > "$run_stdout" 2> "$run_stderr"
+    run_status=$?
+    set -e
+}
+
 run_clean_with_input() {
     work_dir=$1
     input=$2
@@ -160,7 +182,7 @@ duplicate_of: 0003
     assert_stdout_content "update .coderail/tickets/open/0010-open-ticket.md
 remove .coderail/tickets/closed/0001-done-ticket.md
 remove .coderail/tickets/closed/0002-duplicate-done.md"
-    assert_file_empty "$run_stderr"
+    assert_stderr_deprecation_notice
     assert_file "$open_file"
     assert_path_missing "$done_file"
     assert_path_missing "$duplicate_done_file"
@@ -183,7 +205,7 @@ assert_clean_dry_run_does_not_mutate() {
     assert_success
     assert_stdout_content "update .coderail/tickets/open/0011-open-ticket.md
 remove .coderail/tickets/closed/0005-done-ticket.md"
-    assert_file_empty "$run_stderr"
+    assert_stderr_deprecation_notice
     assert_file "$done_file"
     assert_file "$open_file"
     assert_contains "$open_file" "dependencies: 0005"
@@ -202,6 +224,7 @@ assert_clean_rejects_active_tickets() {
 
     assert_failure
     assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "$DEPRECATION_NOTICE"
     assert_contains "$run_stderr" "error: active tickets must be closed or deactivated before cleaning: .coderail/tickets/active/0012-active-ticket.md"
     assert_file "$active_file"
     assert_file "$done_file"
@@ -217,9 +240,22 @@ assert_clean_missing_dependency_fails_without_mutation() {
 
     assert_failure
     assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "$DEPRECATION_NOTICE"
     assert_contains "$run_stderr" "error: ticket reference not found: 9999"
     assert_file "$open_file"
     assert_contains "$open_file" "dependencies: 9999"
+}
+
+assert_clean_without_tickets_directory_is_no_op() {
+    work_dir=$tmp_dir/missing-tickets
+
+    mkdir -p "$work_dir/.coderail"
+
+    run_clean "$work_dir"
+
+    assert_success
+    assert_file_empty "$run_stdout"
+    assert_stderr_deprecation_notice
 }
 
 assert_prune_decline_does_not_mutate() {
@@ -241,6 +277,7 @@ assert_prune_decline_does_not_mutate() {
 
     assert_failure
     assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "$DEPRECATION_NOTICE"
     assert_contains "$run_stderr" "The following tickets would only be removed because --prune was used:"
     assert_contains "$run_stderr" ".coderail/tickets/closed/0008-dismissed-ticket.md"
     assert_contains "$run_stderr" ".coderail/tickets/open/0013-blocked-ticket.md"
@@ -286,7 +323,7 @@ remove .coderail/tickets/closed/0011-duplicate-dismissed.md
 remove .coderail/tickets/closed/0012-duplicate-done.md
 remove .coderail/tickets/open/0016-blocked-ticket.md
 remove .coderail/tickets/open/0017-cascade-ticket.md"
-    assert_file_empty "$run_stderr"
+    assert_stderr_deprecation_notice
     assert_file "$keep_file"
     assert_contains "$keep_file" "dependencies:"
     assert_not_contains "$keep_file" "dependencies: 0009"
@@ -298,13 +335,50 @@ remove .coderail/tickets/open/0017-cascade-ticket.md"
     assert_path_missing "$cascade_file"
 }
 
+assert_clean_quiet_suppresses_deprecation_notice() {
+    work_dir=$(create_project quiet)
+    open_file=$work_dir/.coderail/tickets/open/0018-open-ticket.md
+    done_file=$work_dir/.coderail/tickets/closed/0013-done-ticket.md
+
+    write_ticket "$done_file" 0013 done-ticket "Done Ticket" closed "" "close_reason: done
+"
+    write_ticket "$open_file" 0018 open-ticket "Open Ticket" open "0013" ""
+
+    run_quiet_clean "$work_dir" --dry-run
+
+    assert_success
+    assert_stdout_content "update .coderail/tickets/open/0018-open-ticket.md
+remove .coderail/tickets/closed/0013-done-ticket.md"
+    assert_file_empty "$run_stderr"
+    assert_file "$done_file"
+    assert_file "$open_file"
+    assert_contains "$open_file" "dependencies: 0013"
+}
+
+assert_clean_help_marks_deprecated() {
+    work_dir=$(create_project clean-help)
+
+    run_clean "$work_dir" --help
+
+    assert_success
+    assert_contains "$run_stdout" "  cr ticket clean [options]"
+    assert_contains "$run_stdout" "  Deprecated: use cr clean instead."
+    assert_contains "$run_stdout" "  --dry-run"
+    assert_contains "$run_stdout" "  --prune"
+    assert_contains "$run_stdout" "  --yes"
+    assert_file_empty "$run_stderr"
+}
+
 print_tests_header "Ticket Clean Tests"
 test "Clean removes satisfied closed tickets" assert_clean_removes_satisfied_closed_tickets
 test "Clean dry run does not mutate" assert_clean_dry_run_does_not_mutate
 test "Clean rejects active tickets" assert_clean_rejects_active_tickets
 test "Clean missing dependency fails without mutation" assert_clean_missing_dependency_fails_without_mutation
+test "Clean without tickets directory is no-op" assert_clean_without_tickets_directory_is_no_op
 test "Prune decline does not mutate" assert_prune_decline_does_not_mutate
 test "Prune yes removes closed and unsatisfied open tickets" assert_prune_yes_removes_closed_and_unsatisfied_open_tickets
+test "Clean quiet suppresses deprecation notice" assert_clean_quiet_suppresses_deprecation_notice
+test "Clean help marks deprecated" assert_clean_help_marks_deprecated
 
 print_tests_summary
 

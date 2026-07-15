@@ -183,6 +183,18 @@ assert_validate_all_tickets() {
     assert_contains "$run_stdout" ".coderail/tickets/active/0002-active-ticket.md is valid"
 }
 
+assert_validate_all_without_tickets_directory_succeeds() {
+    work_dir=$tmp_dir/missing-tickets
+
+    mkdir -p "$work_dir/.coderail"
+
+    run_validate "$work_dir"
+
+    assert_success
+    assert_file_empty "$run_stdout"
+    assert_file_empty "$run_stderr"
+}
+
 assert_validate_collects_format_issues() {
     work_dir=$(create_project format-issues)
 
@@ -254,6 +266,7 @@ assert_validate_logs_checks_before_result() {
 print_tests_header "Ticket Validate Tests"
 test "Validate valid ticket" assert_validate_valid_ticket
 test "Validate all tickets" assert_validate_all_tickets
+test "Validate all without tickets directory succeeds" assert_validate_all_without_tickets_directory_succeeds
 test "Validate collects format issues" assert_validate_collects_format_issues
 test "Validate checks dependencies" assert_validate_checks_dependencies
 test "Validate checks duplicate target" assert_validate_checks_duplicate_target
