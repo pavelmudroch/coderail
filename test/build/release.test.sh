@@ -143,6 +143,7 @@ assert_release_published() {
 write_release_metadata() {
     work_dir=$1
     version=$2
+    compare_previous_version=${3:-}
     tag=v$version
 
     mkdir -p "$work_dir/lib"
@@ -159,7 +160,11 @@ write_release_metadata() {
         printf -- '- Release notes.\n'
         printf '\n'
         printf '[Unreleased]: https://github.com/pavelmudroch/coderail/compare/%s...HEAD\n' "$tag"
-        printf '[%s]: https://github.com/pavelmudroch/coderail/releases/tag/%s\n' "$tag" "$tag"
+        if [ -n "$compare_previous_version" ]; then
+            printf '[%s]: https://github.com/pavelmudroch/coderail/compare/v%s...%s\n' "$tag" "$compare_previous_version" "$tag"
+        else
+            printf '[%s]: https://github.com/pavelmudroch/coderail/releases/tag/%s\n' "$tag" "$tag"
+        fi
     } > "$work_dir/CHANGELOG.md"
 }
 
@@ -197,7 +202,7 @@ create_release_repo() {
     git -C "$work_dir" remote add origin "$remote_dir"
     git -C "$work_dir" push -q origin main "v$previous_version" latest
 
-    write_release_metadata "$work_dir" "$target_version"
+    write_release_metadata "$work_dir" "$target_version" "$previous_version"
     commit_all "$work_dir" "Prepare release $target_version"
 
     printf '%s\n' "$work_dir"
@@ -329,9 +334,8 @@ assert_patch_minor_and_major_targets() {
 }
 
 assert_highest_semver_uses_numeric_ordering() {
-    work_dir=$(create_release_repo numeric-order 1.0.0 1.10.1)
+    work_dir=$(create_release_repo numeric-order 1.10.0 1.10.1)
     add_release_tag "$work_dir" 1.9.9
-    add_release_tag "$work_dir" 1.10.0
 
     run_release "$work_dir" --patch
 
@@ -356,6 +360,8 @@ assert_ignored_tags_do_not_affect_target() {
 assert_remote_tags_are_considered() {
     work_dir=$(create_release_repo remote-tags 1.0.0 1.10.1)
     add_remote_release_tag "$work_dir" 1.10.0
+    write_release_metadata "$work_dir" 1.10.1 1.10.0
+    commit_all "$work_dir" "Update release metadata for remote tag"
 
     run_release "$work_dir" --patch
 
@@ -464,7 +470,7 @@ assert_missing_changelog_section_fails() {
         printf '## [Unreleased]\n'
         printf '\n'
         printf '[Unreleased]: https://github.com/pavelmudroch/coderail/compare/v1.0.1...HEAD\n'
-        printf '[v1.0.1]: https://github.com/pavelmudroch/coderail/releases/tag/v1.0.1\n'
+        printf '[v1.0.1]: https://github.com/pavelmudroch/coderail/compare/v1.0.0...v1.0.1\n'
     } > "$work_dir/CHANGELOG.md"
     commit_all "$work_dir" "Remove changelog section"
 
@@ -493,7 +499,7 @@ assert_missing_release_link_fails() {
     run_release "$work_dir" --patch
 
     assert_failure
-    assert_stderr_contains "expected CHANGELOG.md release link"
+    assert_stderr_contains "expected CHANGELOG.md release compare link"
     assert_tag_missing "$work_dir" v1.0.1
     assert_tag_ref "$work_dir" latest "$latest_ref"
 }
@@ -509,7 +515,7 @@ assert_stale_unreleased_link_fails() {
         printf '## [v1.0.1] - 2026-07-14\n'
         printf '\n'
         printf '[Unreleased]: https://github.com/pavelmudroch/coderail/compare/v1.0.0...HEAD\n'
-        printf '[v1.0.1]: https://github.com/pavelmudroch/coderail/releases/tag/v1.0.1\n'
+        printf '[v1.0.1]: https://github.com/pavelmudroch/coderail/compare/v1.0.0...v1.0.1\n'
     } > "$work_dir/CHANGELOG.md"
     commit_all "$work_dir" "Stale unreleased link"
 
