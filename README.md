@@ -560,7 +560,7 @@ cr ticket reopen 0005
 cr ticket validate
 cr ticket loop codex
 cr ticket loop --output-dir .coderail/loop-logs claude
-cr --quiet ticket loop --progress-only gemini
+cr ticket loop --progress-only gemini
 ```
 
 ## Development
