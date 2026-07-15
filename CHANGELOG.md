@@ -11,10 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `build/release.sh` helper for guarded stable release publishing.
 - Logging behavior for INSTALL script and upgrade command.
+- `cr clean` command for removing stale Coderail workflow files after ticket work is resolved.
 
 ### Changed
 
 - `cr --version` now reads the version from `lib/version.sh`.
+- Missing `tickets` directory is no longer treated as an error in `cr ticket` commands.
+
+### Deprecated
+
+- `cr ticket clean` in favor of `cr clean`.
 
 ## [v1.0.0] - 2026-07-14
 

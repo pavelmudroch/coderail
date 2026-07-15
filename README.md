@@ -509,7 +509,7 @@ deferred   Valid work, intentionally postponed.
 dismissed  No longer needed.
 ```
 
-`cr ticket clean` is deprecated; use `cr clean` for branch cleanup. The legacy command remains available and requires no active tickets. By default it removes closed tickets completed as `done`, plus duplicate tickets whose original is completed, if any open ticket depends on them, these dependecies are removed from open ticket. Use `--dry-run` to preview. Use `--prune` to remove all closed tickets and open tickets depending on unsatisfied closed tickets.
+`cr ticket clean` is deprecated; use `cr clean` for branch cleanup. The legacy command remains available and requires no active tickets. By default it removes closed tickets completed as `done`, plus duplicate tickets whose original is completed. When open tickets depend on removed closed tickets, those dependency references are removed. Use `--dry-run` to preview. Use `--prune` to remove all closed tickets and open tickets depending on unsatisfied closed tickets.
 
 Examples:
 
@@ -523,7 +523,6 @@ cr ticket close --reason duplicate --duplicate-of 0001 0003
 cr ticket deactivate -d 0001 0004
 cr ticket reopen 0005
 cr ticket validate
-cr ticket clean --dry-run
 ```
 
 ## Development
