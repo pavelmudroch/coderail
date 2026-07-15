@@ -8,5 +8,5 @@ Walk down each branch of the design tree, resolving dependencies between decisio
 
 If a question can be answered by exploring the codebase or other source use <skill>research</skill>.
 
-Ask question one at a time or few if they are closely related, wait for feedback before continue. Provide recommended answer.
-Always provide brief description for question.
+Ask question one at a time, wait for feedback before continuing. Provide recommended answer.
+Always provide brief context of question for clarity.

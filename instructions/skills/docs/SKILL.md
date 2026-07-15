@@ -10,7 +10,7 @@ Use for `README.md` and `CHANGELOG.md`. Keep docs concise, accurate to repo beha
 If not specified otherwise, update docs based on changed files `git diff --name-only HEAD^ HEAD`. If a change is not user-facing, do not document it.
 Especially read the SPEC, REVIEW or RESEARCH markdown files, optionally any closed tickets. Read changed source code only if absolutely needed.
 
-Assume all tests pass is verified at previous step, so no need to run any tests.
+Assume all tests pass is verified at previous step, do not run any tests.
 
 ## CHANGELOG.md
 Follow Keep a Changelog 1.1.0: https://keepachangelog.com/en/1.1.0/
