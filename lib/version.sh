@@ -1,1 +1,1 @@
-coderail_version="1.1.0"
+coderail_version="1.2.0-alpha.1"

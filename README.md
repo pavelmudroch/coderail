@@ -495,6 +495,7 @@ close [--reason <reason>] [--duplicate-of <ticket>] <ticket>
 deactivate [-d <ticket> ...] <ticket>                Move an active ticket back to open
 reopen [-d <ticket> ...] <ticket>                    Move a closed ticket back to open
 validate [<ticket> ...]                              Validate selected tickets, or all tickets
+loop [options] [<tool>]                              Loop through ready tickets with an agent CLI
 clean [--dry-run] [--prune] [--yes]                  Clean up closed tickets (deprecated; use cr clean)
 ```
 
@@ -508,6 +509,40 @@ duplicate  Duplicate of another ticket; requires --duplicate-of.
 deferred   Valid work, intentionally postponed.
 dismissed  No longer needed.
 ```
+
+`cr ticket loop` repeatedly selects open tickets with satisfied dependencies, hands each ticket to an agent CLI, requires the ticket to be closed as satisfied, and stages the resulting changes.
+
+Usage:
+
+```sh
+cr ticket loop [options] [<tool>]
+```
+
+Supported tools:
+
+```txt
+codex
+copilot
+claude
+gemini
+```
+
+If `<tool>` is omitted, Coderail uses the configured `default_tool`.
+
+Options:
+
+```txt
+-m <count>, --max <count>  Maximum number of tickets to process; default is 5
+--all                      Process all open tickets with satisfied dependencies
+--output-dir <directory>   Write one combined agent stdout/stderr log per ticket
+--progress-only            Print Coderail progress and discard agent transcripts
+```
+
+By default, agent stdout and stderr stream live to the terminal. With `--output-dir <directory>`, Coderail creates the directory when needed and writes one combined log per ticket, named from the ticket basename with `.log`; for example, `0001-demo.md` writes `0001-demo.log`. With `--progress-only`, agent stdout and stderr are discarded, and Coderail prints handoff progress.
+
+Root `--quiet` suppresses terminal progress and terminal agent output. When combined with `--output-dir`, logs are still written. Without `--output-dir`, suppressed agent output is discarded.
+
+`cr ticket loop` does not parse JSON, split stdout and stderr into separate logs, summarize transcripts, or broker agent questions.
 
 `cr ticket clean` is deprecated; use `cr clean` for branch cleanup. The legacy command remains available and requires no active tickets. By default it removes closed tickets completed as `done`, plus duplicate tickets whose original is completed. When open tickets depend on removed closed tickets, those dependency references are removed. Use `--dry-run` to preview. Use `--prune` to remove all closed tickets and open tickets depending on unsatisfied closed tickets.
 
@@ -523,6 +558,9 @@ cr ticket close --reason duplicate --duplicate-of 0001 0003
 cr ticket deactivate -d 0001 0004
 cr ticket reopen 0005
 cr ticket validate
+cr ticket loop codex
+cr ticket loop --output-dir .coderail/loop-logs claude
+cr --quiet ticket loop --progress-only gemini
 ```
 
 ## Development

@@ -385,6 +385,75 @@ ticket_is_state() {
     [ "$_ticket_is_state_actual" = "$_ticket_is_state_expected" ]
 }
 
+_ticket_line_exists() {
+    _ticket_line_exists_file=$1
+    _ticket_line_exists_value=$2
+
+    [ -f "$_ticket_line_exists_file" ] || return 1
+
+    while IFS= read -r _ticket_line_exists_line ||
+        [ -n "$_ticket_line_exists_line" ]; do
+        [ "$_ticket_line_exists_line" = "$_ticket_line_exists_value" ] && return 0
+    done < "$_ticket_line_exists_file"
+
+    return 1
+}
+
+_ticket_append_unique_line() {
+    _ticket_append_unique_file=$1
+    _ticket_append_unique_value=$2
+
+    _ticket_line_exists "$_ticket_append_unique_file" "$_ticket_append_unique_value" ||
+        printf '%s\n' "$_ticket_append_unique_value" >> "$_ticket_append_unique_file"
+}
+
+ticket_closed_is_satisfied() {
+    [ "$#" -eq 3 ] || _ticket_error "ticket_closed_is_satisfied expects 3 arguments" || return 2
+
+    _ticket_satisfied_project=$1
+    _ticket_satisfied_reference=$2
+    _ticket_satisfied_visited=$3
+
+    while :; do
+        _ticket_satisfied_path=$(
+            ticket_resolve_reference "$_ticket_satisfied_project" "$_ticket_satisfied_reference"
+        ) || return 2
+        _ticket_satisfied_file=$_ticket_satisfied_project/$_ticket_satisfied_path
+
+        if _ticket_line_exists "$_ticket_satisfied_visited" "$_ticket_satisfied_path"; then
+            _ticket_error "duplicate dependency cycle: $_ticket_satisfied_path"
+            return 2
+        fi
+        _ticket_append_unique_line "$_ticket_satisfied_visited" "$_ticket_satisfied_path" ||
+            return 2
+
+        ticket_validate_file "$_ticket_satisfied_project" "$_ticket_satisfied_file" ||
+            return 2
+
+        if ! ticket_is_state "$_ticket_satisfied_file" closed; then
+            return 1
+        fi
+
+        _ticket_satisfied_reason=$(
+            _ticket_frontmatter_value "$_ticket_satisfied_file" close_reason
+        ) || _ticket_error "closed tickets must have close_reason" || return 2
+
+        case "$_ticket_satisfied_reason" in
+            done)
+                return 0
+                ;;
+            duplicate)
+                _ticket_satisfied_reference=$(
+                    _ticket_frontmatter_value "$_ticket_satisfied_file" duplicate_of
+                ) || _ticket_error "duplicate tickets must have duplicate_of" || return 2
+                ;;
+            *)
+                return 1
+                ;;
+        esac
+    done
+}
+
 ticket_move_to_state() {
     [ "$#" -eq 3 ] || _ticket_error "ticket_move_to_state expects 3 arguments" || return 1
 

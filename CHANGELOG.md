@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `cr ticket loop` command for iterating through open tickets with satisfied dependencies without user interaction.
+
 ## [v1.1.0] - 2026-07-15
 
 ### Added

@@ -216,37 +216,14 @@ closed_ticket_is_satisfied() {
     closed_ticket_id=$1
     closed_ticket_visited=$2
 
-    while :; do
-        closed_ticket_path=$(resolve_ticket_path "$closed_ticket_id") || fatal_resolve_ticket
-        closed_ticket_file=$project_dir/$closed_ticket_path
+    if ticket_closed_is_satisfied "$project_dir" "$closed_ticket_id" "$closed_ticket_visited"; then
+        return 0
+    else
+        closed_ticket_status=$?
+    fi
 
-        if line_exists "$closed_ticket_visited" "$closed_ticket_path"; then
-            fatal "duplicate dependency cycle: $closed_ticket_path"
-        fi
-        append_unique_line "$closed_ticket_visited" "$closed_ticket_path"
-
-        ticket_validate_file "$project_dir" "$closed_ticket_file" || exit 1
-
-        if ! ticket_is_state "$closed_ticket_file" closed; then
-            return 1
-        fi
-
-        closed_ticket_reason=$(_ticket_frontmatter_value "$closed_ticket_file" close_reason) ||
-            fatal "closed tickets must have close_reason"
-
-        case "$closed_ticket_reason" in
-            done)
-                return 0
-                ;;
-            duplicate)
-                closed_ticket_id=$(_ticket_frontmatter_value "$closed_ticket_file" duplicate_of) ||
-                    fatal "duplicate tickets must have duplicate_of"
-                ;;
-            *)
-                return 1
-                ;;
-        esac
-    done
+    [ "$closed_ticket_status" -eq 1 ] || exit 1
+    return 1
 }
 
 collect_normal_removed_tickets() {

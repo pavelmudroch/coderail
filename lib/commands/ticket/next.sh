@@ -122,27 +122,6 @@ trim() {
     printf '%s\n' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
-line_exists() {
-    line_exists_file=$1
-    line_exists_value=$2
-
-    [ -f "$line_exists_file" ] || return 1
-
-    while IFS= read -r line_exists_line || [ -n "$line_exists_line" ]; do
-        [ "$line_exists_line" = "$line_exists_value" ] && return 0
-    done < "$line_exists_file"
-
-    return 1
-}
-
-append_unique_line() {
-    append_unique_file=$1
-    append_unique_value=$2
-
-    line_exists "$append_unique_file" "$append_unique_value" ||
-        printf '%s\n' "$append_unique_value" >> "$append_unique_file"
-}
-
 ticket_path_from_file() {
     ticket_path_from_file_state=$1
     ticket_path_from_file_file=$2
@@ -165,57 +144,6 @@ ticket_dependencies() {
         done
 }
 
-resolve_ticket_path() {
-    resolve_ticket_reference=$1
-
-    ticket_resolve_reference "$project_dir" "$resolve_ticket_reference" 2>"$resolve_error_file"
-}
-
-fatal_resolve_ticket() {
-    resolve_ticket_error=$(sed 's/^error: //' "$resolve_error_file")
-    fatal "$resolve_ticket_error"
-}
-
-closed_ticket_is_satisfied() {
-    closed_ticket_reference=$1
-    closed_ticket_visited=$2
-
-    while :; do
-        closed_ticket_path=$(resolve_ticket_path "$closed_ticket_reference") ||
-            fatal_resolve_ticket
-        closed_ticket_file=$project_dir/$closed_ticket_path
-
-        if line_exists "$closed_ticket_visited" "$closed_ticket_path"; then
-            fatal "duplicate dependency cycle: $closed_ticket_path"
-        fi
-        append_unique_line "$closed_ticket_visited" "$closed_ticket_path"
-
-        if ! ticket_validate_file "$project_dir" "$closed_ticket_file"; then
-            exit 1
-        fi
-
-        if ! ticket_is_state "$closed_ticket_file" closed; then
-            return 1
-        fi
-
-        closed_ticket_reason=$(_ticket_frontmatter_value "$closed_ticket_file" close_reason) ||
-            fatal "closed tickets must have close_reason"
-
-        case "$closed_ticket_reason" in
-            done)
-                return 0
-                ;;
-            duplicate)
-                closed_ticket_reference=$(_ticket_frontmatter_value "$closed_ticket_file" duplicate_of) ||
-                    fatal "duplicate tickets must have duplicate_of"
-                ;;
-            *)
-                return 1
-                ;;
-        esac
-    done
-}
-
 ticket_is_available() {
     ticket_available_path=$1
     ticket_available_file=$project_dir/$ticket_available_path
@@ -235,10 +163,15 @@ ticket_is_available() {
 
         ticket_available_visited=$(mktemp "$tmp_dir/dependency.XXXXXX")
 
-        if ! closed_ticket_is_satisfied \
+        if ticket_closed_is_satisfied \
+            "$project_dir" \
             "$ticket_available_dependency" \
             "$ticket_available_visited"
         then
+            :
+        else
+            ticket_available_status=$?
+            [ "$ticket_available_status" -eq 1 ] || exit 1
             return 1
         fi
     done < "$ticket_available_dependencies"
@@ -246,10 +179,7 @@ ticket_is_available() {
     return 0
 }
 
-resolve_error_file=$tmp_dir/resolve-error
 available_count=0
-
-: > "$resolve_error_file"
 
 if [ -d "$open_tickets_dir" ]; then
     for ticket_file in "$open_tickets_dir"/*.md; do

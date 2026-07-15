@@ -20,6 +20,7 @@ Commands:
   deactivate            Deactivate an active ticket
   reopen                Reopen a closed ticket
   validate              Validate tickets format
+  loop                  Loop through open tickets with satisfied dependencies
   clean                 Clean up tickets (deprecated; use cr clean)
 EOF
 }
@@ -75,7 +76,7 @@ ticket_command=$1
 shift
 
 case "$ticket_command" in
-    create|next|close|activate|deactivate|reopen|validate|clean)
+    create|next|close|activate|deactivate|reopen|validate|clean|loop)
         run_ticket_command "$ticket_command" "$@"
         ;;
     *)
