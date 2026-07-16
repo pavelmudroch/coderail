@@ -15,6 +15,7 @@ ROOT_DIR=$(
 )
 
 . "$ROOT_DIR/lib/utils/log.sh"
+. "$ROOT_DIR/lib/utils/loop.sh"
 
 usage() {
     cat <<'EOF'
@@ -86,6 +87,7 @@ log_info "Initializing current working directory for coderail agent-based develo
 log_notice "current working directory: $PWD"
 create_dir .coderail
 create_dir .coderail/tickets
+loop_setup . >/dev/null
 create_file .coderail/conf.ini <<'EOF'
 # characters after '#' are comments
 # default_tool = codex # set the default tool for cr

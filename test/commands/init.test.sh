@@ -89,6 +89,8 @@ assert_clean_init() {
 
     assert_dir "$work_dir/.coderail"
     assert_empty_dir "$work_dir/.coderail/tickets"
+    assert_file_content "$work_dir/.coderail/loop/.gitignore" "*
+!.gitignore"
     assert_file_content "$work_dir/.coderail/conf.ini" "# characters after '#' are comments
 # default_tool = codex # set the default tool for cr"
     assert_file_content "$work_dir/.coderail/test.map" "# first '#' starts a Coderail comment, even inside quoted shell text
@@ -99,6 +101,17 @@ assert_clean_init() {
 # Use captures in section patterns for commands that need selected path
 # [{path:**}]
 # shellcheck {path}"
+}
+
+assert_init_preserves_existing_loop_ignore() {
+    work_dir=$tmp_dir/existing-loop-ignore
+
+    mkdir -p "$work_dir/.coderail/loop"
+    printf 'user ignore\n' > "$work_dir/.coderail/loop/.gitignore"
+
+    assert_init_succeeds "$work_dir"
+
+    assert_file_content "$work_dir/.coderail/loop/.gitignore" "user ignore"
 }
 
 assert_init_preserves_existing_files() {
@@ -147,6 +160,7 @@ assert_init_target_file_fails() {
 print_tests_header "Init Tests"
 test "Clean init creates coderail files" assert_clean_init
 test "Init preserves existing files" assert_init_preserves_existing_files
+test "Init preserves existing loop ignore" assert_init_preserves_existing_loop_ignore
 test "Init without write permission fails" assert_init_without_write_permission_fails
 test "Init target file fails" assert_init_target_file_fails
 

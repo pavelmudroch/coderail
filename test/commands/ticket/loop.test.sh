@@ -72,6 +72,56 @@ assert_line_count() {
         fail "$file line count differs: expected $expected_count, got $actual_count"
 }
 
+assert_occurrence_count() {
+    file=$1
+    value=$2
+    expected_count=$3
+    actual_count=$(grep -F -c -- "$value" "$file" || true)
+
+    [ "$actual_count" -eq "$expected_count" ] ||
+        fail "$file occurrence count differs: expected $expected_count, got $actual_count"
+}
+
+assert_match_count() {
+    file=$1
+    pattern=$2
+    expected_count=$3
+    actual_count=$(grep -E -c -- "$pattern" "$file" || true)
+
+    [ "$actual_count" -eq "$expected_count" ] ||
+        fail "$file match count differs: expected $expected_count, got $actual_count"
+}
+
+assert_order() {
+    file=$1
+    first=$2
+    second=$3
+    first_line=$(grep -F -n -- "$first" "$file" | sed -n '1s/:.*//p')
+    second_line=$(grep -F -n -- "$second" "$file" | sed -n '1s/:.*//p')
+
+    [ -n "$first_line" ] || fail "$file does not contain: $first"
+    [ -n "$second_line" ] || fail "$file does not contain: $second"
+    [ "$first_line" -lt "$second_line" ] ||
+        fail "$first should appear before $second in $file"
+}
+
+assert_ignored() {
+    work_dir=$1
+    path=$2
+
+    git -C "$work_dir" check-ignore -q -- "$path" ||
+        fail "$path is not ignored"
+}
+
+assert_only_staged_path() {
+    work_dir=$1
+    expected_path=$2
+    staged_paths=$tmp_dir/staged-paths
+
+    git -C "$work_dir" diff --cached --name-only > "$staged_paths"
+    assert_file_content "$staged_paths" "$expected_path"
+}
+
 assert_no_unstaged_or_untracked_changes() {
     work_dir=$1
     status_file=$tmp_dir/git-status
@@ -158,6 +208,13 @@ commit_all() {
     git -C "$work_dir" commit -q -m "$message"
 }
 
+write_loop_ignore() {
+    work_dir=$1
+
+    mkdir -p "$work_dir/.coderail/loop"
+    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
+}
+
 create_home() {
     home_dir=$tmp_dir/home-$1
 
@@ -198,23 +255,36 @@ set -eu
 }
 
 prompt=$1
+prompt_kind=
 case "$prompt" in
     '$ticket-implement "'*'"')
+        prompt_kind=implementation
         ticket_reference=${prompt#'$ticket-implement "'}
         ticket_reference=${ticket_reference%'"'}
         ;;
     '/ticket-implement "'*'"')
+        prompt_kind=implementation
         ticket_reference=${prompt#'/ticket-implement "'}
         ticket_reference=${ticket_reference%'"'}
         ;;
+    '$review-auto "'*'"')
+        prompt_kind=review
+        ticket_reference=${prompt#'$review-auto "'}
+        ticket_reference=${ticket_reference%'"'}
+        ;;
+    '/review-auto "'*'"')
+        prompt_kind=review
+        ticket_reference=${prompt#'/review-auto "'}
+        ticket_reference=${ticket_reference%'"'}
+        ;;
     *)
-        echo "fake agent expected ticket-implement prompt" >&2
+        echo "fake agent expected ticket prompt" >&2
         exit 65
         ;;
 esac
 
 [ -n "$ticket_reference" ] || {
-    echo "fake agent expected ticket path" >&2
+    echo "fake agent expected ticket reference" >&2
     exit 65
 }
 
@@ -239,10 +309,50 @@ if [ -n "${FAKE_AGENT_STDERR:-}" ]; then
     printf '%s\n' "$FAKE_AGENT_STDERR" >&2
 fi
 
+if [ "${FAKE_AGENT_HANDOFF_OUTPUT:-}" = true ]; then
+    printf 'fake agent %s handoff\n' "$prompt_kind"
+fi
+
 if [ "${FAKE_AGENT_FAIL_ON:-}" = "$count" ]; then
     printf 'failed %s\n' "$ticket_reference" > "work-$count.txt"
     echo "fake agent failure" >&2
     exit 7
+fi
+
+if [ "$prompt_kind" = review ]; then
+    case "${FAKE_AGENT_REVIEW_RESULT:-clean}" in
+        clean)
+            ;;
+        reopen)
+            "$CODERAIL_BIN_PATH" ticket reopen "$ticket_reference" >/dev/null
+            ;;
+        reopen-once)
+            review_marker=$FAKE_AGENT_COUNT_FILE.reviewed
+            if [ ! -f "$review_marker" ]; then
+                : > "$review_marker"
+                "$CODERAIL_BIN_PATH" ticket reopen "$ticket_reference" >/dev/null
+            fi
+            ;;
+        follow-up)
+            "$CODERAIL_BIN_PATH" ticket create \
+                --depends-on "$ticket_reference" \
+                "Review Follow Up" >/dev/null
+            ;;
+        active)
+            reopened_ticket=$("$CODERAIL_BIN_PATH" ticket reopen "$ticket_reference")
+            "$CODERAIL_BIN_PATH" ticket activate "$reopened_ticket" >/dev/null
+            ;;
+        invalid)
+            reopened_ticket=$("$CODERAIL_BIN_PATH" ticket reopen "$ticket_reference")
+            sed -i 's/^status: open$/status: invalid/' "$reopened_ticket"
+            ;;
+        *)
+            echo "unknown fake review result: $FAKE_AGENT_REVIEW_RESULT" >&2
+            exit 66
+            ;;
+    esac
+
+    exit 0
 fi
 
 printf 'implemented %s\n' "$ticket_reference" > "work-$count.txt"
@@ -368,7 +478,9 @@ run_loop_with_fake() {
     FAKE_AGENT_COUNT_FILE=$run_fake_agent_count \
     FAKE_AGENT_DUPLICATE_OF=${FAKE_AGENT_DUPLICATE_OF-} \
     FAKE_AGENT_FAIL_ON=${FAKE_AGENT_FAIL_ON-} \
+    FAKE_AGENT_HANDOFF_OUTPUT=${FAKE_AGENT_HANDOFF_OUTPUT-} \
     FAKE_AGENT_LOG=$run_fake_agent_log \
+    FAKE_AGENT_REVIEW_RESULT=${FAKE_AGENT_REVIEW_RESULT-} \
     FAKE_AGENT_STDERR=${FAKE_AGENT_STDERR-} \
     FAKE_AGENT_STDOUT=${FAKE_AGENT_STDOUT-} \
     PATH="$fake_dir:$PATH" \
@@ -398,12 +510,77 @@ run_quiet_loop_with_fake() {
     FAKE_AGENT_COUNT_FILE=$run_fake_agent_count \
     FAKE_AGENT_DUPLICATE_OF=${FAKE_AGENT_DUPLICATE_OF-} \
     FAKE_AGENT_FAIL_ON=${FAKE_AGENT_FAIL_ON-} \
+    FAKE_AGENT_HANDOFF_OUTPUT=${FAKE_AGENT_HANDOFF_OUTPUT-} \
     FAKE_AGENT_LOG=$run_fake_agent_log \
+    FAKE_AGENT_REVIEW_RESULT=${FAKE_AGENT_REVIEW_RESULT-} \
     FAKE_AGENT_STDERR=${FAKE_AGENT_STDERR-} \
     FAKE_AGENT_STDOUT=${FAKE_AGENT_STDOUT-} \
     PATH="$fake_dir:$PATH" \
     REAL_GIT=$real_git \
         "$CR" --quiet --cwd "$work_dir" ticket loop "$@" > "$run_stdout" 2> "$run_stderr"
+    run_status=$?
+    set -e
+}
+
+run_verbose_loop_with_fake() {
+    work_dir=$1
+    fake_dir=$2
+    shift 2
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+    run_fake_agent_log=$fake_dir/agent.log
+    run_fake_agent_count=$fake_dir/agent.count
+    real_git=$(command -v git)
+
+    : > "$run_fake_agent_log"
+    rm -f "$run_fake_agent_count"
+
+    set +e
+    CODERAIL_BIN_PATH=$CR \
+    FAKE_AGENT_CLOSE_REASON=${FAKE_AGENT_CLOSE_REASON-} \
+    FAKE_AGENT_COUNT_FILE=$run_fake_agent_count \
+    FAKE_AGENT_DUPLICATE_OF=${FAKE_AGENT_DUPLICATE_OF-} \
+    FAKE_AGENT_FAIL_ON=${FAKE_AGENT_FAIL_ON-} \
+    FAKE_AGENT_HANDOFF_OUTPUT=${FAKE_AGENT_HANDOFF_OUTPUT-} \
+    FAKE_AGENT_LOG=$run_fake_agent_log \
+    FAKE_AGENT_REVIEW_RESULT=${FAKE_AGENT_REVIEW_RESULT-} \
+    FAKE_AGENT_STDERR=${FAKE_AGENT_STDERR-} \
+    FAKE_AGENT_STDOUT=${FAKE_AGENT_STDOUT-} \
+    PATH="$fake_dir:$PATH" \
+    REAL_GIT=$real_git \
+        "$CR" --cwd "$work_dir" --verbose ticket loop "$@" > "$run_stdout" 2> "$run_stderr"
+    run_status=$?
+    set -e
+}
+
+run_loop_with_fake_combined() {
+    work_dir=$1
+    fake_dir=$2
+    shift 2
+
+    run_output=$tmp_dir/run.output
+    run_fake_agent_log=$fake_dir/agent.log
+    run_fake_agent_count=$fake_dir/agent.count
+    real_git=$(command -v git)
+
+    : > "$run_fake_agent_log"
+    rm -f "$run_fake_agent_count"
+
+    set +e
+    CODERAIL_BIN_PATH=$CR \
+    FAKE_AGENT_CLOSE_REASON=${FAKE_AGENT_CLOSE_REASON-} \
+    FAKE_AGENT_COUNT_FILE=$run_fake_agent_count \
+    FAKE_AGENT_DUPLICATE_OF=${FAKE_AGENT_DUPLICATE_OF-} \
+    FAKE_AGENT_FAIL_ON=${FAKE_AGENT_FAIL_ON-} \
+    FAKE_AGENT_HANDOFF_OUTPUT=${FAKE_AGENT_HANDOFF_OUTPUT-} \
+    FAKE_AGENT_LOG=$run_fake_agent_log \
+    FAKE_AGENT_REVIEW_RESULT=${FAKE_AGENT_REVIEW_RESULT-} \
+    FAKE_AGENT_STDERR=${FAKE_AGENT_STDERR-} \
+    FAKE_AGENT_STDOUT=${FAKE_AGENT_STDOUT-} \
+    PATH="$fake_dir:$PATH" \
+    REAL_GIT=$real_git \
+        "$CR" --cwd "$work_dir" ticket loop "$@" > "$run_output" 2>&1
     run_status=$?
     set -e
 }
@@ -457,8 +634,9 @@ assert_loop_short_help() {
     assert_success
     assert_contains "$run_stdout" "Usage:"
     assert_contains "$run_stdout" "cr ticket loop"
-    assert_contains "$run_stdout" "--output-dir <directory>"
-    assert_contains "$run_stdout" "--progress-only"
+    assert_contains "$run_stdout" "--auto-review"
+    assert_not_contains "$run_stdout" "--output-dir"
+    assert_not_contains "$run_stdout" "--progress-only"
     assert_file_empty "$run_stderr"
 }
 
@@ -470,8 +648,9 @@ assert_loop_long_help() {
     assert_success
     assert_contains "$run_stdout" "Usage:"
     assert_contains "$run_stdout" "cr ticket loop"
-    assert_contains "$run_stdout" "--output-dir <directory>"
-    assert_contains "$run_stdout" "--progress-only"
+    assert_contains "$run_stdout" "--auto-review"
+    assert_not_contains "$run_stdout" "--output-dir"
+    assert_not_contains "$run_stdout" "--progress-only"
     assert_file_empty "$run_stderr"
 }
 
@@ -515,32 +694,10 @@ assert_loop_accepts_all() {
     assert_file_empty "$run_stderr"
 }
 
-assert_loop_accepts_output_dir() {
-    work_dir=$(create_project output-dir)
-    output_dir=$tmp_dir/output-dir-accepted
+assert_loop_accepts_auto_review() {
+    work_dir=$(create_project auto-review)
 
-    run_loop "$work_dir" --output-dir "$output_dir" codex
-
-    assert_success
-    assert_file_empty "$run_stdout"
-    assert_file_empty "$run_stderr"
-}
-
-assert_loop_accepts_output_dir_equals() {
-    work_dir=$(create_project output-dir-equals)
-    output_dir=$tmp_dir/output-dir-equals-accepted
-
-    run_loop "$work_dir" --output-dir="$output_dir" codex
-
-    assert_success
-    assert_file_empty "$run_stdout"
-    assert_file_empty "$run_stderr"
-}
-
-assert_loop_accepts_progress_only() {
-    work_dir=$(create_project progress-only)
-
-    run_loop "$work_dir" --progress-only codex
+    run_loop "$work_dir" --auto-review codex
 
     assert_success
     assert_file_empty "$run_stdout"
@@ -557,36 +714,14 @@ assert_loop_rejects_repeated_max() {
     assert_contains "$run_stderr" "--max provided multiple times"
 }
 
-assert_loop_rejects_repeated_output_dir() {
-    work_dir=$(create_project repeated-output-dir)
+assert_loop_rejects_repeated_auto_review() {
+    work_dir=$(create_project repeated-auto-review)
 
-    run_loop "$work_dir" --output-dir "$tmp_dir/output-dir-a" --output-dir "$tmp_dir/output-dir-b" codex
-
-    assert_usage_failure
-    assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "--output-dir provided multiple times"
-    assert_contains "$run_stderr" "Usage:"
-}
-
-assert_loop_rejects_repeated_progress_only() {
-    work_dir=$(create_project repeated-progress-only)
-
-    run_loop "$work_dir" --progress-only --progress-only codex
+    run_loop "$work_dir" --auto-review --auto-review codex
 
     assert_usage_failure
     assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "--progress-only provided multiple times"
-    assert_contains "$run_stderr" "Usage:"
-}
-
-assert_loop_rejects_progress_only_with_output_dir() {
-    work_dir=$(create_project progress-only-output-dir)
-
-    run_loop "$work_dir" --progress-only --output-dir "$tmp_dir/progress-only-output-dir" codex
-
-    assert_usage_failure
-    assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "--progress-only and --output-dir cannot be used together"
+    assert_contains "$run_stderr" "--auto-review provided multiple times"
     assert_contains "$run_stderr" "Usage:"
 }
 
@@ -610,39 +745,6 @@ assert_loop_rejects_missing_max_value() {
     assert_contains "$run_stderr" "--max requires a value"
 }
 
-assert_loop_rejects_missing_output_dir_value() {
-    work_dir=$(create_project missing-output-dir)
-
-    run_loop "$work_dir" --output-dir
-
-    assert_usage_failure
-    assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "--output-dir requires a value"
-    assert_contains "$run_stderr" "Usage:"
-}
-
-assert_loop_rejects_empty_output_dir_value() {
-    work_dir=$(create_project empty-output-dir)
-
-    run_loop "$work_dir" --output-dir "" codex
-
-    assert_usage_failure
-    assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "--output-dir requires a non-empty value"
-    assert_contains "$run_stderr" "Usage:"
-}
-
-assert_loop_rejects_empty_output_dir_equals_value() {
-    work_dir=$(create_project empty-output-dir-equals)
-
-    run_loop "$work_dir" --output-dir= codex
-
-    assert_usage_failure
-    assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "--output-dir requires a non-empty value"
-    assert_contains "$run_stderr" "Usage:"
-}
-
 assert_loop_rejects_invalid_max_value() {
     work_dir=$(create_project invalid-max)
 
@@ -661,6 +763,36 @@ assert_loop_rejects_unknown_option() {
     assert_usage_failure
     assert_file_empty "$run_stdout"
     assert_contains "$run_stderr" "unknown option: --unknown"
+}
+
+assert_loop_rejects_removed_output_dir() {
+    work_dir=$(create_project removed-output-dir)
+
+    run_loop "$work_dir" --output-dir "$tmp_dir/output-dir" codex
+
+    assert_usage_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "unknown option: --output-dir"
+}
+
+assert_loop_rejects_removed_output_dir_equals() {
+    work_dir=$(create_project removed-output-dir-equals)
+
+    run_loop "$work_dir" --output-dir="$tmp_dir/output-dir" codex
+
+    assert_usage_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "unknown option: --output-dir=$tmp_dir/output-dir"
+}
+
+assert_loop_rejects_removed_progress_only() {
+    work_dir=$(create_project removed-progress-only)
+
+    run_loop "$work_dir" --progress-only codex
+
+    assert_usage_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "unknown option: --progress-only"
 }
 
 assert_loop_rejects_unexpected_argument() {
@@ -712,6 +844,38 @@ assert_loop_invokes_supported_tools_noninteractively() {
         assert_success
         assert_file_content "$run_fake_agent_log" "$expected_prompt"
         assert_file "$work_dir/.coderail/tickets/closed/0001-command-form.md"
+    done
+}
+
+assert_loop_auto_reviews_supported_tools() {
+    for tool in codex copilot claude gemini; do
+        work_dir=$(create_project "auto-review-command-form-$tool")
+        fake_dir=$tmp_dir/fake-auto-review-command-form-$tool
+        implementation_prompt='/ticket-implement ".coderail/tickets/open/0001-auto-review-command-form.md"'
+        review_prompt='/review-auto "0001"'
+
+        if [ "$tool" = codex ]; then
+            implementation_prompt='$ticket-implement ".coderail/tickets/open/0001-auto-review-command-form.md"'
+            review_prompt='$review-auto "0001"'
+        fi
+
+        write_fake_agent "$fake_dir"
+        write_ticket \
+            "$work_dir/.coderail/tickets/open/0001-auto-review-command-form.md" \
+            0001 \
+            auto-review-command-form \
+            "Auto Review Command Form" \
+            open \
+            "" \
+            ""
+        commit_all "$work_dir" "Add ticket"
+
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review "$tool"
+
+        assert_success
+        assert_file_content "$run_fake_agent_log" "$implementation_prompt
+$review_prompt"
+        assert_file "$work_dir/.coderail/tickets/closed/0001-auto-review-command-form.md"
     done
 }
 
@@ -926,226 +1090,358 @@ assert_loop_respects_explicit_processing_max() {
     assert_file "$work_dir/.coderail/tickets/open/0003-ticket-0003.md"
 }
 
-assert_loop_streams_agent_output_by_default() {
-    work_dir=$(create_project stream-output)
-    fake_dir=$tmp_dir/fake-stream-output
+assert_loop_does_not_create_transcript_setup_without_ready_ticket() {
+    work_dir=$(create_project no-ready-ticket)
+    fake_dir=$tmp_dir/fake-no-ready-ticket
 
     write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-stream-output.md" 0001 stream-output "Stream Output" open "" ""
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --all codex
+
+    assert_success
+    assert_no_path "$work_dir/.coderail/loop"
+    assert_no_path "$run_fake_agent_count"
+}
+
+assert_loop_writes_mapped_transcript() {
+    work_dir=$(create_project mapped-transcript)
+    fake_dir=$tmp_dir/fake-mapped-transcript
+    transcript=$work_dir/.coderail/loop/0001-mapped-transcript.txt
+    ansi_bytes=$(printf '\033[31mansi bytes\033[0m')
+    stdout="fake agent stdout $ansi_bytes"
+    stderr="fake agent stderr"
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-mapped-transcript.md" 0001 mapped-transcript "Mapped Transcript" open "" ""
     commit_all "$work_dir" "Add ticket"
 
-    FAKE_AGENT_STDOUT="fake agent stdout" \
-    FAKE_AGENT_STDERR="fake agent stderr" \
+    FAKE_AGENT_STDOUT=$stdout \
+    FAKE_AGENT_STDERR=$stderr \
         run_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
     assert_success
-    assert_contains "$run_stdout" "fake agent stdout"
-    assert_contains "$run_stderr" "fake agent stderr"
+    assert_file "$transcript"
+    assert_contains "$transcript" "$stdout"
+    assert_contains "$transcript" "$stderr"
+    assert_not_contains "$run_stdout" "$stdout"
+    assert_not_contains "$run_stderr" "$stderr"
+    assert_ignored "$work_dir" .coderail/loop/0001-mapped-transcript.txt
 }
 
-assert_loop_writes_agent_output_to_output_dir() {
-    work_dir=$(create_project output-dir-log)
-    fake_dir=$tmp_dir/fake-output-dir-log
-    output_dir=$tmp_dir/output-dir-log-files
-    log_file=$output_dir/0001-output-dir-log.log
+assert_loop_appends_phase_delimiters_to_reopened_transcript() {
+    work_dir=$(create_project reopened-transcript)
+    fake_dir=$tmp_dir/fake-reopened-transcript
+    transcript=$work_dir/.coderail/loop/0001-reopened-transcript.txt
 
     write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-output-dir-log.md" 0001 output-dir-log "Output Dir Log" open "" ""
+    write_ticket "$work_dir/.coderail/tickets/open/0001-reopened-transcript.md" 0001 reopened-transcript "Reopened Transcript" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_HANDOFF_OUTPUT=true \
+    FAKE_AGENT_REVIEW_RESULT=reopen-once \
+        run_loop_with_fake "$work_dir" "$fake_dir" --max 1 --auto-review codex
+
+    assert_success
+    commit_all "$work_dir" "Checkpoint reopened ticket"
+
+    FAKE_AGENT_HANDOFF_OUTPUT=true \
+    FAKE_AGENT_REVIEW_RESULT=reopen-once \
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
+
+    assert_success
+    assert_file "$transcript"
+    assert_match_count "$transcript" '^[[:print:]]*[0-9]{4}-[0-9]{2}-[0-9]{2}[[:print:]]*implementation[[:print:]]*$' 2
+    assert_match_count "$transcript" '^[[:print:]]*[0-9]{4}-[0-9]{2}-[0-9]{2}[[:print:]]*review[[:print:]]*$' 2
+    assert_occurrence_count "$transcript" "fake agent implementation handoff" 2
+    assert_occurrence_count "$transcript" "fake agent review handoff" 2
+}
+
+assert_loop_writes_ignored_transcripts_for_multiple_tickets() {
+    work_dir=$(create_project multiple-transcripts)
+    fake_dir=$tmp_dir/fake-multiple-transcripts
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-first-transcript.md" 0001 first-transcript "First Transcript" open "" ""
+    write_ticket "$work_dir/.coderail/tickets/open/0002-second-transcript.md" 0002 second-transcript "Second Transcript" open "" ""
+    commit_all "$work_dir" "Add tickets"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --all codex
+
+    assert_success
+    assert_file "$work_dir/.coderail/loop/0001-first-transcript.txt"
+    assert_file "$work_dir/.coderail/loop/0002-second-transcript.txt"
+    assert_ignored "$work_dir" .coderail/loop/0001-first-transcript.txt
+    assert_ignored "$work_dir" .coderail/loop/0002-second-transcript.txt
+    assert_no_unstaged_or_untracked_changes "$work_dir"
+}
+
+assert_loop_quiet_writes_transcript() {
+    work_dir=$(create_project quiet-transcript)
+    fake_dir=$tmp_dir/fake-quiet-transcript
+    transcript=$work_dir/.coderail/loop/0001-quiet-transcript.txt
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-quiet-transcript.md" 0001 quiet-transcript "Quiet Transcript" open "" ""
     commit_all "$work_dir" "Add ticket"
 
     FAKE_AGENT_STDOUT="fake agent stdout" \
     FAKE_AGENT_STDERR="fake agent stderr" \
-        run_loop_with_fake "$work_dir" "$fake_dir" --all --output-dir "$output_dir" codex
+        run_quiet_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
 
     assert_success
-    assert_dir "$output_dir"
-    assert_file "$log_file"
-    assert_contains "$log_file" "fake agent stdout"
-    assert_contains "$log_file" "fake agent stderr"
-    assert_contains "$log_file" ".coderail/tickets/closed/0001-output-dir-log.md"
+    assert_file "$transcript"
+    assert_contains "$transcript" "fake agent stdout"
+    assert_contains "$transcript" "fake agent stderr"
     assert_file_empty "$run_stdout"
     assert_file_empty "$run_stderr"
 }
 
-assert_loop_progress_only_discards_agent_output_and_prints_handoffs() {
-    work_dir=$(create_project progress-only-routing)
-    fake_dir=$tmp_dir/fake-progress-only-routing
+assert_loop_reports_ticket_progress() {
+    work_dir=$(create_project ticket-progress)
+    fake_dir=$tmp_dir/fake-ticket-progress
 
     write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-progress-one.md" 0001 progress-one "Progress One" open "" ""
-    write_ticket "$work_dir/.coderail/tickets/open/0002-progress-two.md" 0002 progress-two "Progress Two" open "" ""
-    commit_all "$work_dir" "Add tickets"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-ticket-progress.md" 0001 ticket-progress "Ticket Progress" open "" ""
+    commit_all "$work_dir" "Add ticket"
 
-    FAKE_AGENT_STDOUT="fake agent stdout" \
-    FAKE_AGENT_STDERR="fake agent stderr" \
-        run_loop_with_fake "$work_dir" "$fake_dir" --all --progress-only codex
+    run_loop_with_fake "$work_dir" "$fake_dir" --max 2 --auto-review codex
 
     assert_success
-    assert_contains "$run_stdout" "ticket loop handoff: .coderail/tickets/open/0001-progress-one.md"
-    assert_contains "$run_stdout" "ticket loop handoff: .coderail/tickets/open/0002-progress-two.md"
-    assert_not_contains "$run_stdout" "fake agent stdout"
+    assert_contains "$run_stdout" "[1/1] Ticket Progress"
+    assert_contains "$run_stdout" "         file: .coderail/tickets/open/0001-ticket-progress.md"
+    assert_contains "$run_stdout" "         inspect: tail -f .coderail/loop/0001-ticket-progress.txt"
+    assert_match_count "$run_stdout" '^         implementing\.\.\. done in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_match_count "$run_stdout" '^         reviewing\.\.\. done in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_match_count "$run_stdout" '^         completed in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_not_contains "$run_stdout" "fake agent"
     assert_file_empty "$run_stderr"
 }
 
-assert_loop_progress_only_stops_on_agent_failure() {
-    work_dir=$(create_project progress-only-agent-failure)
-    fake_dir=$tmp_dir/fake-progress-only-agent-failure
+assert_loop_reports_implementation_failure_progress() {
+    work_dir=$(create_project implementation-progress-failure)
+    fake_dir=$tmp_dir/fake-implementation-progress-failure
 
     write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-first-ticket.md" 0001 first-ticket "First Ticket" open "" ""
-    write_ticket "$work_dir/.coderail/tickets/open/0002-second-ticket.md" 0002 second-ticket "Second Ticket" open "" ""
-    commit_all "$work_dir" "Add tickets"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-implementation-progress-failure.md" 0001 implementation-progress-failure "Implementation Progress Failure" open "" ""
+    commit_all "$work_dir" "Add ticket"
 
     FAKE_AGENT_FAIL_ON=1 \
-    FAKE_AGENT_STDOUT="fake agent stdout" \
-    FAKE_AGENT_STDERR="fake agent stderr" \
-        run_loop_with_fake "$work_dir" "$fake_dir" --all --progress-only codex
+        run_loop_with_fake_combined "$work_dir" "$fake_dir" --all codex
 
     assert_failure
-    assert_line_count "$run_fake_agent_log" 1
-    assert_contains "$run_stdout" "ticket loop handoff: .coderail/tickets/open/0001-first-ticket.md"
-    assert_not_contains "$run_stdout" "ticket loop handoff: .coderail/tickets/open/0002-second-ticket.md"
-    assert_not_contains "$run_stdout" "fake agent stdout"
-    assert_not_contains "$run_stderr" "fake agent stderr"
-    assert_contains "$run_stderr" "agent failed for ticket: .coderail/tickets/open/0001-first-ticket.md"
-    assert_file "$work_dir/.coderail/tickets/open/0001-first-ticket.md"
-    assert_file "$work_dir/.coderail/tickets/open/0002-second-ticket.md"
+    assert_match_count "$run_output" '^         implementing\.\.\. failed in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_order "$run_output" "implementing... failed in" "error: agent failed for ticket: .coderail/tickets/open/0001-implementation-progress-failure.md"
+    assert_not_contains "$run_output" "completed in"
 }
 
-assert_loop_quiet_suppresses_default_agent_output() {
-    work_dir=$(create_project quiet-default-routing)
-    fake_dir=$tmp_dir/fake-quiet-default-routing
+assert_loop_reports_review_failure_progress() {
+    work_dir=$(create_project review-progress-failure)
+    fake_dir=$tmp_dir/fake-review-progress-failure
 
     write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-quiet-default.md" 0001 quiet-default "Quiet Default" open "" ""
+    write_ticket "$work_dir/.coderail/tickets/open/0001-review-progress-failure.md" 0001 review-progress-failure "Review Progress Failure" open "" ""
     commit_all "$work_dir" "Add ticket"
 
-    FAKE_AGENT_STDOUT="fake agent stdout" \
-    FAKE_AGENT_STDERR="fake agent stderr" \
-        run_quiet_loop_with_fake "$work_dir" "$fake_dir" --all codex
+    FAKE_AGENT_FAIL_ON=2 \
+        run_loop_with_fake_combined "$work_dir" "$fake_dir" --all --auto-review codex
+
+    assert_failure
+    assert_match_count "$run_output" '^         implementing\.\.\. done in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_match_count "$run_output" '^         reviewing\.\.\. failed in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_order "$run_output" "reviewing... failed in" "error: agent failed for ticket: 0001"
+    assert_not_contains "$run_output" "completed in"
+}
+
+assert_loop_quiet_suppresses_ticket_progress() {
+    work_dir=$(create_project quiet-ticket-progress)
+    fake_dir=$tmp_dir/fake-quiet-ticket-progress
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-quiet-ticket-progress.md" 0001 quiet-ticket-progress "Quiet Ticket Progress" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    run_quiet_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
     assert_success
     assert_file_empty "$run_stdout"
     assert_file_empty "$run_stderr"
 }
 
-assert_loop_quiet_progress_only_suppresses_progress_and_agent_output() {
-    work_dir=$(create_project quiet-progress-only-routing)
-    fake_dir=$tmp_dir/fake-quiet-progress-only-routing
+assert_loop_verbose_reports_operational_notices() {
+    work_dir=$(create_project verbose-operational-notices)
+    fake_dir=$tmp_dir/fake-verbose-operational-notices
 
     write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-quiet-progress.md" 0001 quiet-progress "Quiet Progress" open "" ""
+    write_ticket "$work_dir/.coderail/tickets/open/0001-verbose-operational-notices.md" 0001 verbose-operational-notices "Verbose Operational Notices" open "" ""
     commit_all "$work_dir" "Add ticket"
 
-    FAKE_AGENT_STDOUT="fake agent stdout" \
-    FAKE_AGENT_STDERR="fake agent stderr" \
-        run_quiet_loop_with_fake "$work_dir" "$fake_dir" --all --progress-only codex
+    run_verbose_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
     assert_success
-    assert_file_empty "$run_stdout"
+    assert_contains "$run_stdout" "ticket loop selecting next ticket"
+    assert_contains "$run_stdout" "ticket loop selected ticket: .coderail/tickets/open/0001-verbose-operational-notices.md"
+    assert_contains "$run_stdout" "ticket loop validating ticket closure: 0001"
+    assert_contains "$run_stdout" "ticket loop confirmed satisfied closure: 0001"
+    assert_contains "$run_stdout" "ticket loop staging post-agent changes"
     assert_file_empty "$run_stderr"
 }
 
-assert_loop_quiet_output_dir_keeps_terminal_empty_and_writes_log() {
-    work_dir=$(create_project quiet-output-dir-routing)
-    fake_dir=$tmp_dir/fake-quiet-output-dir-routing
-    output_dir=$tmp_dir/quiet-output-dir-log-files
-    log_file=$output_dir/0001-quiet-output-dir.log
+assert_loop_uses_ready_snapshot_headings() {
+    work_dir=$(create_project ready-snapshot-headings)
+    fake_dir=$tmp_dir/fake-ready-snapshot-headings
 
     write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-quiet-output-dir.md" 0001 quiet-output-dir "Quiet Output Dir" open "" ""
-    commit_all "$work_dir" "Add ticket"
 
-    FAKE_AGENT_STDOUT="fake agent stdout" \
-    FAKE_AGENT_STDERR="fake agent stderr" \
-        run_quiet_loop_with_fake "$work_dir" "$fake_dir" --all --output-dir "$output_dir" codex
-
-    assert_success
-    assert_file_empty "$run_stdout"
-    assert_file_empty "$run_stderr"
-    assert_file "$log_file"
-    assert_contains "$log_file" "fake agent stdout"
-    assert_contains "$log_file" "fake agent stderr"
-}
-
-assert_loop_quiet_reports_agent_failure() {
-    work_dir=$(create_project quiet-agent-failure)
-    fake_dir=$tmp_dir/fake-quiet-agent-failure
-
-    write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-first-ticket.md" 0001 first-ticket "First Ticket" open "" ""
-    write_ticket "$work_dir/.coderail/tickets/open/0002-second-ticket.md" 0002 second-ticket "Second Ticket" open "" ""
+    for ticket_id in 0001 0002 0003; do
+        write_ticket \
+            "$work_dir/.coderail/tickets/open/$ticket_id-ready-snapshot-$ticket_id.md" \
+            "$ticket_id" \
+            "ready-snapshot-$ticket_id" \
+            "Ready Snapshot $ticket_id" \
+            open \
+            "" \
+            ""
+    done
     commit_all "$work_dir" "Add tickets"
 
-    FAKE_AGENT_FAIL_ON=1 \
-    FAKE_AGENT_STDOUT="fake agent stdout" \
-    FAKE_AGENT_STDERR="fake agent stderr" \
-        run_quiet_loop_with_fake "$work_dir" "$fake_dir" --all codex
+    run_loop_with_fake "$work_dir" "$fake_dir" --max 5 codex
 
-    assert_failure
-    assert_file_empty "$run_stdout"
-    assert_line_count "$run_fake_agent_log" 1
-    assert_not_contains "$run_stderr" "fake agent stderr"
-    assert_contains "$run_stderr" "agent failed for ticket: .coderail/tickets/open/0001-first-ticket.md"
-}
+    assert_success
+    assert_contains "$run_stdout" "[1/3] Ready Snapshot 0001"
+    assert_contains "$run_stdout" "[2/3] Ready Snapshot 0002"
+    assert_contains "$run_stdout" "[3/3] Ready Snapshot 0003"
+    assert_not_contains "$run_stdout" "reviewing..."
 
-assert_loop_rejects_output_dir_file() {
-    work_dir=$(create_project output-dir-file)
-    fake_dir=$tmp_dir/fake-output-dir-file
-    output_dir=$tmp_dir/output-dir-file-path
+    work_dir=$(create_project ready-snapshot-limit)
+    fake_dir=$tmp_dir/fake-ready-snapshot-limit
 
     write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-output-dir-file.md" 0001 output-dir-file "Output Dir File" open "" ""
-    commit_all "$work_dir" "Add ticket"
-    printf '%s\n' "not a directory" > "$output_dir"
 
-    run_loop_with_fake "$work_dir" "$fake_dir" --all --output-dir "$output_dir" codex
-
-    assert_failure
-    assert_contains "$run_stderr" "--output-dir is not a directory: $output_dir"
-    assert_no_path "$run_fake_agent_count"
-}
-
-assert_loop_rejects_existing_output_log() {
-    work_dir=$(create_project existing-output-log)
-    fake_dir=$tmp_dir/fake-existing-output-log
-    output_dir=$tmp_dir/existing-output-log-dir
-    log_file=$output_dir/0001-existing-output-log.log
-
-    write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-existing-output-log.md" 0001 existing-output-log "Existing Output Log" open "" ""
-    commit_all "$work_dir" "Add ticket"
-    mkdir -p "$output_dir"
-    printf '%s\n' "existing log" > "$log_file"
-
-    run_loop_with_fake "$work_dir" "$fake_dir" --all --output-dir "$output_dir" codex
-
-    assert_failure
-    assert_contains "$run_stderr" "ticket loop output log already exists: $log_file"
-    assert_no_path "$run_fake_agent_count"
-    assert_file_content "$log_file" "existing log"
-}
-
-assert_loop_stops_on_agent_failure() {
-    work_dir=$(create_project agent-failure)
-    fake_dir=$tmp_dir/fake-agent-failure
-
-    write_fake_agent "$fake_dir"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-first-ticket.md" 0001 first-ticket "First Ticket" open "" ""
-    write_ticket "$work_dir/.coderail/tickets/open/0002-second-ticket.md" 0002 second-ticket "Second Ticket" open "" ""
+    for ticket_id in 0001 0002 0003; do
+        write_ticket \
+            "$work_dir/.coderail/tickets/open/$ticket_id-ready-snapshot-$ticket_id.md" \
+            "$ticket_id" \
+            "ready-snapshot-$ticket_id" \
+            "Ready Snapshot $ticket_id" \
+            open \
+            "" \
+            ""
+    done
     commit_all "$work_dir" "Add tickets"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --max 2 codex
+
+    assert_success
+    assert_contains "$run_stdout" "[1/2] Ready Snapshot 0001"
+    assert_contains "$run_stdout" "[2/2] Ready Snapshot 0002"
+    assert_not_contains "$run_stdout" "[3/"
+
+    work_dir=$(create_project all-ready-snapshot-headings)
+    fake_dir=$tmp_dir/fake-all-ready-snapshot-headings
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-all-ready-snapshot.md" 0001 all-ready-snapshot "All Ready Snapshot One" open "" ""
+    write_ticket "$work_dir/.coderail/tickets/open/0002-all-ready-snapshot.md" 0002 all-ready-snapshot "All Ready Snapshot Two" open "" ""
+    commit_all "$work_dir" "Add tickets"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --all codex
+
+    assert_success
+    assert_contains "$run_stdout" "[1] All Ready Snapshot One"
+    assert_contains "$run_stdout" "[2] All Ready Snapshot Two"
+    assert_not_contains "$run_stdout" "[1/"
+}
+
+assert_loop_updates_headings_for_reopened_and_follow_up_tickets() {
+    work_dir=$(create_project reopened-heading)
+    fake_dir=$tmp_dir/fake-reopened-heading
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-reopened-heading.md" 0001 reopened-heading "Reopened Heading" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_REVIEW_RESULT=reopen-once \
+        run_loop_with_fake "$work_dir" "$fake_dir" --max 2 --auto-review codex
+
+    assert_success
+    assert_contains "$run_stdout" "[1/1] Reopened Heading"
+    assert_contains "$run_stdout" "[2/2] Reopened Heading"
+
+    work_dir=$(create_project follow-up-heading)
+    fake_dir=$tmp_dir/fake-follow-up-heading
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-follow-up-heading.md" 0001 follow-up-heading "Follow Up Heading" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_REVIEW_RESULT=follow-up \
+        run_loop_with_fake "$work_dir" "$fake_dir" --max 2 --auto-review codex
+
+    assert_success
+    assert_contains "$run_stdout" "[1/1] Follow Up Heading"
+    assert_contains "$run_stdout" "[2/2] Review Follow Up"
+}
+
+assert_loop_stages_new_ignore_before_failed_handoff() {
+    work_dir=$(create_project first-use-agent-failure)
+    fake_dir=$tmp_dir/fake-first-use-agent-failure
+    transcript=$work_dir/.coderail/loop/0001-first-use-agent-failure.txt
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-first-use-agent-failure.md" 0001 first-use-agent-failure "First Use Agent Failure" open "" ""
+    commit_all "$work_dir" "Add ticket"
 
     FAKE_AGENT_FAIL_ON=1 run_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
     assert_failure
     assert_line_count "$run_fake_agent_log" 1
-    assert_contains "$run_stderr" "fake agent failure"
-    assert_contains "$run_stderr" "agent failed for ticket: .coderail/tickets/open/0001-first-ticket.md"
-    assert_not_contains "$run_stderr" "ticket was not closed as satisfied"
-    assert_no_staged_changes "$work_dir"
+    assert_file_content "$work_dir/.coderail/loop/.gitignore" "*
+!.gitignore"
+    assert_only_staged_path "$work_dir" .coderail/loop/.gitignore
+    assert_file "$transcript"
+    assert_ignored "$work_dir" .coderail/loop/0001-first-use-agent-failure.txt
     assert_file "$work_dir/work-1.txt"
-    assert_file "$work_dir/.coderail/tickets/open/0001-first-ticket.md"
-    assert_file "$work_dir/.coderail/tickets/open/0002-second-ticket.md"
+}
+
+assert_loop_force_stages_new_ignore_in_ignored_directory() {
+    work_dir=$(create_project ignored-loop-directory)
+    fake_dir=$tmp_dir/fake-ignored-loop-directory
+    transcript=$work_dir/.coderail/loop/0001-ignored-loop-directory.txt
+
+    write_fake_agent "$fake_dir"
+    printf '%s\n' '.coderail/loop/' > "$work_dir/.gitignore"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-ignored-loop-directory.md" 0001 ignored-loop-directory "Ignored Loop Directory" open "" ""
+    commit_all "$work_dir" "Add ticket and ignored loop directory"
+
+    FAKE_AGENT_FAIL_ON=1 run_loop_with_fake "$work_dir" "$fake_dir" --all codex
+
+    assert_failure
+    assert_line_count "$run_fake_agent_log" 1
+    assert_file_content "$work_dir/.coderail/loop/.gitignore" "*
+!.gitignore"
+    assert_only_staged_path "$work_dir" .coderail/loop/.gitignore
+    assert_file "$transcript"
+    assert_ignored "$work_dir" .coderail/loop/0001-ignored-loop-directory.txt
+    assert_file "$work_dir/work-1.txt"
+}
+
+assert_loop_rejects_unignored_transcript() {
+    work_dir=$(create_project unignored-transcript)
+    fake_dir=$tmp_dir/fake-unignored-transcript
+    transcript=.coderail/loop/0001-unignored-transcript.txt
+
+    write_fake_agent "$fake_dir"
+    mkdir -p "$work_dir/.coderail/loop"
+    printf '%s\n' '!.gitignore' > "$work_dir/.coderail/loop/.gitignore"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-unignored-transcript.md" 0001 unignored-transcript "Unignored Transcript" open "" ""
+    commit_all "$work_dir" "Add ticket and custom ignore"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --all codex
+
+    assert_failure
+    assert_contains "$run_stderr" "ticket loop transcript is not ignored: $transcript"
+    assert_no_path "$run_fake_agent_count"
+    assert_no_path "$work_dir/$transcript"
 }
 
 assert_loop_stages_post_agent_changes() {
@@ -1164,6 +1460,145 @@ assert_loop_stages_post_agent_changes() {
     assert_contains "$staged_paths" ".coderail/tickets/closed/0001-first-ticket.md"
     assert_contains "$staged_paths" "work-1.txt"
     assert_no_unstaged_or_untracked_changes "$work_dir"
+}
+
+assert_loop_stages_clean_auto_review() {
+    work_dir=$(create_project clean-auto-review)
+    fake_dir=$tmp_dir/fake-clean-auto-review
+    staged_paths=$tmp_dir/clean-auto-review-staged-paths
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-clean-auto-review.md" 0001 clean-auto-review "Clean Auto Review" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
+
+    assert_success
+    assert_line_count "$run_fake_agent_log" 2
+    assert_file "$work_dir/.coderail/tickets/closed/0001-clean-auto-review.md"
+    git -C "$work_dir" diff --cached --name-only > "$staged_paths"
+    assert_contains "$staged_paths" ".coderail/tickets/closed/0001-clean-auto-review.md"
+    assert_contains "$staged_paths" "work-1.txt"
+    assert_no_unstaged_or_untracked_changes "$work_dir"
+}
+
+assert_loop_reimplements_reopened_ticket_with_max() {
+    work_dir=$(create_project reopened-auto-review-max)
+    fake_dir=$tmp_dir/fake-reopened-auto-review-max
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-reopened-auto-review.md" 0001 reopened-auto-review "Reopened Auto Review" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_REVIEW_RESULT=reopen-once \
+        run_loop_with_fake "$work_dir" "$fake_dir" --max 2 --auto-review codex
+
+    assert_success
+    assert_file_content "$run_fake_agent_log" '$ticket-implement ".coderail/tickets/open/0001-reopened-auto-review.md"
+$review-auto "0001"
+$ticket-implement ".coderail/tickets/open/0001-reopened-auto-review.md"
+$review-auto "0001"'
+    assert_file "$work_dir/.coderail/tickets/closed/0001-reopened-auto-review.md"
+    assert_no_unstaged_or_untracked_changes "$work_dir"
+}
+
+assert_loop_all_reprocesses_reopened_ticket() {
+    work_dir=$(create_project reopened-auto-review-all)
+    fake_dir=$tmp_dir/fake-reopened-auto-review-all
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-reopened-auto-review.md" 0001 reopened-auto-review "Reopened Auto Review" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_REVIEW_RESULT=reopen-once \
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
+
+    assert_success
+    assert_line_count "$run_fake_agent_log" 4
+    assert_file "$work_dir/.coderail/tickets/closed/0001-reopened-auto-review.md"
+}
+
+assert_loop_schedules_review_follow_up() {
+    work_dir=$(create_project auto-review-follow-up)
+    fake_dir=$tmp_dir/fake-auto-review-follow-up
+    follow_up=$work_dir/.coderail/tickets/open/0002-review-follow-up.md
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-auto-review-source.md" 0001 auto-review-source "Auto Review Source" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_REVIEW_RESULT=follow-up \
+        run_loop_with_fake "$work_dir" "$fake_dir" --max 1 --auto-review codex
+
+    assert_success
+    assert_file "$work_dir/.coderail/tickets/closed/0001-auto-review-source.md"
+    assert_file "$follow_up"
+    assert_contains "$follow_up" "dependencies: 0001"
+    next_ticket=$("$CR" --cwd "$work_dir" ticket next)
+    [ "$next_ticket" = ".coderail/tickets/open/0002-review-follow-up.md" ] ||
+        fail "follow-up was not selected by ticket next"
+
+    commit_all "$work_dir" "Checkpoint review follow-up"
+    run_loop_with_fake "$work_dir" "$fake_dir" --all codex
+
+    assert_success
+    assert_file "$work_dir/.coderail/tickets/closed/0002-review-follow-up.md"
+}
+
+assert_loop_stops_on_auto_review_failure_without_staging() {
+    work_dir=$(create_project auto-review-agent-failure)
+    fake_dir=$tmp_dir/fake-auto-review-agent-failure
+
+    write_fake_agent "$fake_dir"
+    write_loop_ignore "$work_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-auto-review-agent-failure.md" 0001 auto-review-agent-failure "Auto Review Agent Failure" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_FAIL_ON=2 \
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
+
+    assert_failure
+    assert_line_count "$run_fake_agent_log" 2
+    assert_contains "$run_stderr" "agent failed for ticket: 0001"
+    assert_no_staged_changes "$work_dir"
+    assert_file "$work_dir/.coderail/tickets/closed/0001-auto-review-agent-failure.md"
+    assert_file "$work_dir/work-1.txt"
+}
+
+assert_loop_rejects_active_auto_review_ticket_without_staging() {
+    work_dir=$(create_project active-auto-review-ticket)
+    fake_dir=$tmp_dir/fake-active-auto-review-ticket
+
+    write_fake_agent "$fake_dir"
+    write_loop_ignore "$work_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-active-auto-review.md" 0001 active-auto-review "Active Auto Review" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_REVIEW_RESULT=active \
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
+
+    assert_failure
+    assert_line_count "$run_fake_agent_log" 2
+    assert_no_staged_changes "$work_dir"
+    assert_file "$work_dir/.coderail/tickets/active/0001-active-auto-review.md"
+}
+
+assert_loop_rejects_invalid_auto_review_ticket_without_staging() {
+    work_dir=$(create_project invalid-auto-review-ticket)
+    fake_dir=$tmp_dir/fake-invalid-auto-review-ticket
+
+    write_fake_agent "$fake_dir"
+    write_loop_ignore "$work_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-invalid-auto-review.md" 0001 invalid-auto-review "Invalid Auto Review" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_REVIEW_RESULT=invalid \
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
+
+    assert_failure
+    assert_line_count "$run_fake_agent_log" 2
+    assert_no_staged_changes "$work_dir"
+    assert_file "$work_dir/.coderail/tickets/open/0001-invalid-auto-review.md"
 }
 
 assert_loop_rejects_unsafe_handoff_state() {
@@ -1236,9 +1671,11 @@ assert_loop_rejects_unsatisfied_closed_ticket() {
     write_ticket "$work_dir/.coderail/tickets/open/0001-first-ticket.md" 0001 first-ticket "First Ticket" open "" ""
     commit_all "$work_dir" "Add tickets"
 
-    FAKE_AGENT_CLOSE_REASON=dismissed run_loop_with_fake "$work_dir" "$fake_dir" --all codex
+    FAKE_AGENT_CLOSE_REASON=dismissed \
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
 
     assert_failure
+    assert_line_count "$run_fake_agent_log" 1
     assert_contains "$run_stderr" "ticket was not closed as satisfied: 0001"
 }
 
@@ -1247,6 +1684,7 @@ assert_loop_leaves_rejected_changes_unstaged() {
     fake_dir=$tmp_dir/fake-rejected-unstaged
 
     write_fake_agent "$fake_dir"
+    write_loop_ignore "$work_dir"
     write_ticket "$work_dir/.coderail/tickets/open/0001-first-ticket.md" 0001 first-ticket "First Ticket" open "" ""
     commit_all "$work_dir" "Add tickets"
 
@@ -1267,9 +1705,11 @@ assert_loop_rejects_deferred_closed_ticket() {
     write_ticket "$work_dir/.coderail/tickets/open/0001-first-ticket.md" 0001 first-ticket "First Ticket" open "" ""
     commit_all "$work_dir" "Add tickets"
 
-    FAKE_AGENT_CLOSE_REASON=deferred run_loop_with_fake "$work_dir" "$fake_dir" --all codex
+    FAKE_AGENT_CLOSE_REASON=deferred \
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
 
     assert_failure
+    assert_line_count "$run_fake_agent_log" 1
     assert_contains "$run_stderr" "ticket was not closed as satisfied: 0001"
 }
 
@@ -1295,6 +1735,32 @@ assert_loop_accepts_duplicate_closed_to_done() {
         run_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
     assert_success
+    assert_file "$work_dir/.coderail/tickets/closed/0002-duplicate-ticket.md"
+}
+
+assert_loop_skips_auto_review_for_satisfied_duplicate() {
+    work_dir=$(create_project auto-review-duplicate-close)
+    fake_dir=$tmp_dir/fake-auto-review-duplicate-close
+
+    write_fake_agent "$fake_dir"
+    write_ticket \
+        "$work_dir/.coderail/tickets/closed/0001-done-ticket.md" \
+        0001 \
+        done-ticket \
+        "Done Ticket" \
+        closed \
+        "" \
+        "close_reason: done
+"
+    write_ticket "$work_dir/.coderail/tickets/open/0002-duplicate-ticket.md" 0002 duplicate-ticket "Duplicate Ticket" open "" ""
+    commit_all "$work_dir" "Add tickets"
+
+    FAKE_AGENT_CLOSE_REASON=duplicate \
+    FAKE_AGENT_DUPLICATE_OF=0001 \
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex
+
+    assert_success
+    assert_line_count "$run_fake_agent_log" 1
     assert_file "$work_dir/.coderail/tickets/closed/0002-duplicate-ticket.md"
 }
 
@@ -1331,23 +1797,20 @@ test "Loop uses default max" assert_loop_uses_default_max
 test "Loop accepts short max" assert_loop_accepts_short_max
 test "Loop accepts long max" assert_loop_accepts_long_max
 test "Loop accepts all" assert_loop_accepts_all
-test "Loop accepts output dir" assert_loop_accepts_output_dir
-test "Loop accepts output dir equals" assert_loop_accepts_output_dir_equals
-test "Loop accepts progress only" assert_loop_accepts_progress_only
+test "Loop accepts auto review" assert_loop_accepts_auto_review
 test "Loop rejects repeated max" assert_loop_rejects_repeated_max
-test "Loop rejects repeated output dir" assert_loop_rejects_repeated_output_dir
-test "Loop rejects repeated progress only" assert_loop_rejects_repeated_progress_only
-test "Loop rejects progress only with output dir" assert_loop_rejects_progress_only_with_output_dir
+test "Loop rejects repeated auto review" assert_loop_rejects_repeated_auto_review
 test "Loop rejects all with max" assert_loop_rejects_all_with_max
 test "Loop rejects missing max value" assert_loop_rejects_missing_max_value
-test "Loop rejects missing output dir value" assert_loop_rejects_missing_output_dir_value
-test "Loop rejects empty output dir value" assert_loop_rejects_empty_output_dir_value
-test "Loop rejects empty output dir equals value" assert_loop_rejects_empty_output_dir_equals_value
 test "Loop rejects invalid max value" assert_loop_rejects_invalid_max_value
 test "Loop rejects unknown option" assert_loop_rejects_unknown_option
+test "Loop rejects removed output dir" assert_loop_rejects_removed_output_dir
+test "Loop rejects removed output dir equals" assert_loop_rejects_removed_output_dir_equals
+test "Loop rejects removed progress only" assert_loop_rejects_removed_progress_only
 test "Loop rejects unexpected argument" assert_loop_rejects_unexpected_argument
 test "Loop accepts supported tools" assert_loop_accepts_supported_tools
 test "Loop invokes supported tools noninteractively" assert_loop_invokes_supported_tools_noninteractively
+test "Loop auto reviews supported tools" assert_loop_auto_reviews_supported_tools
 test "Loop explicit tool wins" assert_loop_explicit_tool_wins
 test "Loop uses user default tool" assert_loop_uses_user_default_tool
 test "Loop repo default overrides user default" assert_loop_repo_default_overrides_user_default
@@ -1361,18 +1824,29 @@ test "Loop rejects untracked startup files" assert_loop_rejects_untracked_startu
 test "Loop processes dependent tickets sequentially" assert_loop_processes_dependent_tickets_sequentially
 test "Loop respects default processing max" assert_loop_respects_default_processing_max
 test "Loop respects explicit processing max" assert_loop_respects_explicit_processing_max
-test "Loop streams agent output by default" assert_loop_streams_agent_output_by_default
-test "Loop writes agent output to output dir" assert_loop_writes_agent_output_to_output_dir
-test "Loop progress only discards agent output and prints handoffs" assert_loop_progress_only_discards_agent_output_and_prints_handoffs
-test "Loop progress only stops on agent failure" assert_loop_progress_only_stops_on_agent_failure
-test "Loop quiet suppresses default agent output" assert_loop_quiet_suppresses_default_agent_output
-test "Loop quiet progress only suppresses progress and agent output" assert_loop_quiet_progress_only_suppresses_progress_and_agent_output
-test "Loop quiet output dir keeps terminal empty and writes log" assert_loop_quiet_output_dir_keeps_terminal_empty_and_writes_log
-test "Loop quiet reports agent failure" assert_loop_quiet_reports_agent_failure
-test "Loop rejects output dir file" assert_loop_rejects_output_dir_file
-test "Loop rejects existing output log" assert_loop_rejects_existing_output_log
-test "Loop stops on agent failure" assert_loop_stops_on_agent_failure
+test "Loop leaves setup absent without ready tickets" assert_loop_does_not_create_transcript_setup_without_ready_ticket
+test "Loop writes mapped transcript" assert_loop_writes_mapped_transcript
+test "Loop appends phase delimiters to reopened transcript" assert_loop_appends_phase_delimiters_to_reopened_transcript
+test "Loop writes ignored transcripts for multiple tickets" assert_loop_writes_ignored_transcripts_for_multiple_tickets
+test "Loop quiet writes transcript" assert_loop_quiet_writes_transcript
+test "Loop reports ticket progress" assert_loop_reports_ticket_progress
+test "Loop reports implementation failure progress" assert_loop_reports_implementation_failure_progress
+test "Loop reports review failure progress" assert_loop_reports_review_failure_progress
+test "Loop quiet suppresses ticket progress" assert_loop_quiet_suppresses_ticket_progress
+test "Loop verbose reports operational notices" assert_loop_verbose_reports_operational_notices
+test "Loop uses ready snapshot headings" assert_loop_uses_ready_snapshot_headings
+test "Loop updates headings for reopened and follow-up tickets" assert_loop_updates_headings_for_reopened_and_follow_up_tickets
+test "Loop stages new ignore before failed handoff" assert_loop_stages_new_ignore_before_failed_handoff
+test "Loop force stages new ignore in ignored directory" assert_loop_force_stages_new_ignore_in_ignored_directory
+test "Loop rejects unignored transcript" assert_loop_rejects_unignored_transcript
 test "Loop stages post-agent changes" assert_loop_stages_post_agent_changes
+test "Loop stages clean auto review" assert_loop_stages_clean_auto_review
+test "Loop reimplements reopened ticket with max" assert_loop_reimplements_reopened_ticket_with_max
+test "Loop all reprocesses reopened ticket" assert_loop_all_reprocesses_reopened_ticket
+test "Loop schedules review follow-up" assert_loop_schedules_review_follow_up
+test "Loop stops on auto review failure without staging" assert_loop_stops_on_auto_review_failure_without_staging
+test "Loop rejects active auto review ticket without staging" assert_loop_rejects_active_auto_review_ticket_without_staging
+test "Loop rejects invalid auto review ticket without staging" assert_loop_rejects_invalid_auto_review_ticket_without_staging
 test "Loop rejects unsafe handoff state" assert_loop_rejects_unsafe_handoff_state
 test "Loop accepts done closed ticket" assert_loop_accepts_done_closed_ticket
 test "Loop rejects open ticket" assert_loop_rejects_open_ticket
@@ -1381,6 +1855,7 @@ test "Loop rejects unsatisfied closed ticket" assert_loop_rejects_unsatisfied_cl
 test "Loop leaves rejected changes unstaged" assert_loop_leaves_rejected_changes_unstaged
 test "Loop rejects deferred closed ticket" assert_loop_rejects_deferred_closed_ticket
 test "Loop accepts duplicate closed to done" assert_loop_accepts_duplicate_closed_to_done
+test "Loop skips auto review for satisfied duplicate" assert_loop_skips_auto_review_for_satisfied_duplicate
 test "Loop rejects duplicate closed to unsatisfied" assert_loop_rejects_duplicate_closed_to_unsatisfied
 
 print_tests_summary

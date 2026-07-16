@@ -556,11 +556,14 @@ It creates the following files and directories when they do not already exist:
 ```txt
 .coderail/
 .coderail/tickets/
+.coderail/loop/
+.coderail/loop/.gitignore
 .coderail/conf.ini
 .coderail/test.map
 ```
 
-Existing files are left untouched.
+The loop ignore file keeps local agent transcripts out of Git. Existing files
+are left untouched.
 
 Examples:
 
@@ -861,10 +864,11 @@ dismissed  Work no longer required
 It repeatedly:
 
 1. Selects an open ticket whose dependencies are satisfied.
-2. Hands the ticket to a supported agent CLI.
+2. Hands the ticket to a supported agent CLI for implementation.
 3. Requires the agent to close the ticket as satisfied.
-4. Stages all post-agent changes after the ticket is closed as satisfied.
-5. Continues until the configured limit is reached or no ready ticket remains.
+4. When `--auto-review` is set and the ticket closed as `done`, hands its stable ID to an autonomous reviewer.
+5. Stages all post-agent changes after the ticket is closed as satisfied.
+6. Continues until the configured limit is reached or no ready ticket remains.
 
 Usage:
 
@@ -886,25 +890,34 @@ If `<tool>` is omitted, Coderail uses `default_tool`.
 Options:
 
 ```txt
--m <count>, --max <count>  Maximum number of tickets to process; default is 5
+-m <count>, --max <count>  Maximum successful implementation handoffs; default is 5
 --all                      Process all ready open tickets; incompatible with --max
---output-dir <directory>   Write one combined agent output log per ticket; incompatible with --progress-only
---progress-only            Print Coderail progress and discard agent transcripts; incompatible with --output-dir
+--auto-review              Run an autonomous review after each ticket closes as done
 ```
 
-By default, agent standard output and standard error stream to the terminal.
+`--auto-review` is opt-in. It runs the normal implementation handoff first, then reviews tickets closed as `done`. A clean review leaves the ticket closed and its changes are staged normally. A within-scope finding adds tasks to and reopens the source ticket; the reopened-ticket checkpoint is staged, then the ticket returns to normal dependency-aware scheduling. A broader finding creates a dependent follow-up ticket while the reviewed ticket stays closed.
 
-With `--output-dir`, Coderail writes one combined log per ticket:
+`--max` counts successful implementation handoffs, not unique ticket IDs. Reimplementing a reopened ticket consumes another slot. `--all` can continue through reopened tickets and review-created follow-up tickets until none are ready.
 
-```txt
-0001-demo.md → 0001-demo.log
+Each agent phase appends its combined standard output and error to the fixed
+per-ticket transcript `.coderail/loop/<ticket-basename>.txt`. Agent output is
+not streamed to the terminal. Inspect the current handoff with:
+
+```sh
+tail -f .coderail/loop/0001-demo.txt
 ```
 
-It refuses to overwrite an existing output log.
+`cr init` creates `.coderail/loop/.gitignore` so these local transcripts stay
+out of Git. Repeated implementation and review handoffs append to the same
+ticket transcript.
 
-With `--progress-only`, agent output is discarded and only Coderail progress is printed.
-
-Root `--quiet` suppresses terminal progress and agent output. Logs are still written when `--output-dir` is also used.
+By default, the terminal shows compact ticket progress: the title, ticket
+file, transcript inspection command, phase status, and durations. For a
+limited run, headings use `[current/total]` from the ready-ticket snapshot at
+each selection; the total can change after reopened tickets or review-created
+follow-ups. `--all` uses `[current]` headings. `--verbose` adds operational
+notices for selection, validation, and staging. `--quiet` suppresses both
+progress and notices, while transcripts continue to be written.
 
 `cr ticket loop` deliberately does not:
 
@@ -956,8 +969,8 @@ cr ticket deactivate -d 0001 0004
 cr ticket reopen 0005
 cr ticket validate
 cr ticket loop codex
-cr ticket loop --output-dir .coderail/loop-logs claude
-cr ticket loop --progress-only gemini
+cr ticket loop --all claude
+cr ticket loop --max 2 --auto-review gemini
 ```
 
 ## Development

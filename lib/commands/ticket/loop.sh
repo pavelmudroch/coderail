@@ -16,6 +16,7 @@ ROOT_DIR=$(
 
 . "$ROOT_DIR/lib/utils/log.sh"
 . "$ROOT_DIR/lib/utils/config.sh"
+. "$ROOT_DIR/lib/utils/loop.sh"
 . "$ROOT_DIR/lib/utils/ticket.sh"
 
 CR=${CODERAIL_BIN_PATH:-$ROOT_DIR/bin/cr}
@@ -34,11 +35,7 @@ Options:
                         positive integer.
                         (default: 5)
   --all                 Loop through all open tickets with satisfied dependencies.
-  --output-dir <directory>
-                        Write one combined agent stdout/stderr log per ticket
-                        under the directory.
-  --progress-only       Print Coderail handoff progress and discard agent
-                        stdout/stderr.
+  --auto-review         Run an autonomous review after each ticket closes as done.
 
 Arguments:
   <tool>      The agent cli tool to use for tickets. If not specified, the
@@ -56,6 +53,24 @@ error() {
 fatal() {
     log_error "$@"
     exit 1
+}
+
+format_duration() {
+    format_duration_seconds=$1
+    format_duration_minutes=$((format_duration_seconds / 60))
+    format_duration_remaining_seconds=$((format_duration_seconds % 60))
+
+    printf '%02d:%02d\n' \
+        "$format_duration_minutes" \
+        "$format_duration_remaining_seconds"
+}
+
+elapsed_duration() {
+    elapsed_duration_started_at=$1
+    elapsed_duration_now=$(date +%s)
+    elapsed_duration_seconds=$((elapsed_duration_now - elapsed_duration_started_at))
+
+    format_duration "$elapsed_duration_seconds"
 }
 
 has_unstaged_or_untracked_changes() {
@@ -94,7 +109,7 @@ select_next_ticket() {
     select_next_stderr=$tmp_dir/next.stderr
 
     set +e
-    "$CR" ticket next --limit 1 > "$select_next_stdout" 2> "$select_next_stderr"
+    "$CR" ticket next > "$select_next_stdout" 2> "$select_next_stderr"
     select_next_status=$?
     set -e
 
@@ -102,6 +117,7 @@ select_next_ticket() {
         next_ticket=$(sed -n '1p' "$select_next_stdout")
         [ -n "$next_ticket" ] ||
             fatal "ticket next returned no ticket"
+        ready_ticket_count=$(wc -l < "$select_next_stdout" | tr -d ' ')
         return 0
     fi
 
@@ -136,6 +152,36 @@ require_ticket_closed_satisfied() {
     fatal "ticket was not closed as satisfied: $require_ticket_closed_id"
 }
 
+ticket_close_reason() {
+    ticket_close_reason_id=$1
+    ticket_close_reason_path=$(ticket_resolve_reference "$project_dir" "$ticket_close_reason_id") ||
+        return 1
+    ticket_close_reason_file=$project_dir/$ticket_close_reason_path
+
+    _ticket_frontmatter_value "$ticket_close_reason_file" close_reason
+}
+
+require_auto_review_ticket_state() {
+    require_auto_review_id=$1
+    require_auto_review_path=$(ticket_resolve_reference "$project_dir" "$require_auto_review_id") ||
+        fatal "failed to resolve ticket after auto review: $require_auto_review_id"
+    require_auto_review_file=$project_dir/$require_auto_review_path
+
+    ticket_validate_file "$project_dir" "$require_auto_review_file" ||
+        fatal "ticket is invalid after auto review: $require_auto_review_id"
+
+    if ticket_is_state "$require_auto_review_file" closed; then
+        require_ticket_closed_satisfied "$require_auto_review_id"
+        return 0
+    fi
+
+    if ticket_is_state "$require_auto_review_file" open; then
+        return 0
+    fi
+
+    fatal "ticket must be open or closed after auto review: $require_auto_review_id"
+}
+
 stage_post_agent_changes() {
     git add --all ||
         fatal "failed to stage post-agent changes"
@@ -143,69 +189,71 @@ stage_post_agent_changes() {
 
 invoke_agent() {
     invoke_ticket=$1
+    invoke_prompt_kind=$2
+
+    case "$invoke_prompt_kind" in
+        implementation)
+            prompt_name=ticket-implement
+            ;;
+        review)
+            prompt_name=review-auto
+            ;;
+        *)
+            fatal "unknown ticket loop prompt kind: $invoke_prompt_kind"
+            ;;
+    esac
 
     case "$tool" in
         codex)
-            prompt='$ticket-implement "'"$invoke_ticket"'"'
+            prompt='$'"$prompt_name"' "'"$invoke_ticket"'"'
             "$tool" exec "$prompt"
             ;;
         copilot|claude|gemini)
-            prompt='/ticket-implement "'"$invoke_ticket"'"'
+            prompt='/'"$prompt_name"' "'"$invoke_ticket"'"'
             "$tool" -p "$prompt"
             ;;
     esac
 }
 
-print_handoff() {
-    print_handoff_ticket=$1
+prepare_transcript() {
+    prepare_transcript_ticket=$1
+    prepare_transcript_base=${prepare_transcript_ticket##*/}
+    transcript_file=.coderail/loop/${prepare_transcript_base%.md}.txt
 
-    if [ "$progress_only" = true ]; then
-        log_info "ticket loop handoff: $print_handoff_ticket"
-    else
-        log_notice "ticket loop handoff: $print_handoff_ticket"
+    transcript_ignore_created=$(loop_setup "$project_dir") ||
+        fatal "failed to set up ticket loop transcript directory"
+
+    if [ "$transcript_ignore_created" = true ]; then
+        git add -f -- .coderail/loop/.gitignore ||
+            fatal "failed to stage ticket loop transcript ignore file"
     fi
+
+    git check-ignore -q -- "$transcript_file" ||
+        fatal "ticket loop transcript is not ignored: $transcript_file"
 }
 
-invoke_agent_with_routing() {
+append_phase_delimiter() {
+    append_phase=$1
+
+    printf '\n--- %s %s ---\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$append_phase" >> "$transcript_file" ||
+        fatal "failed to append ticket loop transcript delimiter: $transcript_file"
+}
+
+invoke_agent_to_transcript() {
     invoke_agent_ticket=$1
+    invoke_agent_prompt_kind=$2
 
-    if [ "$output_dir_set" = true ]; then
-        invoke_agent "$invoke_agent_ticket" > "$output_log_file" 2>&1
-    elif [ "$log_quiet" = 1 ] || [ "$progress_only" = true ]; then
-        invoke_agent "$invoke_agent_ticket" > /dev/null 2>&1
-    else
-        invoke_agent "$invoke_agent_ticket"
-    fi
+    invoke_agent "$invoke_agent_ticket" "$invoke_agent_prompt_kind" >> "$transcript_file" 2>&1
 }
 
-prepare_output_dir() {
-    if [ -e "$output_dir" ] && [ ! -d "$output_dir" ]; then
-        fatal "--output-dir is not a directory: $output_dir"
-    fi
+print_ticket_block() {
+    print_ticket_block_heading=$1
+    print_ticket_block_title=$2
+    print_ticket_block_ticket=$3
 
-    if [ ! -e "$output_dir" ]; then
-        mkdir -p "$output_dir" ||
-            fatal "failed to create --output-dir: $output_dir"
-    fi
-}
-
-prepare_output_log_file() {
-    prepare_output_ticket=$1
-    output_log_file=
-
-    [ "$output_dir_set" = true ] || return 0
-
-    prepare_output_dir
-
-    output_log_base=${prepare_output_ticket##*/}
-    output_log_file=$output_dir/${output_log_base%.md}.log
-
-    [ ! -e "$output_log_file" ] ||
-        fatal "ticket loop output log already exists: $output_log_file"
-
-    if ! : > "$output_log_file"; then
-        fatal "failed to create ticket loop output log: $output_log_file"
-    fi
+    log_info "$print_ticket_block_heading $print_ticket_block_title"
+    log_info "         file: $print_ticket_block_ticket"
+    log_info "         inspect: tail -f $transcript_file"
 }
 
 set_max() {
@@ -232,20 +280,10 @@ set_all() {
     all_tickets=true
 }
 
-set_output_dir() {
-    [ "$output_dir_set" = false ] || error "--output-dir provided multiple times"
-    [ -n "$1" ] || error "--output-dir requires a non-empty value"
-    [ "$progress_only" = false ] || error "--progress-only and --output-dir cannot be used together"
+set_auto_review() {
+    [ "$auto_review" = false ] || error "--auto-review provided multiple times"
 
-    output_dir=$1
-    output_dir_set=true
-}
-
-set_progress_only() {
-    [ "$progress_only" = false ] || error "--progress-only provided multiple times"
-    [ "$output_dir_set" = false ] || error "--progress-only and --output-dir cannot be used together"
-
-    progress_only=true
+    auto_review=true
 }
 
 set_tool() {
@@ -265,9 +303,7 @@ set_tool() {
 max=5
 max_set=false
 all_tickets=false
-output_dir=
-output_dir_set=false
-progress_only=false
+auto_review=false
 tool=
 
 while [ "$#" -gt 0 ]; do
@@ -293,18 +329,8 @@ while [ "$#" -gt 0 ]; do
             set_all
             shift
             ;;
-        --output-dir=*)
-            set_output_dir "${1#--output-dir=}"
-            shift
-            ;;
-        --output-dir)
-            shift
-            [ "$#" -gt 0 ] || error "--output-dir requires a value"
-            set_output_dir "$1"
-            shift
-            ;;
-        --progress-only)
-            set_progress_only
+        --auto-review)
+            set_auto_review
             shift
             ;;
         --)
@@ -367,21 +393,69 @@ while :; do
         require_handoff_clean_worktree
     fi
 
+    log_notice "ticket loop selecting next ticket"
     if ! select_next_ticket; then
         exit 0
     fi
 
     next_ticket_id=$(ticket_id_from_name "$next_ticket")
+    next_ticket_title=$(_ticket_frontmatter_value "$project_dir/$next_ticket" title) ||
+        fatal "failed to read ticket title: $next_ticket"
+    ticket_started_at=$(date +%s)
 
-    prepare_output_log_file "$next_ticket"
-
-    print_handoff "$next_ticket"
-    if ! invoke_agent_with_routing "$next_ticket"; then
-        fatal "agent failed for ticket: $next_ticket"
+    if [ "$all_tickets" = true ]; then
+        ticket_heading="[$((processed_count + 1))]"
+    else
+        ticket_total=$((processed_count + ready_ticket_count))
+        if [ "$ticket_total" -gt "$max" ]; then
+            ticket_total=$max
+        fi
+        ticket_heading="[$((processed_count + 1))/$ticket_total]"
     fi
 
+    log_notice "ticket loop selected ticket: $next_ticket"
+    prepare_transcript "$next_ticket"
+    append_phase_delimiter implementation
+    print_ticket_block "$ticket_heading" "$next_ticket_title" "$next_ticket"
+
+    log_info "         implementing..."
+    implementation_started_at=$(date +%s)
+    if ! invoke_agent_to_transcript "$next_ticket" implementation; then
+        implementation_duration=$(elapsed_duration "$implementation_started_at")
+        log_info "         implementation failed in $implementation_duration"
+        fatal "agent failed for ticket: $next_ticket"
+    fi
+    implementation_duration=$(elapsed_duration "$implementation_started_at")
+    log_info "         implementation done in $implementation_duration"
+
+    log_notice "ticket loop validating ticket closure: $next_ticket_id"
     require_ticket_closed_satisfied "$next_ticket_id"
+    log_notice "ticket loop confirmed satisfied closure: $next_ticket_id"
+
+    if [ "$auto_review" = true ]; then
+        next_ticket_close_reason=$(ticket_close_reason "$next_ticket_id") ||
+            fatal "failed to determine ticket close reason: $next_ticket_id"
+
+        if [ "$next_ticket_close_reason" = done ]; then
+            append_phase_delimiter review
+            review_started_at=$(date +%s)
+            log_info "         reviewing..."
+            if ! invoke_agent_to_transcript "$next_ticket_id" review; then
+                review_duration=$(elapsed_duration "$review_started_at")
+                log_info "         review failed in $review_duration"
+                fatal "agent failed for ticket: $next_ticket_id"
+            fi
+            review_duration=$(elapsed_duration "$review_started_at")
+            log_info "         review done in $review_duration"
+
+            require_auto_review_ticket_state "$next_ticket_id"
+        fi
+    fi
+
+    log_notice "ticket loop staging post-agent changes"
     stage_post_agent_changes
 
     processed_count=$((processed_count + 1))
+    ticket_duration=$(elapsed_duration "$ticket_started_at")
+    log_info "         completed in $ticket_duration"
 done
