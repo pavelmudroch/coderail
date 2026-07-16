@@ -26,6 +26,7 @@ Usage:
 Options:
   -h, --help            Show this help message and exit
   --dry-run             Print planned removals without mutating files
+  --force               Remove files without confirmation
 EOF
 }
 
@@ -191,7 +192,55 @@ apply_clean_plan() {
     done < "$stale_files"
 }
 
+collect_unsafe_stale_files() {
+    : > "$unsafe_stale_files"
+
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+        fatal "failed to query Git index"
+
+    while IFS= read -r safety_path || [ -n "$safety_path" ]; do
+        [ -n "$safety_path" ] || continue
+
+        if git ls-files --error-unmatch -- "$safety_path" >/dev/null 2>&1; then
+            if git diff --quiet -- "$safety_path"; then
+                continue
+            else
+                safety_status=$?
+            fi
+            [ "$safety_status" -eq 1 ] ||
+                fatal "failed to query Git index: $safety_path"
+        else
+            safety_status=$?
+            [ "$safety_status" -eq 1 ] ||
+                fatal "failed to query Git index: $safety_path"
+        fi
+
+        printf '%s\n' "$safety_path" >> "$unsafe_stale_files"
+    done < "$stale_files"
+}
+
+confirm_unsafe_stale_files() {
+    [ -s "$unsafe_stale_files" ] || return 0
+    [ "$force" = true ] && return 0
+
+    echo "warning: the current content of the following files cannot be restored exactly from Git and will be permanently deleted:" >&2
+    while IFS= read -r warning_path || [ -n "$warning_path" ]; do
+        [ -n "$warning_path" ] || continue
+
+        printf '  %s\n' "$warning_path" >&2
+    done < "$unsafe_stale_files"
+    printf 'Continue? [y/N] ' >&2
+
+    if IFS= read -r confirmation && [ "$confirmation" = y ]; then
+        return 0
+    fi
+
+    printf '\n' >&2
+    fatal "cleanup aborted"
+}
+
 dry_run=false
+force=false
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -203,6 +252,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --dry-run)
             dry_run=true
+            shift
+            ;;
+        --force)
+            force=true
             shift
             ;;
         --)
@@ -238,6 +291,7 @@ trap cleanup EXIT HUP INT TERM
 
 stale_files=$tmp_dir/stale-files
 ticket_files=$tmp_dir/ticket-files
+unsafe_stale_files=$tmp_dir/unsafe-stale-files
 
 find .coderail -type f \
     ! -path .coderail/conf.ini \
@@ -250,7 +304,13 @@ if [ ! -s "$stale_files" ]; then
 fi
 
 collect_ticket_files "$ticket_files"
-validate_ticket_readiness
+
+if [ -s "$ticket_files" ]; then
+    validate_ticket_readiness
+elif [ "$dry_run" != true ]; then
+    collect_unsafe_stale_files
+    confirm_unsafe_stale_files
+fi
 
 if [ "$dry_run" = true ]; then
     print_clean_plan

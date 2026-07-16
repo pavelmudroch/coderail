@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `cr ticket loop` command for iterating through open tickets with satisfied dependencies without user interaction.
 
+### Changed
+
+- `cr clean` removal policy when there are no tickets requires user confirmation for non restorable changes before removing stale Coderail workflow files.
+
 ## [v1.1.0] - 2026-07-15
 
 ### Added

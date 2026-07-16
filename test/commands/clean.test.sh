@@ -82,6 +82,15 @@ create_project() {
     printf '%s\n' "$project_dir"
 }
 
+create_git_project() {
+    project_dir=$(create_project "$1")
+
+    git -C "$project_dir" init -q
+    git -C "$project_dir" add .coderail
+
+    printf '%s\n' "$project_dir"
+}
+
 write_ticket() {
     ticket_file=$1
     ticket_id=$2
@@ -130,7 +139,21 @@ run_cr() {
     run_stderr=$tmp_dir/run.stderr
 
     set +e
-    "$CR" --cwd "$work_dir" "$@" > "$run_stdout" 2> "$run_stderr"
+    "$CR" --cwd "$work_dir" "$@" > "$run_stdout" 2> "$run_stderr" < /dev/null
+    run_status=$?
+    set -e
+}
+
+run_cr_answer() {
+    answer=$1
+    work_dir=$2
+    shift 2
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+
+    set +e
+    printf '%s\n' "$answer" | "$CR" --cwd "$work_dir" "$@" > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
 }
@@ -155,6 +178,7 @@ assert_clean_help_documents_dry_run() {
     assert_contains "$run_stdout" "Usage:"
     assert_contains "$run_stdout" "  cr clean [options]"
     assert_contains "$run_stdout" "  --dry-run"
+    assert_contains "$run_stdout" "  --force"
     assert_not_contains "$run_stdout" "--prune"
     assert_not_contains "$run_stdout" "--yes"
     assert_file_empty "$run_stderr"
@@ -214,6 +238,135 @@ assert_clean_rejects_legacy_options() {
     assert_contains "$run_stderr" "error: unknown option: --yes"
 }
 
+assert_clean_removes_index_backed_helpers_without_prompt() {
+    work_dir=$(create_git_project index-backed-helper)
+    helper_file=$work_dir/.coderail/SCOPE.md
+    unrelated_file=$work_dir/unrelated.md
+
+    printf 'scope\n' > "$helper_file"
+    git -C "$work_dir" add .coderail/SCOPE.md
+    printf 'unrelated\n' > "$unrelated_file"
+
+    run_cr "$work_dir" clean
+
+    assert_success
+    assert_stdout_content "remove .coderail/SCOPE.md"
+    assert_file_empty "$run_stderr"
+    assert_path_missing "$helper_file"
+    assert_file_content "$unrelated_file" "unrelated"
+}
+
+assert_clean_warns_for_untracked_helpers() {
+    work_dir=$(create_git_project untracked-helper)
+    safe_file=$work_dir/.coderail/SPEC.md
+    unsafe_file=$work_dir/.coderail/SCOPE.md
+
+    printf 'spec\n' > "$safe_file"
+    git -C "$work_dir" add .coderail/SPEC.md
+    printf 'scope\n' > "$unsafe_file"
+
+    run_cr_answer n "$work_dir" clean
+
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "cannot be restored exactly from Git"
+    assert_contains "$run_stderr" "will be permanently deleted"
+    assert_contains "$run_stderr" ".coderail/SCOPE.md"
+    assert_not_contains "$run_stderr" ".coderail/SPEC.md"
+    assert_file "$safe_file"
+    assert_file "$unsafe_file"
+}
+
+assert_clean_warns_for_modified_helpers() {
+    work_dir=$(create_git_project modified-helper)
+    helper_file=$work_dir/.coderail/SCOPE.md
+
+    printf 'staged scope\n' > "$helper_file"
+    git -C "$work_dir" add .coderail/SCOPE.md
+    printf 'unstaged scope\n' >> "$helper_file"
+
+    run_cr "$work_dir" clean
+
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "cannot be restored exactly from Git"
+    assert_contains "$run_stderr" ".coderail/SCOPE.md"
+    assert_file_content "$helper_file" "staged scope
+unstaged scope"
+}
+
+assert_clean_aborts_for_invalid_or_missing_confirmation() {
+    work_dir=$(create_git_project invalid-confirmation)
+    helper_file=$work_dir/.coderail/SCOPE.md
+
+    printf 'scope\n' > "$helper_file"
+
+    run_cr_answer no "$work_dir" clean
+
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "cannot be restored exactly from Git"
+    assert_file "$helper_file"
+
+    run_cr "$work_dir" clean
+
+    assert_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "cannot be restored exactly from Git"
+    assert_file "$helper_file"
+}
+
+assert_clean_removes_unsafe_helpers_after_confirmation() {
+    work_dir=$(create_git_project confirmed-cleanup)
+    safe_file=$work_dir/.coderail/SPEC.md
+    unsafe_file=$work_dir/.coderail/SCOPE.md
+
+    printf 'spec\n' > "$safe_file"
+    git -C "$work_dir" add .coderail/SPEC.md
+    printf 'scope\n' > "$unsafe_file"
+
+    run_cr_answer y "$work_dir" clean
+
+    assert_success
+    assert_stdout_content "remove .coderail/SCOPE.md
+remove .coderail/SPEC.md"
+    assert_path_missing "$safe_file"
+    assert_path_missing "$unsafe_file"
+}
+
+assert_clean_force_removes_unsafe_helpers_without_prompt() {
+    work_dir=$(create_git_project forced-cleanup)
+    safe_file=$work_dir/.coderail/SPEC.md
+    unsafe_file=$work_dir/.coderail/SCOPE.md
+
+    printf 'spec\n' > "$safe_file"
+    git -C "$work_dir" add .coderail/SPEC.md
+    printf 'scope\n' > "$unsafe_file"
+
+    run_cr "$work_dir" clean --force
+
+    assert_success
+    assert_stdout_content "remove .coderail/SCOPE.md
+remove .coderail/SPEC.md"
+    assert_file_empty "$run_stderr"
+    assert_path_missing "$safe_file"
+    assert_path_missing "$unsafe_file"
+}
+
+assert_clean_dry_run_does_not_prompt_for_unsafe_helpers() {
+    work_dir=$(create_git_project dry-run-unsafe-helper)
+    helper_file=$work_dir/.coderail/SCOPE.md
+
+    printf 'scope\n' > "$helper_file"
+
+    run_cr "$work_dir" clean --dry-run --force
+
+    assert_success
+    assert_stdout_content "remove .coderail/SCOPE.md"
+    assert_file_empty "$run_stderr"
+    assert_file "$helper_file"
+}
+
 assert_clean_removes_done_tickets_and_stale_files() {
     work_dir=$(create_project done-readiness)
     closed_dir=$work_dir/.coderail/tickets/closed
@@ -258,7 +411,7 @@ remove .coderail/z.txt"
     assert_file "$work_dir/.coderail/tickets/closed/0001-done-ticket.md"
 }
 
-assert_clean_dry_run_requires_ticket_evidence() {
+assert_clean_dry_run_without_tickets_prints_removal_plan() {
     work_dir=$(create_project dry-run-no-ticket-evidence)
     stale_file=$work_dir/.coderail/notes.md
 
@@ -266,9 +419,9 @@ assert_clean_dry_run_requires_ticket_evidence() {
 
     run_cr "$work_dir" clean --dry-run
 
-    assert_failure
-    assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "error: stale file cleanup requires at least one ticket file"
+    assert_success
+    assert_stdout_content "remove .coderail/notes.md"
+    assert_file_empty "$run_stderr"
     assert_file "$stale_file"
 }
 
@@ -323,7 +476,7 @@ remove .coderail/tickets/closed/0002-duplicate-ticket.md"
     assert_file "$duplicate_file"
 }
 
-assert_clean_requires_ticket_evidence_for_stale_files() {
+assert_clean_without_tickets_requires_git_index() {
     work_dir=$(create_project no-ticket-evidence)
     stale_file=$work_dir/.coderail/notes.md
 
@@ -333,7 +486,7 @@ assert_clean_requires_ticket_evidence_for_stale_files() {
 
     assert_failure
     assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "error: stale file cleanup requires at least one ticket file"
+    assert_contains "$run_stderr" "error: failed to query Git index"
     assert_file "$stale_file"
 }
 
@@ -550,12 +703,19 @@ test "Clean requires coderail directory" assert_missing_coderail_fails
 test "Clean no-op preserves config files" assert_noop_preserves_config_files
 test "Clean ignores empty directories" assert_empty_directories_are_ignored
 test "Clean rejects legacy ticket-clean options" assert_clean_rejects_legacy_options
+test "Clean removes index-backed helpers without prompting" assert_clean_removes_index_backed_helpers_without_prompt
+test "Clean warns for untracked helpers" assert_clean_warns_for_untracked_helpers
+test "Clean warns for modified helpers" assert_clean_warns_for_modified_helpers
+test "Clean aborts for invalid or missing confirmation" assert_clean_aborts_for_invalid_or_missing_confirmation
+test "Clean removes unsafe helpers after confirmation" assert_clean_removes_unsafe_helpers_after_confirmation
+test "Clean force removes unsafe helpers without prompting" assert_clean_force_removes_unsafe_helpers_without_prompt
+test "Clean dry run does not prompt for unsafe helpers" assert_clean_dry_run_does_not_prompt_for_unsafe_helpers
 test "Clean removes done tickets and stale files" assert_clean_removes_done_tickets_and_stale_files
 test "Clean dry run prints full removal plan" assert_clean_dry_run_prints_full_removal_plan
-test "Clean dry run requires ticket evidence" assert_clean_dry_run_requires_ticket_evidence
+test "Clean dry run without tickets prints removal plan" assert_clean_dry_run_without_tickets_prints_removal_plan
 test "Clean actual output matches dry-run plan" assert_clean_actual_matches_dry_run_plan
 test "Clean dry run allows duplicate chain to done" assert_clean_dry_run_allows_duplicate_chain_to_done
-test "Clean requires ticket evidence for stale files" assert_clean_requires_ticket_evidence_for_stale_files
+test "Clean without tickets requires a Git index" assert_clean_without_tickets_requires_git_index
 test "Clean rejects open tickets" assert_clean_rejects_open_tickets
 test "Clean rejects active tickets" assert_clean_rejects_active_tickets
 test "Clean rejects invalid ticket files" assert_clean_rejects_invalid_ticket_files
