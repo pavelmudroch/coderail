@@ -8,7 +8,7 @@ description: Use for guidance when updating base docs (README, CHANGELOG) files.
 Use for `README.md` and `CHANGELOG.md`. Keep docs concise, accurate to repo behavior, and in existing style. Verify commands/files before documenting. Do not invent features, claims, badges, or roadmap.
 
 If not specified otherwise, update docs based on changed files `git diff --name-only HEAD^ HEAD`. If a change is not user-facing, do not document it.
-Especially read the SPEC, REVIEW or RESEARCH markdown files, optionally any closed tickets. Read changed source code only if absolutely needed.
+Especially read the closed tickets, if additional context needed read SPEC, REVIEW or RESEARCH markdown files. Read changed source code only if absolutely needed.
 
 Assume all tests pass is verified at previous step, do not run any tests.
 
