@@ -172,8 +172,14 @@ render_skill_file() {
     source_file=$2
     target_file=$3
     target_tmp=$target_file.tmp.$$
+    target_policy_file=$(dirname "$target_file")/agents/openia.yaml
+    target_policy_tmp=$target_policy_file.tmp.$$
 
-    if ! awk -v tool="$tool" -v source_file="$source_file" '
+    if [ "$tool" = codex ]; then
+        mkdir -p "$(dirname "$target_policy_file")"
+    fi
+
+    if ! awk -v tool="$tool" -v source_file="$source_file" -v policy_file="$target_policy_tmp" '
         function trim(value) {
             gsub(/^[[:space:]]+/, "", value)
             gsub(/[[:space:]]+$/, "", value)
@@ -205,7 +211,9 @@ render_skill_file() {
 
         in_frontmatter && $0 == "---" {
             if (policy == "user-only" && tool == "codex") {
-                print "allow_implicit_invocation: false"
+                print "policy:" > policy_file
+                print "  allow_implicit_invocation: false" > policy_file
+                close(policy_file)
             }
             if (policy == "user-only" && (tool == "copilot" || tool == "claude" || tool == "gemini")) {
                 print "disable-model-invocation: true"
@@ -238,12 +246,16 @@ render_skill_file() {
 
         { print }
     ' "$source_file" > "$target_tmp"; then
-        rm -f "$target_tmp"
+        rm -f "$target_tmp" "$target_policy_tmp"
         install_error "failed to render skill: $source_file"
     fi
 
     translate_file "$tool" "$target_tmp" "$target_file"
     rm -f "$target_tmp"
+
+    if [ -f "$target_policy_tmp" ]; then
+        mv "$target_policy_tmp" "$target_policy_file"
+    fi
 }
 
 frontmatter_value() {

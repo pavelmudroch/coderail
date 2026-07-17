@@ -57,6 +57,15 @@ assert_same_file() {
     cmp "$1" "$2" >/dev/null || fail "$2 differs from $1"
 }
 
+assert_codex_policy_file() {
+    policy_file=$1
+    expected_file=$tmp_dir/expected-codex-policy
+
+    printf 'policy:\n  allow_implicit_invocation: false\n' > "$expected_file"
+    assert_file "$policy_file"
+    assert_same_file "$expected_file" "$policy_file"
+}
+
 assert_translated_file() {
     source_file=$1
     target_file=$2
@@ -66,7 +75,8 @@ assert_translated_file() {
     case "$tool" in
         codex)
             sed \
-                -e 's/^disable-model-invocation: true$/allow_implicit_invocation: false/' \
+                -e '/^disable-model-invocation: \(true\|false\)$/d' \
+                -e '/^allow_implicit_invocation: \(true\|false\)$/d' \
                 -e 's#<skill>\([^<]*\)</skill>#$\1#g' \
                 "$source_file" > "$expected_file"
             ;;
@@ -258,6 +268,12 @@ assert_skill_files() {
     assert_translated_file "$ROOT_DIR/instructions/skills/cr-ticket-pick/SKILL.md" "$skill_file" "$tool"
     assert_translated_file "$ROOT_DIR/instructions/skills/cr-ticket-create/examples/ticket.md" "$support_file" "$tool"
     assert_contains "$skill_file" "$(skill_reference "$tool")"
+
+    if [ "$tool" = codex ]; then
+        policy_file=$tool_dir/skills/cr-ticket-pick/agents/openia.yaml
+
+        assert_codex_policy_file "$policy_file"
+    fi
 }
 
 assert_agent_files() {
@@ -802,13 +818,16 @@ assert_policy_key_normalization() {
     HOME=$home_dir "$case_root/bin/cr" install codex copilot claude gemini >/dev/null
 
     codex_skill=$home_dir/.codex/skills/policy-test/SKILL.md
+    codex_policy=$home_dir/.codex/skills/policy-test/agents/openia.yaml
     copilot_skill=$home_dir/.copilot/skills/policy-test/SKILL.md
     claude_skill=$home_dir/.claude/skills/policy-test/SKILL.md
     gemini_skill=$home_dir/.gemini/skills/policy-test/SKILL.md
 
-    assert_contains "$codex_skill" 'allow_implicit_invocation: false'
     assert_not_contains "$codex_skill" 'disable-model-invocation'
+    assert_not_contains "$codex_skill" 'allow_implicit_invocation'
     assert_contains "$codex_skill" '$cr-ticket-pick'
+    assert_codex_policy_file "$codex_policy"
+    assert_contains "$home_dir/.codex/.coderail-install" 'skills/policy-test/agents/openia.yaml'
 
     assert_not_contains "$copilot_skill" 'allow_implicit_invocation'
     assert_contains "$copilot_skill" 'disable-model-invocation: true'
