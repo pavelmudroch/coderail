@@ -590,6 +590,22 @@ remove_stale_files() {
         target_file=$tool_root/$rel_path
         [ -e "$target_file" ] || continue
         rm -f "$target_file"
+        remove_empty_parent_dirs "$tool_root" "$rel_path"
+    done
+}
+
+remove_empty_parent_dirs() {
+    tool_root=$1
+    rel_path=$2
+    rel_dir=$(dirname "$rel_path")
+
+    while [ "$rel_dir" != "." ]; do
+        rmdir "$tool_root/$rel_dir" 2>/dev/null || return 0
+
+        case "$rel_dir" in
+            */*) rel_dir=${rel_dir%/*} ;;
+            *) rel_dir=. ;;
+        esac
     done
 }
 

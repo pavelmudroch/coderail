@@ -65,7 +65,10 @@ assert_translated_file() {
 
     case "$tool" in
         codex)
-            sed 's#<skill>\([^<]*\)</skill>#$\1#g' "$source_file" > "$expected_file"
+            sed \
+                -e 's/^disable-model-invocation: true$/allow_implicit_invocation: false/' \
+                -e 's#<skill>\([^<]*\)</skill>#$\1#g' \
+                "$source_file" > "$expected_file"
             ;;
         copilot|claude|gemini)
             sed 's#<skill>\([^<]*\)</skill>#/\1#g' "$source_file" > "$expected_file"
@@ -123,8 +126,8 @@ tool_dir_for_tool() {
 
 skill_reference() {
     case "$1" in
-        codex) printf '$ticket-implement\n' ;;
-        copilot|claude|gemini) printf '/ticket-implement\n' ;;
+        codex) printf '$cr-ticket-implement\n' ;;
+        copilot|claude|gemini) printf '/cr-ticket-implement\n' ;;
         *) fail "unknown tool: $1" ;;
     esac
 }
@@ -247,13 +250,13 @@ assert_root_instruction() {
 assert_skill_files() {
     tool_dir=$1
     tool=$2
-    skill_file=$tool_dir/skills/ticket-pick/SKILL.md
-    support_file=$tool_dir/skills/ticket-create/examples/ticket.md
+    skill_file=$tool_dir/skills/cr-ticket-pick/SKILL.md
+    support_file=$tool_dir/skills/cr-ticket-create/examples/ticket.md
 
     assert_file "$skill_file"
     assert_file "$support_file"
-    assert_translated_file "$ROOT_DIR/instructions/skills/ticket-pick/SKILL.md" "$skill_file" "$tool"
-    assert_translated_file "$ROOT_DIR/instructions/skills/ticket-create/examples/ticket.md" "$support_file" "$tool"
+    assert_translated_file "$ROOT_DIR/instructions/skills/cr-ticket-pick/SKILL.md" "$skill_file" "$tool"
+    assert_translated_file "$ROOT_DIR/instructions/skills/cr-ticket-create/examples/ticket.md" "$support_file" "$tool"
     assert_contains "$skill_file" "$(skill_reference "$tool")"
 }
 
@@ -348,7 +351,7 @@ assert_clean_install() {
 managed_file_for_tool_dir() {
     tool_dir=$1
 
-    printf '%s/skills/ticket-pick/SKILL.md\n' "$tool_dir"
+    printf '%s/skills/cr-ticket-pick/SKILL.md\n' "$tool_dir"
 }
 
 modify_managed_file() {
@@ -386,7 +389,7 @@ assert_force_overwrites_modified_managed_file() {
 
     assert_install_succeeds "$home_dir" --force "$tool"
 
-    assert_translated_file "$ROOT_DIR/instructions/skills/ticket-pick/SKILL.md" "$managed_file" "$tool"
+    assert_translated_file "$ROOT_DIR/instructions/skills/cr-ticket-pick/SKILL.md" "$managed_file" "$tool"
     assert_not_contains "$managed_file" "modified managed file for $tool"
     assert_marker_checksums "$tool_dir"
 }
@@ -404,7 +407,7 @@ assert_missing_managed_file_is_restored() {
 
     assert_install_succeeds "$home_dir" "$tool"
 
-    assert_translated_file "$ROOT_DIR/instructions/skills/ticket-pick/SKILL.md" "$managed_file" "$tool"
+    assert_translated_file "$ROOT_DIR/instructions/skills/cr-ticket-pick/SKILL.md" "$managed_file" "$tool"
     assert_marker_checksums "$tool_dir"
 }
 
@@ -424,6 +427,7 @@ assert_stale_managed_file_is_removed() {
     assert_install_succeeds "$home_dir" "$tool"
 
     assert_path_missing "$stale_file"
+    assert_path_missing "$tool_dir/skills/no-longer"
     assert_not_contains "$tool_dir/.coderail-install" "$stale_path"
     assert_marker_checksums "$tool_dir"
 }
@@ -768,7 +772,7 @@ name: policy-test
 description: Policy test skill.
 disable-model-invocation: true
 ---
-Use <skill>ticket-pick</skill>.
+Use <skill>cr-ticket-pick</skill>.
 EOF
 }
 
@@ -804,19 +808,19 @@ assert_policy_key_normalization() {
 
     assert_contains "$codex_skill" 'allow_implicit_invocation: false'
     assert_not_contains "$codex_skill" 'disable-model-invocation'
-    assert_contains "$codex_skill" '$ticket-pick'
+    assert_contains "$codex_skill" '$cr-ticket-pick'
 
     assert_not_contains "$copilot_skill" 'allow_implicit_invocation'
     assert_contains "$copilot_skill" 'disable-model-invocation: true'
-    assert_contains "$copilot_skill" '/ticket-pick'
+    assert_contains "$copilot_skill" '/cr-ticket-pick'
 
     assert_contains "$claude_skill" 'disable-model-invocation: true'
     assert_not_contains "$claude_skill" 'allow_implicit_invocation'
-    assert_contains "$claude_skill" '/ticket-pick'
+    assert_contains "$claude_skill" '/cr-ticket-pick'
 
     assert_not_contains "$gemini_skill" 'allow_implicit_invocation'
     assert_contains "$gemini_skill" 'disable-model-invocation: true'
-    assert_contains "$gemini_skill" '/ticket-pick'
+    assert_contains "$gemini_skill" '/cr-ticket-pick'
 }
 
 assert_conflicting_policy_fails() {

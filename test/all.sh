@@ -8,7 +8,7 @@ SCRIPT_DIR=$(
     pwd
 )
 
-some_tests_failed=false
+some_tests_failed=0
 TEMP_DIR="${TMPDIR:-/tmp}"
 TEMP_DIR=${TEMP_DIR%/}
 tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-all-test.XXXXXX")
@@ -27,10 +27,10 @@ while IFS= read -r test_file || [ -n "$test_file" ]; do
     echo ""
 
     if [ "$test_status" -ne 0 ]; then
-        some_tests_failed=true
+        some_tests_failed=1
     fi
 done < "$test_files"
 
-if [ "$some_tests_failed" = true ]; then
+if [ "$some_tests_failed" -ne 0 ]; then
     exit 1
 fi

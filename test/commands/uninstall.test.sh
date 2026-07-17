@@ -91,7 +91,7 @@ root_file_for_tool_dir() {
 managed_file_for_tool_dir() {
     tool_dir=$1
 
-    printf '%s/skills/ticket-pick/SKILL.md\n' "$tool_dir"
+    printf '%s/skills/cr-ticket-pick/SKILL.md\n' "$tool_dir"
 }
 
 agent_file_for_tool_dir() {

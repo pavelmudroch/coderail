@@ -257,24 +257,24 @@ set -eu
 prompt=$1
 prompt_kind=
 case "$prompt" in
-    '$ticket-implement "'*'"')
+    '$cr-ticket-implement "'*'"')
         prompt_kind=implementation
-        ticket_reference=${prompt#'$ticket-implement "'}
+        ticket_reference=${prompt#'$cr-ticket-implement "'}
         ticket_reference=${ticket_reference%'"'}
         ;;
-    '/ticket-implement "'*'"')
+    '/cr-ticket-implement "'*'"')
         prompt_kind=implementation
-        ticket_reference=${prompt#'/ticket-implement "'}
+        ticket_reference=${prompt#'/cr-ticket-implement "'}
         ticket_reference=${ticket_reference%'"'}
         ;;
-    '$review-auto "'*'"')
+    '$cr-review-auto "'*'"')
         prompt_kind=review
-        ticket_reference=${prompt#'$review-auto "'}
+        ticket_reference=${prompt#'$cr-review-auto "'}
         ticket_reference=${ticket_reference%'"'}
         ;;
-    '/review-auto "'*'"')
+    '/cr-review-auto "'*'"')
         prompt_kind=review
-        ticket_reference=${prompt#'/review-auto "'}
+        ticket_reference=${prompt#'/cr-review-auto "'}
         ticket_reference=${ticket_reference%'"'}
         ;;
     *)
@@ -822,10 +822,10 @@ assert_loop_invokes_supported_tools_noninteractively() {
     for tool in codex copilot claude gemini; do
         work_dir=$(create_project "command-form-$tool")
         fake_dir=$tmp_dir/fake-command-form-$tool
-        expected_prompt='/ticket-implement ".coderail/tickets/open/0001-command-form.md"'
+        expected_prompt='/cr-ticket-implement ".coderail/tickets/open/0001-command-form.md"'
 
         if [ "$tool" = codex ]; then
-            expected_prompt='$ticket-implement ".coderail/tickets/open/0001-command-form.md"'
+            expected_prompt='$cr-ticket-implement ".coderail/tickets/open/0001-command-form.md"'
         fi
 
         write_fake_agent "$fake_dir"
@@ -851,12 +851,12 @@ assert_loop_auto_reviews_supported_tools() {
     for tool in codex copilot claude gemini; do
         work_dir=$(create_project "auto-review-command-form-$tool")
         fake_dir=$tmp_dir/fake-auto-review-command-form-$tool
-        implementation_prompt='/ticket-implement ".coderail/tickets/open/0001-auto-review-command-form.md"'
-        review_prompt='/review-auto "0001"'
+        implementation_prompt='/cr-ticket-implement ".coderail/tickets/open/0001-auto-review-command-form.md"'
+        review_prompt='/cr-review-auto "0001"'
 
         if [ "$tool" = codex ]; then
-            implementation_prompt='$ticket-implement ".coderail/tickets/open/0001-auto-review-command-form.md"'
-            review_prompt='$review-auto "0001"'
+            implementation_prompt='$cr-ticket-implement ".coderail/tickets/open/0001-auto-review-command-form.md"'
+            review_prompt='$cr-review-auto "0001"'
         fi
 
         write_fake_agent "$fake_dir"
@@ -1034,8 +1034,8 @@ assert_loop_processes_dependent_tickets_sequentially() {
     run_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
     assert_success
-    assert_file_content "$run_fake_agent_log" '$ticket-implement ".coderail/tickets/open/0001-first-ticket.md"
-$ticket-implement ".coderail/tickets/open/0002-second-ticket.md"'
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement ".coderail/tickets/open/0001-first-ticket.md"
+$cr-ticket-implement ".coderail/tickets/open/0002-second-ticket.md"'
     assert_file "$work_dir/.coderail/tickets/closed/0001-first-ticket.md"
     assert_file "$work_dir/.coderail/tickets/closed/0002-second-ticket.md"
 }
@@ -1210,8 +1210,8 @@ assert_loop_reports_ticket_progress() {
     assert_contains "$run_stdout" "[1/1] Ticket Progress"
     assert_contains "$run_stdout" "         file: .coderail/tickets/open/0001-ticket-progress.md"
     assert_contains "$run_stdout" "         inspect: tail -f .coderail/loop/0001-ticket-progress.txt"
-    assert_match_count "$run_stdout" '^         implementing\.\.\. done in [0-9][0-9]:[0-9][0-9]$' 1
-    assert_match_count "$run_stdout" '^         reviewing\.\.\. done in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_match_count "$run_stdout" '^         implementation done in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_match_count "$run_stdout" '^         review done in [0-9][0-9]:[0-9][0-9]$' 1
     assert_match_count "$run_stdout" '^         completed in [0-9][0-9]:[0-9][0-9]$' 1
     assert_not_contains "$run_stdout" "fake agent"
     assert_file_empty "$run_stderr"
@@ -1229,8 +1229,8 @@ assert_loop_reports_implementation_failure_progress() {
         run_loop_with_fake_combined "$work_dir" "$fake_dir" --all codex
 
     assert_failure
-    assert_match_count "$run_output" '^         implementing\.\.\. failed in [0-9][0-9]:[0-9][0-9]$' 1
-    assert_order "$run_output" "implementing... failed in" "error: agent failed for ticket: .coderail/tickets/open/0001-implementation-progress-failure.md"
+    assert_match_count "$run_output" '^         implementation failed in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_order "$run_output" "implementation failed in" "error: agent failed for ticket: .coderail/tickets/open/0001-implementation-progress-failure.md"
     assert_not_contains "$run_output" "completed in"
 }
 
@@ -1246,9 +1246,9 @@ assert_loop_reports_review_failure_progress() {
         run_loop_with_fake_combined "$work_dir" "$fake_dir" --all --auto-review codex
 
     assert_failure
-    assert_match_count "$run_output" '^         implementing\.\.\. done in [0-9][0-9]:[0-9][0-9]$' 1
-    assert_match_count "$run_output" '^         reviewing\.\.\. failed in [0-9][0-9]:[0-9][0-9]$' 1
-    assert_order "$run_output" "reviewing... failed in" "error: agent failed for ticket: 0001"
+    assert_match_count "$run_output" '^         implementation done in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_match_count "$run_output" '^         review failed in [0-9][0-9]:[0-9][0-9]$' 1
+    assert_order "$run_output" "review failed in" "error: agent failed for ticket: 0001"
     assert_not_contains "$run_output" "completed in"
 }
 
@@ -1494,10 +1494,10 @@ assert_loop_reimplements_reopened_ticket_with_max() {
         run_loop_with_fake "$work_dir" "$fake_dir" --max 2 --auto-review codex
 
     assert_success
-    assert_file_content "$run_fake_agent_log" '$ticket-implement ".coderail/tickets/open/0001-reopened-auto-review.md"
-$review-auto "0001"
-$ticket-implement ".coderail/tickets/open/0001-reopened-auto-review.md"
-$review-auto "0001"'
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement ".coderail/tickets/open/0001-reopened-auto-review.md"
+$cr-review-auto "0001"
+$cr-ticket-implement ".coderail/tickets/open/0001-reopened-auto-review.md"
+$cr-review-auto "0001"'
     assert_file "$work_dir/.coderail/tickets/closed/0001-reopened-auto-review.md"
     assert_no_unstaged_or_untracked_changes "$work_dir"
 }

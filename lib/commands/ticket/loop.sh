@@ -193,10 +193,10 @@ invoke_agent() {
 
     case "$invoke_prompt_kind" in
         implementation)
-            prompt_name=ticket-implement
+            prompt_name=cr-ticket-implement
             ;;
         review)
-            prompt_name=review-auto
+            prompt_name=cr-review-auto
             ;;
         *)
             fatal "unknown ticket loop prompt kind: $invoke_prompt_kind"
