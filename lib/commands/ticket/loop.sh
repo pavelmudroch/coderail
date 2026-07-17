@@ -24,22 +24,25 @@ CR=${CODERAIL_BIN_PATH:-$ROOT_DIR/bin/cr}
 usage() {
     cat <<'EOF'
 Usage:
-  cr ticket loop [options] [<tool>]
+  cr ticket loop [options] [<tool>] [-- <tool-args>...]
 
   Loop through open tickets with satisfied dependencies for the current repository.
 
+  ** DANGER!: ** This command runs agent cli tool with extended permissions and network access.
+
 Options:
-  -h, --help            Show this help message and exit
+  -h, --help        Show this help message and exit
   -m <count>, --max <count>
-                        Maximum number of tickets to loop through. Must be a
-                        positive integer.
-                        (default: 5)
-  --all                 Loop through all open tickets with satisfied dependencies.
-  --auto-review         Run an autonomous review after each ticket closes as done.
+                    Maximum number of tickets to loop through. Must be a
+                    positive integer.
+                    (default: 5)
+  --all             Loop through all open tickets with satisfied dependencies.
+  --auto-review     Run an autonomous review after each ticket closes as done.
 
 Arguments:
   <tool>      The agent cli tool to use for tickets. If not specified, the
               default configured will be used.
+  <tool-args> Additional arguments passed directly to the agent cli tool.
 EOF
 }
 
@@ -190,6 +193,7 @@ stage_post_agent_changes() {
 invoke_agent() {
     invoke_ticket=$1
     invoke_prompt_kind=$2
+    shift 2
 
     case "$invoke_prompt_kind" in
         implementation)
@@ -208,19 +212,19 @@ invoke_agent() {
             prompt='$'"$prompt_name"' @"'"$invoke_ticket"'"'
             "$tool" --sandbox workspace-write \
                 -c 'sandbox_workspace_write.network_access=true' \
-                exec "$prompt"
+                exec "$@" "$prompt"
             ;;
         claude)
             prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
-            "$tool" --dangerously-skip-permissions -p "$prompt"
+            "$tool" --dangerously-skip-permissions "$@" -p "$prompt"
             ;;
         gemini)
             prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
-            "$tool" --approval-mode=yolo -p "$prompt"
+            "$tool" --approval-mode=yolo "$@" -p "$prompt"
             ;;
         copilot)
             prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
-            "$tool" --yolo -p "$prompt"
+            "$tool" --yolo "$@" -p "$prompt"
             ;;
     esac
 }
@@ -252,8 +256,9 @@ append_phase_delimiter() {
 invoke_agent_to_transcript() {
     invoke_agent_ticket=$1
     invoke_agent_prompt_kind=$2
+    shift 2
 
-    invoke_agent "$invoke_agent_ticket" "$invoke_agent_prompt_kind" >> "$transcript_file" 2>&1
+    invoke_agent "$invoke_agent_ticket" "$invoke_agent_prompt_kind" "$@" >> "$transcript_file" 2>&1
 }
 
 print_ticket_block() {
@@ -315,6 +320,7 @@ max_set=false
 all_tickets=false
 auto_review=false
 tool=
+has_tool_args=false
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -345,6 +351,7 @@ while [ "$#" -gt 0 ]; do
             ;;
         --)
             shift
+            has_tool_args=true
             break
             ;;
         --*)
@@ -360,10 +367,12 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-while [ "$#" -gt 0 ]; do
-    set_tool "$1"
-    shift
-done
+if [ "$has_tool_args" = false ]; then
+    while [ "$#" -gt 0 ]; do
+        set_tool "$1"
+        shift
+    done
+fi
 
 if [ -z "$tool" ]; then
     load_default_tool
@@ -430,7 +439,7 @@ while :; do
 
     log_info "         implementing..."
     implementation_started_at=$(date +%s)
-    if ! invoke_agent_to_transcript "$next_ticket" implementation; then
+    if ! invoke_agent_to_transcript "$next_ticket" implementation "$@"; then
         implementation_duration=$(elapsed_duration "$implementation_started_at")
         log_info "         implementation failed in $implementation_duration"
         fatal "agent failed for ticket: $next_ticket"
@@ -450,7 +459,7 @@ while :; do
             append_phase_delimiter review
             review_started_at=$(date +%s)
             log_info "         reviewing..."
-            if ! invoke_agent_to_transcript "$next_ticket_id" review; then
+            if ! invoke_agent_to_transcript "$next_ticket_id" review "$@"; then
                 review_duration=$(elapsed_duration "$review_started_at")
                 log_info "         review failed in $review_duration"
                 fatal "agent failed for ticket: $next_ticket_id"

@@ -387,8 +387,8 @@ EOF
 #!/usr/bin/env sh
 set -eu
 
-[ "$#" -eq 6 ] || {
-    echo "fake codex expected 6 arguments" >&2
+[ "$#" -ge 6 ] || {
+    echo "fake codex expected at least 6 arguments" >&2
     exit 64
 }
 [ "$1" = --sandbox ] &&
@@ -400,7 +400,15 @@ set -eu
     exit 65
 }
 
-exec "$(dirname "$0")/fake-agent" "$6"
+if [ -n "${FAKE_CODEX_LOG:-}" ]; then
+    printf '%s\n' "$@" >> "$FAKE_CODEX_LOG"
+fi
+
+for codex_arg do
+    codex_prompt=$codex_arg
+done
+
+exec "$(dirname "$0")/fake-agent" "$codex_prompt"
 EOF
     chmod +x "$fake_dir/codex"
 
@@ -815,6 +823,38 @@ assert_loop_rejects_unexpected_argument() {
     assert_usage_failure
     assert_file_empty "$run_stdout"
     assert_contains "$run_stderr" "unexpected argument: extra"
+}
+
+assert_loop_forwards_tool_args() {
+    work_dir=$(create_project tool-args)
+    fake_dir=$tmp_dir/fake-tool-args
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-tool-args.md" 0001 tool-args "Tool Args" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_CODEX_LOG=$fake_dir/codex.log \
+        run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review codex -- --model "gpt 5" --json
+
+    assert_success
+    assert_file_content "$fake_dir/codex.log" "--sandbox
+workspace-write
+-c
+sandbox_workspace_write.network_access=true
+exec
+--model
+gpt 5
+--json
+\$cr-ticket-implement @\".coderail/tickets/open/0001-tool-args.md\"
+--sandbox
+workspace-write
+-c
+sandbox_workspace_write.network_access=true
+exec
+--model
+gpt 5
+--json
+\$cr-review-auto @\"0001\""
 }
 
 assert_loop_accepts_supported_tools() {
@@ -1820,6 +1860,7 @@ test "Loop rejects removed output dir" assert_loop_rejects_removed_output_dir
 test "Loop rejects removed output dir equals" assert_loop_rejects_removed_output_dir_equals
 test "Loop rejects removed progress only" assert_loop_rejects_removed_progress_only
 test "Loop rejects unexpected argument" assert_loop_rejects_unexpected_argument
+test "Loop forwards tool args" assert_loop_forwards_tool_args
 test "Loop accepts supported tools" assert_loop_accepts_supported_tools
 test "Loop invokes supported tools noninteractively" assert_loop_invokes_supported_tools_noninteractively
 test "Loop auto reviews supported tools" assert_loop_auto_reviews_supported_tools

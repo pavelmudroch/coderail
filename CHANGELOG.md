@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `cr ticket loop` command for iterating through open tickets with satisfied dependencies without user interaction.
+- `cr ticket loop` forwards agent CLI arguments supplied after `--`.
 
 ### Changed
 

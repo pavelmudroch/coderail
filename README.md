@@ -871,7 +871,7 @@ It repeatedly:
 Usage:
 
 ```sh
-cr ticket loop [options] [<tool>]
+cr ticket loop [options] [<tool>] [-- <tool-args>...]
 ```
 
 Supported tools:
@@ -884,6 +884,13 @@ gemini
 ```
 
 If `<tool>` is omitted, Coderail uses `default_tool`.
+
+Use `--` to pass remaining arguments directly to the selected agent CLI for
+each implementation and auto-review handoff:
+
+```sh
+cr ticket loop codex -- --model gpt-5
+```
 
 Options:
 
