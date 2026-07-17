@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.2.0] - 2026-07-17
+
 ### Added
 
 - `cr ticket loop` command for iterating through open tickets with satisfied dependencies without user interaction.
@@ -52,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `default_tool` config support for `cr install` and `cr uninstall` when no tool argument is provided.
 - Directory selectors for `cr test`, expanded recursively to regular files.
 
-[Unreleased]: https://github.com/pavelmudroch/coderail/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/pavelmudroch/coderail/compare/v1.2.0...HEAD
+[v1.2.0]: https://github.com/pavelmudroch/coderail/compare/v1.1.0...v1.2.0
 [v1.1.0]: https://github.com/pavelmudroch/coderail/compare/v1.0.0...v1.1.0
 [v1.0.0]: https://github.com/pavelmudroch/coderail/releases/tag/v1.0.0
