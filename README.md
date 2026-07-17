@@ -17,7 +17,6 @@ Coderail automates repetitive development mechanics while keeping scope, review,
 * [Installation](#installation)
 * [Quick Start](#quick-start)
 * [Workflow](#workflow)
-
   * [Create a branch](#create-a-branch)
   * [Clarify complex work](#clarify-complex-work)
   * [Create and review a specification](#create-and-review-a-specification)
@@ -27,12 +26,10 @@ Coderail automates repetitive development mechanics while keeping scope, review,
   * [Review the complete change](#review-the-complete-change)
   * [Clean and integrate](#clean-and-integrate)
 * [Configuration](#configuration)
-
   * [`~/.coderail/config.ini`](#coderailconfigini)
   * [`.coderail/conf.ini`](#coderailconfini)
   * [`.coderail/test.map`](#coderailtestmap)
 * [Command Reference](#command-reference)
-
   * [`cr init`](#cr-init)
   * [`cr install`](#cr-install)
   * [`cr uninstall`](#cr-uninstall)
@@ -41,7 +38,6 @@ Coderail automates repetitive development mechanics while keeping scope, review,
   * [`cr clean`](#cr-clean)
   * [`cr ticket`](#cr-ticket)
 * [Development](#development)
-
   * [Release Helper](#release-helper)
 * [Inspirations](#inspirations)
 * [License](#license)
