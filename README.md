@@ -240,7 +240,7 @@ Coderail does not require a particular branch naming convention. Follow the rule
 
 ### Clarify complex work
 
-For a complex or unclear problem, invoke the `scope` skill.
+For a complex or unclear problem, invoke the `cr-scope` skill.
 
 Discuss the problem with the agent until the following are aligned:
 
@@ -264,7 +264,7 @@ Small or straightforward changes can skip this phase.
 
 ### Create and review a specification
 
-Invoke the `to-spec` skill when the selected direction is ready to become an implementation specification.
+Invoke the `cr-to-spec` skill when the selected direction is ready to become an implementation specification.
 
 The skill writes:
 
@@ -284,11 +284,11 @@ The specification can contain:
 
 Review and revise the specification before creating tickets.
 
-For small changes, a short implementation plan can replace the specification. If the plan becomes too large for one ticket, return to `to-spec`.
+For small changes, a short implementation plan can replace the specification. If the plan becomes too large for one ticket, return to `cr-to-spec`.
 
 ### Create and review tickets
 
-Invoke `tickets-from-spec` to split the specification into actionable branch-local tickets.
+Invoke `cr-tickets-from-context` to split the specification into actionable branch-local tickets.
 
 Tickets are stored under:
 
@@ -306,11 +306,9 @@ Review generated tickets before implementation, especially:
 * validation criteria
 * overlap between tickets
 
-For a small change, use `ticket-from-plan` to create one ticket from a short implementation plan.
-
 ### Implement tickets
 
-Invoke `ticket-pick` to select the next open ticket whose dependencies are satisfied.
+Invoke `cr-ticket-pick` to select the next open ticket whose dependencies are satisfied.
 
 The implementation workflow:
 
@@ -323,7 +321,7 @@ The implementation workflow:
 
 Completed implementation changes can be committed to the feature branch at ticket-sized checkpoints.
 
-Use the `review` skill for an uncertain, security-sensitive, compatibility-sensitive, or otherwise risky ticket when the additional review cost is justified.
+Use the `cr-review` skill for an uncertain, security-sensitive, compatibility-sensitive, or otherwise risky ticket when the additional review cost is justified.
 
 Several ready tickets can be processed through an agent CLI with:
 
@@ -337,7 +335,7 @@ The loop is explicitly invoked and bounded by the user. It is intended to remove
 
 ### Update documentation
 
-For user-facing changes, invoke the `docs` skill.
+For user-facing changes, invoke the `cr-docs-guidelines` skill.
 
 It can use the following temporary workflow files as source material:
 
@@ -353,7 +351,7 @@ Documentation changes can be committed separately when appropriate.
 
 After all tickets are complete, run the repository's full validation suite.
 
-Then manually invoke the `review` skill against the complete branch or combined change.
+Then manually invoke the `cr-review` skill against the complete branch or combined change.
 
 The final review should check:
 

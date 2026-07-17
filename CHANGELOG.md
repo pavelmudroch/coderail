@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `cr clean` removal policy when there are no tickets requires user confirmation for non restorable changes before removing stale Coderail workflow files.
+- All skills renamed to `cr-<skill-name>` for compatibility with build in commands to avoid name collisions.
+- Skills `tickets-from-spec` and `ticket-from-plan` merged into `tickets-from-context` skill.
 
 ## [v1.1.0] - 2026-07-15
 
