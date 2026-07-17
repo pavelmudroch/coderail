@@ -257,24 +257,24 @@ set -eu
 prompt=$1
 prompt_kind=
 case "$prompt" in
-    '$cr-ticket-implement "'*'"')
+    '$cr-ticket-implement @"'*'"')
         prompt_kind=implementation
-        ticket_reference=${prompt#'$cr-ticket-implement "'}
+        ticket_reference=${prompt#'$cr-ticket-implement @"'}
         ticket_reference=${ticket_reference%'"'}
         ;;
-    '/cr-ticket-implement "'*'"')
+    '/cr-ticket-implement @"'*'"')
         prompt_kind=implementation
-        ticket_reference=${prompt#'/cr-ticket-implement "'}
+        ticket_reference=${prompt#'/cr-ticket-implement @"'}
         ticket_reference=${ticket_reference%'"'}
         ;;
-    '$cr-review-auto "'*'"')
+    '$cr-review-auto @"'*'"')
         prompt_kind=review
-        ticket_reference=${prompt#'$cr-review-auto "'}
+        ticket_reference=${prompt#'$cr-review-auto @"'}
         ticket_reference=${ticket_reference%'"'}
         ;;
-    '/cr-review-auto "'*'"')
+    '/cr-review-auto @"'*'"')
         prompt_kind=review
-        ticket_reference=${prompt#'/cr-review-auto "'}
+        ticket_reference=${prompt#'/cr-review-auto @"'}
         ticket_reference=${ticket_reference%'"'}
         ;;
     *)
@@ -387,16 +387,20 @@ EOF
 #!/usr/bin/env sh
 set -eu
 
-[ "$#" -eq 2 ] || {
-    echo "fake codex expected 2 arguments" >&2
+[ "$#" -eq 6 ] || {
+    echo "fake codex expected 6 arguments" >&2
     exit 64
 }
-[ "$1" = exec ] || {
-    echo "fake codex expected exec command" >&2
+[ "$1" = --sandbox ] &&
+    [ "$2" = workspace-write ] &&
+    [ "$3" = -c ] &&
+    [ "$4" = sandbox_workspace_write.network_access=true ] &&
+    [ "$5" = exec ] || {
+    echo "fake codex expected workspace-write command" >&2
     exit 65
 }
 
-exec "$(dirname "$0")/fake-agent" "$2"
+exec "$(dirname "$0")/fake-agent" "$6"
 EOF
     chmod +x "$fake_dir/codex"
 
@@ -405,16 +409,24 @@ EOF
 #!/usr/bin/env sh
 set -eu
 
-[ "$#" -eq 2 ] || {
-    echo "fake prompt agent expected 2 arguments" >&2
+[ "$#" -eq 3 ] || {
+    echo "fake prompt agent expected 3 arguments" >&2
     exit 64
 }
-[ "$1" = -p ] || {
-    echo "fake prompt agent expected -p command" >&2
+
+case "${0##*/}" in
+    claude) permission_flag=--dangerously-skip-permissions ;;
+    gemini) permission_flag=--approval-mode=yolo ;;
+    copilot) permission_flag=--yolo ;;
+    *) exit 65 ;;
+esac
+
+[ "$1" = "$permission_flag" ] && [ "$2" = -p ] || {
+    echo "fake prompt agent expected permission and -p arguments" >&2
     exit 65
 }
 
-exec "$(dirname "$0")/fake-agent" "$2"
+exec "$(dirname "$0")/fake-agent" "$3"
 EOF
         chmod +x "$fake_dir/$fake_tool"
     done
@@ -822,10 +834,10 @@ assert_loop_invokes_supported_tools_noninteractively() {
     for tool in codex copilot claude gemini; do
         work_dir=$(create_project "command-form-$tool")
         fake_dir=$tmp_dir/fake-command-form-$tool
-        expected_prompt='/cr-ticket-implement ".coderail/tickets/open/0001-command-form.md"'
+        expected_prompt='/cr-ticket-implement @".coderail/tickets/open/0001-command-form.md"'
 
         if [ "$tool" = codex ]; then
-            expected_prompt='$cr-ticket-implement ".coderail/tickets/open/0001-command-form.md"'
+            expected_prompt='$cr-ticket-implement @".coderail/tickets/open/0001-command-form.md"'
         fi
 
         write_fake_agent "$fake_dir"
@@ -851,12 +863,12 @@ assert_loop_auto_reviews_supported_tools() {
     for tool in codex copilot claude gemini; do
         work_dir=$(create_project "auto-review-command-form-$tool")
         fake_dir=$tmp_dir/fake-auto-review-command-form-$tool
-        implementation_prompt='/cr-ticket-implement ".coderail/tickets/open/0001-auto-review-command-form.md"'
-        review_prompt='/cr-review-auto "0001"'
+        implementation_prompt='/cr-ticket-implement @".coderail/tickets/open/0001-auto-review-command-form.md"'
+        review_prompt='/cr-review-auto @"0001"'
 
         if [ "$tool" = codex ]; then
-            implementation_prompt='$cr-ticket-implement ".coderail/tickets/open/0001-auto-review-command-form.md"'
-            review_prompt='$cr-review-auto "0001"'
+            implementation_prompt='$cr-ticket-implement @".coderail/tickets/open/0001-auto-review-command-form.md"'
+            review_prompt='$cr-review-auto @"0001"'
         fi
 
         write_fake_agent "$fake_dir"
@@ -1034,8 +1046,8 @@ assert_loop_processes_dependent_tickets_sequentially() {
     run_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
     assert_success
-    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement ".coderail/tickets/open/0001-first-ticket.md"
-$cr-ticket-implement ".coderail/tickets/open/0002-second-ticket.md"'
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-first-ticket.md"
+$cr-ticket-implement @".coderail/tickets/open/0002-second-ticket.md"'
     assert_file "$work_dir/.coderail/tickets/closed/0001-first-ticket.md"
     assert_file "$work_dir/.coderail/tickets/closed/0002-second-ticket.md"
 }
@@ -1494,10 +1506,10 @@ assert_loop_reimplements_reopened_ticket_with_max() {
         run_loop_with_fake "$work_dir" "$fake_dir" --max 2 --auto-review codex
 
     assert_success
-    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement ".coderail/tickets/open/0001-reopened-auto-review.md"
-$cr-review-auto "0001"
-$cr-ticket-implement ".coderail/tickets/open/0001-reopened-auto-review.md"
-$cr-review-auto "0001"'
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-reopened-auto-review.md"
+$cr-review-auto @"0001"
+$cr-ticket-implement @".coderail/tickets/open/0001-reopened-auto-review.md"
+$cr-review-auto @"0001"'
     assert_file "$work_dir/.coderail/tickets/closed/0001-reopened-auto-review.md"
     assert_no_unstaged_or_untracked_changes "$work_dir"
 }

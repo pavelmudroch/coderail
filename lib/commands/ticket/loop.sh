@@ -205,12 +205,22 @@ invoke_agent() {
 
     case "$tool" in
         codex)
-            prompt='$'"$prompt_name"' "'"$invoke_ticket"'"'
-            "$tool" exec "$prompt"
+            prompt='$'"$prompt_name"' @"'"$invoke_ticket"'"'
+            "$tool" --sandbox workspace-write \
+                -c 'sandbox_workspace_write.network_access=true' \
+                exec "$prompt"
             ;;
-        copilot|claude|gemini)
-            prompt='/'"$prompt_name"' "'"$invoke_ticket"'"'
-            "$tool" -p "$prompt"
+        claude)
+            prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
+            "$tool" --dangerously-skip-permissions -p "$prompt"
+            ;;
+        gemini)
+            prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
+            "$tool" --approval-mode=yolo -p "$prompt"
+            ;;
+        copilot)
+            prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
+            "$tool" --yolo -p "$prompt"
             ;;
     esac
 }
