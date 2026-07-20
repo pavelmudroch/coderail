@@ -1,5 +1,5 @@
 ---
-name: tickets-from-context
+name: cr-tickets-from-context
 description: Create implementation tickets from the available spec, plan, or conversation.
 disable-model-invocation: true
 ---
