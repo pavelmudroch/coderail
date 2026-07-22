@@ -2,8 +2,6 @@
 name: cr-typescript
 description: Apply TypeScript conventions and best practices.
 ---
-Use this skill for TypeScript design and implementation.
-
 Check `examples` directory for specific language patterns and best practices.
 
 ## Goals
