@@ -2,10 +2,11 @@
 id: 0001
 slug: add-work-start-workflow
 title: Add work start workflow
-status: open
+status: closed
 created_at: 2026-07-23T13:52:22Z
-updated_at: 2026-07-23T13:52:22Z
+updated_at: 2026-07-23T14:08:29Z
 dependencies: 
+close_reason: done
 ---
 
 # Add work start workflow
@@ -16,10 +17,10 @@ temporary workflow state.
 
 ## Tasks
 
-1. [ ] Add focused tests for `work start` dispatch, validation, and cleanup preservation
-2. [ ] Add `work` command routing and validated work-state helpers
-3. [ ] Implement `cr work start` branch creation and record setup
-4. [ ] Preserve `work.ini` during general cleanup
+1. [x] Add focused tests for `work start` dispatch, validation, and cleanup preservation
+2. [x] Add `work` command routing and validated work-state helpers
+3. [x] Implement `cr work start` branch creation and record setup
+4. [x] Preserve `work.ini` during general cleanup
 
 ## Task details
 

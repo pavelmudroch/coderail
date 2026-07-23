@@ -2,5 +2,8 @@
 [lib/{path:**}/{name:*}.sh]
 test/{path}/{name}.test.sh
 
+[bin/cr]
+test/commands/work.test.sh
+
 [build/release.sh]
 sh test/build/release.test.sh

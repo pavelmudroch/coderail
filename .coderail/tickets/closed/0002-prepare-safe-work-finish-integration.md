@@ -2,10 +2,11 @@
 id: 0002
 slug: prepare-safe-work-finish-integration
 title: Prepare safe work finish integration
-status: open
+status: closed
 created_at: 2026-07-23T13:52:22Z
-updated_at: 2026-07-23T13:52:22Z
+updated_at: 2026-07-23T14:21:50Z
 dependencies: 0001
+close_reason: done
 ---
 
 # Prepare safe work finish integration
@@ -16,10 +17,10 @@ non-Coderail integration changes.
 
 ## Tasks
 
-1. [ ] Add focused tests for finish preconditions and safe squash outcomes
-2. [ ] Validate and checkpoint recorded work before switching branches
-3. [ ] Prepare and clean the squash result on the recorded base branch
-4. [ ] Handle conflicts and no-op integration results safely
+1. [x] Add focused tests for finish preconditions and safe squash outcomes
+2. [x] Validate and checkpoint recorded work before switching branches
+3. [x] Prepare and clean the squash result on the recorded base branch
+4. [x] Handle conflicts and no-op integration results safely
 
 ## Task details
 

@@ -2,10 +2,11 @@
 id: 0003
 slug: add-work-finish-commit-automation
 title: Add work finish commit automation
-status: open
+status: closed
 created_at: 2026-07-23T13:52:22Z
-updated_at: 2026-07-23T13:52:22Z
+updated_at: 2026-07-23T14:34:08Z
 dependencies: 0002
+close_reason: done
 ---
 
 # Add work finish commit automation
@@ -15,9 +16,9 @@ a non-empty cleaned integration result on the base branch.
 
 ## Tasks
 
-1. [ ] Add focused tests for automatic-commit prompts and failure handling
-2. [ ] Implement standard-input confirmation and agent selection
-3. [ ] Invoke and confirm a parsed agent-generated commit message
+1. [x] Add focused tests for automatic-commit prompts and failure handling
+2. [x] Implement standard-input confirmation and agent selection
+3. [x] Invoke and confirm a parsed agent-generated commit message
 
 ## Task details
 
