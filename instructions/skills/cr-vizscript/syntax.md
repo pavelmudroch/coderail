@@ -1,14 +1,14 @@
 ## Types
 
-- **Boolean** | True/False
-- **Integer** | 32-bit signed int
-- **Double** | 64-bit float
-- **String** | Text
-- **Vertex** | 3D point (x, y, z)
-- **Matrix** | 4x4 matrix
-- **Color** | RGBA (0.0-1.0 each)
-- **Array[Type]** | Dynamic array
-- **Structure** | Custom data structure
+- **Boolean** True/False
+- **Integer** 32-bit signed int
+- **Double** 64-bit float
+- **String** Text
+- **Vertex** 3D point (x, y, z)
+- **Matrix** 4x4 matrix
+- **Color** RGBA (0.0-1.0 each)
+- **Array[Type]** Dynamic array
+- **Structure** Custom data structure
 
 ```vb
 Structure User
