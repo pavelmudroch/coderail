@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `cr work start` creates and records a local work branch.
+- `cr work finish` stages a squash integration of recorded work onto its starting branch.
+
+### Changed
+
+- `cr clean` preserves `.coderail/work.ini` work records.
+
 ## [v1.2.0] - 2026-07-17
 
 ### Added

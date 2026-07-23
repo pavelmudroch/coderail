@@ -9,15 +9,20 @@ Analyze the currently staged changes and produce an accurate Conventional Commit
 Use staged changes only:
 
 ```sh
-git diff --cached
+git diff --cached --stat
 ```
 
 You may inspect supporting context when useful:
 
 ```sh
 git status --short
-git diff --cached --stat
 git log -5 --oneline
+```
+
+You may inspect each file changes individually:
+
+```sh
+git diff --cached <file-path>
 ```
 
 Do not stage files, modify source files, amend commits, or push.

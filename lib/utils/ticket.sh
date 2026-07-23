@@ -454,6 +454,136 @@ ticket_closed_is_satisfied() {
     done
 }
 
+ticket_collect_files() {
+    [ "$#" -eq 3 ] || _ticket_error "ticket_collect_files expects 3 arguments" || return 1
+
+    _ticket_collect_project=$1
+    _ticket_collect_output=$2
+    _ticket_collect_tmp_dir=$3
+    _ticket_collect_unsorted=$_ticket_collect_tmp_dir/ticket-files-unsorted
+
+    : > "$_ticket_collect_unsorted"
+
+    for _ticket_collect_state in open active closed; do
+        _ticket_collect_dir=$_ticket_collect_project/.coderail/tickets/$_ticket_collect_state
+
+        [ -d "$_ticket_collect_dir" ] || continue
+
+        for _ticket_collect_file in "$_ticket_collect_dir"/*.md; do
+            [ -f "$_ticket_collect_file" ] || continue
+
+            _ticket_collect_base=$(basename "$_ticket_collect_file")
+            printf '.coderail/tickets/%s/%s\n' \
+                "$_ticket_collect_state" \
+                "$_ticket_collect_base" >> "$_ticket_collect_unsorted"
+        done
+    done
+
+    sort "$_ticket_collect_unsorted" > "$_ticket_collect_output"
+}
+
+ticket_readiness_is_resolved() {
+    [ "$#" -eq 3 ] || _ticket_error "ticket_readiness_is_resolved expects 3 arguments" || return 1
+
+    _ticket_readiness_project=$1
+    _ticket_readiness_path=$2
+    _ticket_readiness_visited=$3
+    _ticket_readiness_file=$_ticket_readiness_project/$_ticket_readiness_path
+
+    if _ticket_line_exists "$_ticket_readiness_visited" "$_ticket_readiness_path"; then
+        _ticket_error "duplicate ticket cycle: $_ticket_readiness_path"
+        return 1
+    fi
+    _ticket_append_unique_line "$_ticket_readiness_visited" "$_ticket_readiness_path"
+
+    _ticket_readiness_status=$(
+        _ticket_frontmatter_value "$_ticket_readiness_file" status
+    ) || _ticket_error "missing ticket field: status" || return 1
+
+    case "$_ticket_readiness_status" in
+        open|active)
+            _ticket_error "$_ticket_readiness_status tickets are not resolved: $_ticket_readiness_path"
+            return 1
+            ;;
+        closed)
+            ;;
+        *)
+            _ticket_error "invalid ticket status: $_ticket_readiness_status"
+            return 1
+            ;;
+    esac
+
+    _ticket_readiness_reason=$(
+        _ticket_frontmatter_value "$_ticket_readiness_file" close_reason
+    ) || _ticket_error "closed tickets must have close_reason" || return 1
+
+    case "$_ticket_readiness_reason" in
+        done)
+            return 0
+            ;;
+        duplicate)
+            _ticket_readiness_duplicate_of=$(
+                _ticket_frontmatter_value "$_ticket_readiness_file" duplicate_of
+            ) || _ticket_error "duplicate tickets must have duplicate_of" || return 1
+            _ticket_readiness_target_path=$(
+                ticket_resolve_reference \
+                    "$_ticket_readiness_project" \
+                    "$_ticket_readiness_duplicate_of"
+            ) || return 1
+            _ticket_readiness_target_file=$_ticket_readiness_project/$_ticket_readiness_target_path
+
+            ticket_validate_file \
+                "$_ticket_readiness_project" \
+                "$_ticket_readiness_target_file" || return 1
+
+            if ! ticket_is_state "$_ticket_readiness_target_file" closed; then
+                _ticket_error "duplicate target is not closed: $_ticket_readiness_target_path"
+                return 1
+            fi
+
+            ticket_readiness_is_resolved \
+                "$_ticket_readiness_project" \
+                "$_ticket_readiness_target_path" \
+                "$_ticket_readiness_visited"
+            ;;
+        *)
+            _ticket_error "closed ticket is not resolved: $_ticket_readiness_path"
+            return 1
+            ;;
+    esac
+}
+
+ticket_validate_all_resolved() {
+    [ "$#" -eq 3 ] || _ticket_error "ticket_validate_all_resolved expects 3 arguments" || return 1
+
+    _ticket_validate_all_project=$1
+    _ticket_validate_all_files=$2
+    _ticket_validate_all_tmp_dir=$3
+
+    [ -s "$_ticket_validate_all_files" ] || return 0
+
+    while IFS= read -r _ticket_validate_all_path ||
+        [ -n "$_ticket_validate_all_path" ]; do
+        [ -n "$_ticket_validate_all_path" ] || continue
+
+        ticket_validate_file \
+            "$_ticket_validate_all_project" \
+            "$_ticket_validate_all_project/$_ticket_validate_all_path" || return 1
+    done < "$_ticket_validate_all_files"
+
+    while IFS= read -r _ticket_validate_all_path ||
+        [ -n "$_ticket_validate_all_path" ]; do
+        [ -n "$_ticket_validate_all_path" ] || continue
+
+        _ticket_validate_all_visited=$(mktemp "$_ticket_validate_all_tmp_dir/readiness.XXXXXX") ||
+            _ticket_error "failed to create ticket readiness state" || return 1
+        ticket_readiness_is_resolved \
+            "$_ticket_validate_all_project" \
+            "$_ticket_validate_all_path" \
+            "$_ticket_validate_all_visited" || return 1
+    done < "$_ticket_validate_all_files"
+}
+
 ticket_move_to_state() {
     [ "$#" -eq 3 ] || _ticket_error "ticket_move_to_state expects 3 arguments" || return 1
 

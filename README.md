@@ -17,24 +17,27 @@ Coderail automates repetitive development mechanics while keeping scope, review,
 * [Installation](#installation)
 * [Quick Start](#quick-start)
 * [Workflow](#workflow)
-  * [Create a branch](#create-a-branch)
+  * [Choose a workflow](#choose-a-workflow)
   * [Clarify complex work](#clarify-complex-work)
   * [Create and review a specification](#create-and-review-a-specification)
   * [Create and review tickets](#create-and-review-tickets)
   * [Implement tickets](#implement-tickets)
   * [Update documentation](#update-documentation)
   * [Review the complete change](#review-the-complete-change)
-  * [Clean and integrate](#clean-and-integrate)
+  * [Manual: clean and integrate](#manual-clean-and-integrate)
+  * [Managed: finish work](#managed-finish-work)
 * [Configuration](#configuration)
   * [`~/.coderail/config.ini`](#coderailconfigini)
   * [`.coderail/conf.ini`](#coderailconfini)
   * [`.coderail/test.map`](#coderailtestmap)
+  * [`.coderail/work.ini`](#coderailworkini)
 * [Command Reference](#command-reference)
   * [`cr init`](#cr-init)
   * [`cr install`](#cr-install)
   * [`cr uninstall`](#cr-uninstall)
   * [`cr upgrade`](#cr-upgrade)
   * [`cr test`](#cr-test)
+  * [`cr work`](#cr-work)
   * [`cr clean`](#cr-clean)
   * [`cr ticket`](#cr-ticket)
 * [Development](#development)
@@ -221,18 +224,36 @@ The complete workflow is useful for complex or uncertain work. Small changes can
 
 For larger work, use fresh agent contexts between scope, specification, ticket creation, and implementation when practical. Repo-local Coderail files carry the agreed state between sessions.
 
-### Create a branch
+### Choose a workflow
 
-Create a branch before making changes.
+Use one branch lifecycle. The scope, ticket, implementation, documentation,
+and review steps below apply to both.
 
-Example naming conventions:
+| Manual workflow | Managed workflow |
+| --- | --- |
+| Create and name the branch with Git. | Start with `cr work start <work-name>`. |
+| Finish with `cr clean`, then use the repository's normal integration process. | Finish with `cr work finish`, which stages a local squash integration. |
+
+For the manual workflow, create the branch with Git:
 
 ```sh
 git checkout -b feat/<feature-name>
 git checkout -b fix/<issue-or-fix-name>
 ```
 
-Coderail does not require a particular branch naming convention. Follow the rules of the repository you are working in.
+Coderail does not require a particular branch naming convention. Follow the
+rules of the repository you are working in.
+
+For the more automated managed workflow, create and record a local work branch:
+
+```sh
+cr work start "Add request timeout handling"
+```
+
+This creates and switches to `coderail/add-request-timeout-handling`, records
+the starting branch in `.coderail/work.ini`, and does not push to a remote.
+Commit the work record before commands that require a clean worktree, such as
+`cr ticket loop`.
 
 ### Clarify complex work
 
@@ -365,9 +386,10 @@ Return to the scope or specification phase only when a finding invalidates an ea
 
 Final review remains manually invoked because its cost and value depend on the size and risk of the change.
 
-### Clean and integrate
+### Manual: clean and integrate
 
-Before integration, remove temporary Coderail workflow files:
+For the manual workflow, remove temporary Coderail workflow files before using
+the repository's normal integration process:
 
 ```sh
 cr clean --dry-run
@@ -407,6 +429,24 @@ Coderail deliberately does not prescribe the repository's integration policy.
 
 Temporary workflow files can be committed on the feature branch when preserving their intermediate history is useful, but they should normally be removed before the completed change is integrated.
 
+### Managed: finish work
+
+For the managed workflow started with `cr work start`, use:
+
+```sh
+cr work finish
+```
+
+It requires the recorded work branch, a clean worktree with no untracked or
+unstaged files, and all tickets resolved. It switches to the recorded base branch,
+stages a squash integration, and removes branch-local Coderail workflow files
+from that integration while preserving the base branch configuration.
+
+This is more automated than the manual lifecycle, but it does not push and
+does not create a commit without confirmation. You can inspect and commit the
+staged integration yourself, or confirm a configured or selected supported
+tool's proposed integration commit message.
+
 ## Configuration
 
 ### `~/.coderail/config.ini`
@@ -423,7 +463,8 @@ Example:
 default_tool = codex
 ```
 
-When no tool argument is provided, `cr install`, `cr uninstall`, and `cr ticket loop` use `default_tool`.
+When no tool argument is provided, `cr install`, `cr uninstall`, `cr ticket loop`,
+and automatic commit-message generation in `cr work finish` use `default_tool`.
 
 ### `.coderail/test.map`
 
@@ -481,6 +522,12 @@ There are no implicit placeholders.
 
 `{path}`, `{name}`, `{ext}`, and `{dir}` expand only when the matching section explicitly defines those captures. Other brace text remains literal.
 
+### `.coderail/work.ini`
+
+`cr work start` creates this branch-local record with the base branch, work
+branch, and work name. `cr work finish` uses it to stage the squash integration.
+`cr clean` preserves the record; `cr work finish` omits it from the integration.
+
 ## Command Reference
 
 `cr` runs repo-local workflow commands from the current directory or a directory selected with `--cwd`.
@@ -503,7 +550,8 @@ Global options:
 
 `--quiet` does not suppress command result output such as created ticket paths or `cr test` result lines.
 
-`--cwd` applies to repo-local commands such as `init`, `ticket`, `test`, and `clean`.
+`--cwd` applies to repo-local commands such as `init`, `work`, `ticket`, `test`,
+and `clean`.
 
 For installation-root commands such as `upgrade`, `install`, and `uninstall`, it is accepted and ignored.
 
@@ -532,6 +580,7 @@ upgrade
 install
 uninstall
 init
+work
 clean
 ticket
 test
@@ -760,6 +809,7 @@ It preserves:
 ```txt
 .coderail/conf.ini
 .coderail/test.map
+.coderail/work.ini
 ```
 
 If those are the only files and the remaining directories are empty, cleanup succeeds as a no-op. When ticket files exist, cleanup validates every ticket and removes workflow files only when every ticket is satisfied: closed as `done`, or closed as `duplicate` with a chain ending at `done`. It removes files, including ticket files, but leaves empty directories.
@@ -781,6 +831,29 @@ cr clean --dry-run
 cr clean
 cr clean --force
 ```
+
+### `cr work`
+
+Manage a local work branch created from the current branch.
+
+Usage:
+
+```sh
+cr work <command>
+```
+
+Subcommands:
+
+```txt
+start <work-name>  Create and switch to coderail/<slug>, then write .coderail/work.ini
+finish             Stage a squash integration of recorded work onto its base branch
+```
+
+`cr work start` requires a Git repository, `.coderail`, and a clean worktree.
+It never pushes the new branch. `cr work finish` requires all tickets resolved
+and no untracked or unstaged files; when it produces integration changes, it
+leaves them staged on the base branch and can optionally create their commit
+through a supported tool.
 
 ### `cr ticket`
 

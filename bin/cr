@@ -52,6 +52,7 @@ Commands:
   uninstall     Uninstall instructions for specific agent-based tool
   init          Initialize a new project in the working directory
   clean         Clean stale Coderail workflow files
+  work          Manage branch-local work
   ticket        Ticket management for the project in the working directory
   test          Run defined checks for the project in the working directory
 EOF
@@ -144,7 +145,7 @@ while [ "$#" -gt 0 ]; do
             run_global_command "$command" "$@"
             exit 0
             ;;
-        init|clean|ticket|test)
+        init|clean|work|ticket|test)
             command=$1
             shift
             run_command "$command" "$@"

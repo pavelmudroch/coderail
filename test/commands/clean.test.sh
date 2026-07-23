@@ -197,6 +197,7 @@ assert_missing_coderail_fails() {
 
 assert_noop_preserves_config_files() {
     work_dir=$(create_project noop)
+    printf 'base_branch=main\nwork_branch=coderail/add-feature\nwork_name=Add feature\n' > "$work_dir/.coderail/work.ini"
 
     run_cr "$work_dir" clean
 
@@ -206,6 +207,35 @@ assert_noop_preserves_config_files() {
     assert_file_content "$work_dir/.coderail/conf.ini" "user conf"
     assert_file_content "$work_dir/.coderail/test.map" "[default]
 true"
+    assert_file_content "$work_dir/.coderail/work.ini" "base_branch=main
+work_branch=coderail/add-feature
+work_name=Add feature"
+}
+
+assert_clean_preserves_work_record() {
+    work_dir=$(create_git_project work-record)
+    stale_file=$work_dir/.coderail/SCOPE.md
+    work_file=$work_dir/.coderail/work.ini
+
+    printf 'scope\n' > "$stale_file"
+    git -C "$work_dir" add .coderail/SCOPE.md
+    printf 'base_branch=main\nwork_branch=coderail/add-feature\nwork_name=Add feature\n' > "$work_file"
+
+    run_cr "$work_dir" clean --dry-run
+    assert_success
+    assert_stdout_content 'remove .coderail/SCOPE.md'
+    assert_file "$stale_file"
+    assert_file_content "$work_file" "base_branch=main
+work_branch=coderail/add-feature
+work_name=Add feature"
+
+    run_cr "$work_dir" clean
+    assert_success
+    assert_stdout_content 'remove .coderail/SCOPE.md'
+    assert_path_missing "$stale_file"
+    assert_file_content "$work_file" "base_branch=main
+work_branch=coderail/add-feature
+work_name=Add feature"
 }
 
 assert_empty_directories_are_ignored() {
@@ -701,6 +731,7 @@ test "Top-level help lists clean" assert_help_lists_clean
 test "Clean help documents dry-run" assert_clean_help_documents_dry_run
 test "Clean requires coderail directory" assert_missing_coderail_fails
 test "Clean no-op preserves config files" assert_noop_preserves_config_files
+test "Clean preserves work record" assert_clean_preserves_work_record
 test "Clean ignores empty directories" assert_empty_directories_are_ignored
 test "Clean rejects legacy ticket-clean options" assert_clean_rejects_legacy_options
 test "Clean removes index-backed helpers without prompting" assert_clean_removes_index_backed_helpers_without_prompt
