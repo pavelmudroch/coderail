@@ -176,7 +176,7 @@ collect_managed_paths() {
     git ls-tree -r --name-only "$managed_ref" -- .coderail |
         while IFS= read -r managed_path || [ -n "$managed_path" ]; do
             case "$managed_path" in
-                .coderail/conf.ini|.coderail/test.map)
+                .coderail/conf.ini|.coderail/test.map|*/.gitignore|*/.gitkeep)
                     ;;
                 .coderail/*)
                     printf '%s\n' "$managed_path"

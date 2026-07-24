@@ -114,6 +114,8 @@ git switch --quiet -c "$work_branch" ||
 find .coderail -type f \
     ! -path .coderail/conf.ini \
     ! -path .coderail/test.map \
+    ! -name .gitignore \
+    ! -name .gitkeep \
     -delete || fatal "failed to remove inherited workflow files"
 
 printf 'base_branch=%s\nwork_branch=%s\nwork_name=%s\n' \

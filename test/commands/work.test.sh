@@ -428,6 +428,8 @@ assert_start_creates_work_record_and_removes_inherited_workflow() {
     mkdir -p "$work_dir/.coderail/notes"
     printf 'scope\n' > "$work_dir/.coderail/SCOPE.md"
     printf 'note\n' > "$work_dir/.coderail/notes/plan.md"
+    printf 'protected ignore\n' > "$work_dir/.coderail/.gitignore"
+    printf 'protected keep\n' > "$work_dir/.coderail/.gitkeep"
     commit_all "$work_dir" 'Add inherited workflow'
 
     run_cr "$work_dir" work start 'Add Feature!'
@@ -443,6 +445,8 @@ work_name=Add Feature!"
     assert_no_staged_changes "$work_dir"
     assert_path_missing "$work_dir/.coderail/SCOPE.md"
     assert_path_missing "$work_dir/.coderail/notes/plan.md"
+    assert_file_content "$work_dir/.coderail/.gitignore" 'protected ignore'
+    assert_file_content "$work_dir/.coderail/.gitkeep" 'protected keep'
     assert_file_content "$work_dir/.coderail/conf.ini" 'repo config'
     assert_file_content "$work_dir/.coderail/test.map" '[default]
 true'
@@ -667,6 +671,8 @@ assert_finish_restores_managed_files_and_permanent_config() {
     start_recorded_work "$work_dir"
     printf 'work edit\n' > "$work_dir/.coderail/notes/edit.md"
     printf 'work child\n' > "$work_dir/.coderail/child.md"
+    printf 'protected ignore\n' > "$work_dir/.coderail/.gitignore"
+    printf 'protected keep\n' > "$work_dir/.coderail/.gitkeep"
     printf 'updated config\n' > "$work_dir/.coderail/conf.ini"
     printf 'updated map\n' > "$work_dir/.coderail/test.map"
     printf 'feature\n' > "$work_dir/feature.txt"
@@ -681,6 +687,8 @@ assert_finish_restores_managed_files_and_permanent_config() {
     assert_file_content "$work_dir/.coderail/delete.md" 'base delete'
     assert_path_missing "$work_dir/.coderail/child.md"
     assert_staged_file_content "$work_dir" feature.txt 'feature'
+    assert_staged_file_content "$work_dir" .coderail/.gitignore 'protected ignore'
+    assert_staged_file_content "$work_dir" .coderail/.gitkeep 'protected keep'
     assert_staged_file_content "$work_dir" .coderail/conf.ini 'updated config'
     assert_staged_file_content "$work_dir" .coderail/test.map 'updated map'
 }
