@@ -4,7 +4,7 @@ description: Convert an approved scope into a technical specification.
 disable-model-invocation: true
 ---
 
-This skill takes the current conversation context and codebase understanding and produces an implementation spec. Do not interview the user by default. Synthesize what is already known. If important assumptions remain, record them clearly in the spec instead of blocking progress.
+This skill takes the current conversation context, .coderail/SPEC.md, or .coderail/IDEA.md, and codebase understanding and produces an implementation spec. Do not interview the user by default. Synthesize what is already known. If important assumptions remain, record them clearly in the spec instead of blocking progress.
 
 ## Process
 

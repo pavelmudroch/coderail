@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- New skill `cr-forge` for shaping the idea before specification, ment to replace `cr-scope` skill.
 - `cr work start` creates and records a local work branch.
 - `cr work finish` stages a squash integration of recorded work onto its starting branch.
 
