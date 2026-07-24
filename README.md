@@ -6,7 +6,7 @@ Coderail is a lightweight, repo-local CLI and skill set for coordinating coding 
 
 It helps different coding tools follow the same project workflow without requiring every agent to know each repository convention, validation command, test runner, formatter, linter, or ticket format.
 
-Coderail automates repetitive development mechanics while keeping scope, review, and integration decisions under human control.
+Coderail automates repetitive development mechanics while keeping direction, review, and integration decisions under human control.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ Coderail automates repetitive development mechanics while keeping scope, review,
 * [Quick Start](#quick-start)
 * [Workflow](#workflow)
   * [Choose a workflow](#choose-a-workflow)
-  * [Clarify complex work](#clarify-complex-work)
+  * [Forge complex ideas](#forge-complex-ideas)
   * [Create and review a specification](#create-and-review-a-specification)
   * [Create and review tickets](#create-and-review-tickets)
   * [Implement tickets](#implement-tickets)
@@ -69,7 +69,7 @@ Coderail provides:
 
 * a lightweight POSIX shell CLI
 * reusable skills for agent-guided engineering
-* repo-local scope, specification, review, and ticket files
+* repo-local idea, specification, review, and ticket files
 * branch-local ticket lifecycle and dependency management
 * repository-specific validation command routing
 * consistent behavior across supported coding tools
@@ -79,7 +79,7 @@ Coderail provides:
 For larger changes, the included skills guide work through:
 
 ```txt
-scope
+idea forging
 → specification
 → tickets
 → implementation
@@ -220,13 +220,17 @@ cr clean
 
 Coderail's recommended workflow is branch-based.
 
-The complete workflow is useful for complex or uncertain work. Small changes can skip scope, specification, or additional review when the intended change is already clear.
+The complete workflow is useful for complex or uncertain work. Small changes can
+skip idea forging, specification, or additional review when the intended change
+is already clear.
 
-For larger work, use fresh agent contexts between scope, specification, ticket creation, and implementation when practical. Repo-local Coderail files carry the agreed state between sessions.
+For larger work, use fresh agent contexts between idea forging, specification,
+ticket creation, and implementation when practical. Repo-local Coderail files
+carry the agreed state between sessions.
 
 ### Choose a workflow
 
-Use one branch lifecycle. The scope, ticket, implementation, documentation,
+Use one branch lifecycle. The idea-forging, ticket, implementation, documentation,
 and review steps below apply to both.
 
 | Manual workflow | Managed workflow |
@@ -255,13 +259,15 @@ the starting branch in `.coderail/work.ini`, and does not push to a remote.
 Commit the work record before commands that require a clean worktree, such as
 `cr ticket loop`.
 
-### Clarify complex work
+### Forge complex ideas
 
-For a complex or unclear problem, invoke the `cr-scope` skill.
+For a complex or unclear problem, invoke the `cr-forge` skill to turn a rough
+idea into a clear, defensible direction.
 
 Discuss the problem with the agent until the following are aligned:
 
-* intended outcome
+* problem and motivation
+* desired outcome
 * boundaries
 * constraints
 * trade-offs
@@ -269,19 +275,22 @@ Discuss the problem with the agent until the following are aligned:
 * explicitly rejected alternatives
 * unresolved questions
 
-The skill maintains the current direction in:
+The skill maintains the current idea in:
 
 ```txt
-.coderail/SCOPE.md
+.coderail/IDEA.md
 ```
 
-Review this file before continuing. The scope phase is complete when it accurately captures the agreed direction without prematurely defining implementation details.
+Review this file before continuing. The forge challenges assumptions and
+alternatives but does not research the codebase, design the implementation, or
+create tickets. It is ready for specification when it captures the agreed
+direction without prematurely defining implementation details.
 
-Small or straightforward changes can skip this phase.
+Small or straightforward changes can skip idea forging.
 
 ### Create and review a specification
 
-Invoke the `cr-to-spec` skill when the selected direction is ready to become an implementation specification.
+Invoke the `cr-spec` skill when the selected direction is ready to become an implementation specification.
 
 The skill writes:
 
@@ -301,7 +310,7 @@ The specification can contain:
 
 Review and revise the specification before creating tickets.
 
-For small changes, a short implementation plan can replace the specification. If the plan becomes too large for one ticket, return to `cr-to-spec`.
+For small changes, a short implementation plan can replace the specification. If the plan becomes too large for one ticket, return to `cr-spec`.
 
 ### Create and review tickets
 
@@ -356,7 +365,7 @@ For user-facing changes, invoke the `cr-docs-guidelines` skill.
 
 It can use the following temporary workflow files as source material:
 
-* scope
+* idea
 * specification
 * tickets
 * implementation summaries
@@ -382,7 +391,7 @@ The final review should check:
 
 Resolve ordinary findings within the existing implementation or create follow-up tickets when useful.
 
-Return to the scope or specification phase only when a finding invalidates an earlier decision or materially changes the intended behavior.
+Return to idea forging or the specification phase only when a finding invalidates an earlier decision or materially changes the intended behavior.
 
 Final review remains manually invoked because its cost and value depend on the size and risk of the change.
 
@@ -406,7 +415,7 @@ cr clean
 It removes temporary branch-scoped workflow files such as:
 
 ```txt
-.coderail/SCOPE.md
+.coderail/IDEA.md
 .coderail/SPEC.md
 .coderail/REVIEW.md
 .coderail/tickets/closed/0001-example.md

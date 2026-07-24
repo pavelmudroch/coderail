@@ -1,5 +1,5 @@
 ---
-name: cr-to-spec
+name: cr-spec
 description: Convert an approved scope into a technical specification.
 disable-model-invocation: true
 ---

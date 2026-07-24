@@ -1,6 +1,7 @@
 ---
 name: cr-ticket-create
 description: Create one clear, actionable ticket.
+disable-model-invocation: true
 ---
 Ticket is vertical slice through multiple layers of the system, that delivers a specific value or feature.
 
