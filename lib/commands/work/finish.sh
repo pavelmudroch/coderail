@@ -106,23 +106,56 @@ select_commit_tool() {
 invoke_commit_agent() {
     case "$selected_tool" in
         codex)
-            "$selected_tool" --sandbox workspace-write \
+            exec "$selected_tool" --sandbox workspace-write \
                 -c 'sandbox_workspace_write.network_access=true' \
                 exec '$cr-commit'
             ;;
         claude)
-            "$selected_tool" --dangerously-skip-permissions -p '/cr-commit'
+            exec "$selected_tool" --dangerously-skip-permissions -p '/cr-commit'
             ;;
         gemini)
-            "$selected_tool" --approval-mode=yolo -p '/cr-commit'
+            exec "$selected_tool" --approval-mode=yolo -p '/cr-commit'
             ;;
         copilot)
-            "$selected_tool" --yolo -p '/cr-commit'
+            exec "$selected_tool" --yolo -p '/cr-commit'
             ;;
         *)
             automatic_commit_failure "unsupported tool: $selected_tool"
             ;;
     esac
+}
+
+show_commit_generation() {
+    dot_count=0
+
+    while :; do
+        printf '\rGenerating commit%.*s\033[K' "$dot_count" '.....'
+        sleep 1
+        dot_count=$(((dot_count + 1) % 6))
+    done
+}
+
+stop_commit_generation() {
+    if [ -n "${commit_spinner_pid:-}" ]; then
+        kill "$commit_spinner_pid" 2>/dev/null || :
+        wait "$commit_spinner_pid" 2>/dev/null || :
+        commit_spinner_pid=
+        printf '\r\033[K'
+    fi
+}
+
+stop_commit_agent() {
+    if [ -n "${commit_agent_pid:-}" ]; then
+        kill -INT "$commit_agent_pid" 2>/dev/null || :
+        wait "$commit_agent_pid" 2>/dev/null || :
+        commit_agent_pid=
+    fi
+}
+
+abort() {
+    stop_commit_generation
+    stop_commit_agent
+    exit "$1"
 }
 
 parse_commit_message() {
@@ -288,7 +321,10 @@ tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-work-finish.XXXXXX") ||
 cleanup() {
     rm -rf "$tmp_dir"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'abort 129' HUP
+trap 'abort 130' INT
+trap 'abort 143' TERM
 
 ticket_files=$tmp_dir/ticket-files
 work_managed_paths=$tmp_dir/work-managed-paths
@@ -392,7 +428,25 @@ if ! select_commit_tool; then
     exit 0
 fi
 
-if ! invoke_commit_agent > "$agent_output" 2>&1; then
+commit_agent_pid=
+commit_spinner_pid=
+
+invoke_commit_agent > "$agent_output" 2>&1 &
+commit_agent_pid=$!
+
+if [ -t 1 ]; then
+    show_commit_generation &
+    commit_spinner_pid=$!
+fi
+
+if wait "$commit_agent_pid"; then
+    commit_agent_pid=
+    stop_commit_generation
+else
+    commit_agent_status=$?
+    commit_agent_pid=
+    stop_commit_generation
+    [ "$commit_agent_status" -eq 130 ] && exit 130
     automatic_commit_failure "failed to generate commit message"
 fi
 
