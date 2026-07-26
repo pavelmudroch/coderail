@@ -36,7 +36,25 @@ If provided path is directory, this will run tests for all files recursively in 
 
 To see full failed test output run `cr --verbose test <paths ...>` or `cr --verbose test --changed`.
 
-### 4. Summarize
+### 4. Discover
+
+Before closing the ticket, compare the implementation with the current specification.
+
+If implementation revealed specification drift:
+
+- update `.coderail/DISCOVERY.md` (create if missing),
+- preserve discoveries from other tickets,
+- replace previous unresolved discoveries from this ticket,
+- record:
+  - source ticket,
+  - affected spec section (if known),
+  - finding,
+  - supporting evidence,
+  - consequence.
+
+Record only specification drift. Do not update the specification or tickets, and do not record implementation defects, incomplete work, or failed tests.
+
+### 5. Summarize
 
 Summarize the result and verification performed.
 Mention remaining risks or unverified areas.
