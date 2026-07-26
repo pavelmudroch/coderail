@@ -75,8 +75,10 @@ assert_translated_file() {
     case "$tool" in
         codex)
             sed \
-                -e '/^disable-model-invocation: \(true\|false\)$/d' \
-                -e '/^allow_implicit_invocation: \(true\|false\)$/d' \
+                -e '/^disable-model-invocation: true$/d' \
+                -e '/^disable-model-invocation: false$/d' \
+                -e '/^allow_implicit_invocation: true$/d' \
+                -e '/^allow_implicit_invocation: false$/d' \
                 -e 's#<skill>\([^<]*\)</skill>#$\1#g' \
                 "$source_file" > "$expected_file"
             ;;

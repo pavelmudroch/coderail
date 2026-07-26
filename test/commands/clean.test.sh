@@ -2,6 +2,8 @@
 
 set -eu
 
+export LC_ALL=C
+
 SCRIPT_DIR=$(
     CDPATH= cd -- "$(dirname "$0")"
     pwd
