@@ -43,6 +43,9 @@ Before closing the ticket, compare the implementation with the current specifica
 If implementation revealed specification drift:
 
 - update `.coderail/DISCOVERY.md` (create if missing),
+- preserve unrelated fields in its first frontmatter block,
+- set exactly one `resolved: false` field in that first frontmatter block whenever
+  creating, adding, or replacing a discovery,
 - preserve discoveries from other tickets,
 - replace previous unresolved discoveries from this ticket,
 - record:
@@ -53,6 +56,18 @@ If implementation revealed specification drift:
   - consequence.
 
 Record only specification drift. Do not update the specification or tickets, and do not record implementation defects, incomplete work, or failed tests.
+
+Use the strict first-frontmatter form for a new discovery document:
+
+```yaml
+---
+resolved: false
+---
+```
+
+Legacy discovery documents without a `resolved` marker remain valid input; add
+the marker when this ticket writes a discovery. Do not remove the discovery
+document during implementation.
 
 ### 5. Summarize
 

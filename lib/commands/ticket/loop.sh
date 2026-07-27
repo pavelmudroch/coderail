@@ -36,6 +36,10 @@ Options:
                     positive integer.
                     (default: 5)
   --all             Loop through all open tickets with satisfied dependencies.
+  --drift-check <cadence>
+                    Reconcile discovery drift: never, each, end, or a
+                    positive integer.
+                    (default: each)
   --auto-review     Run an autonomous review after each ticket closes as done.
   --no-auto-review  Do not run autonomous reviews after tickets close as done.
 
@@ -202,6 +206,9 @@ invoke_agent() {
         review)
             prompt_name=cr-review-auto
             ;;
+        drift)
+            prompt_name=cr-drift
+            ;;
         *)
             fatal "unknown ticket loop prompt kind: $invoke_prompt_kind"
             ;;
@@ -209,21 +216,37 @@ invoke_agent() {
 
     case "$tool" in
         codex)
-            prompt='$'"$prompt_name"' @"'"$invoke_ticket"'"'
+            if [ "$invoke_prompt_kind" = drift ]; then
+                prompt='$'"$prompt_name"
+            else
+                prompt='$'"$prompt_name"' @"'"$invoke_ticket"'"'
+            fi
             "$tool" --sandbox workspace-write \
                 -c 'sandbox_workspace_write.network_access=true' \
                 exec "$@" "$prompt"
             ;;
         claude)
-            prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
+            if [ "$invoke_prompt_kind" = drift ]; then
+                prompt='/'"$prompt_name"
+            else
+                prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
+            fi
             "$tool" --dangerously-skip-permissions "$@" -p "$prompt"
             ;;
         gemini)
-            prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
+            if [ "$invoke_prompt_kind" = drift ]; then
+                prompt='/'"$prompt_name"
+            else
+                prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
+            fi
             "$tool" --approval-mode=yolo "$@" -p "$prompt"
             ;;
         copilot)
-            prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
+            if [ "$invoke_prompt_kind" = drift ]; then
+                prompt='/'"$prompt_name"
+            else
+                prompt='/'"$prompt_name"' @"'"$invoke_ticket"'"'
+            fi
             "$tool" --yolo "$@" -p "$prompt"
             ;;
     esac
@@ -231,19 +254,76 @@ invoke_agent() {
 
 prepare_transcript() {
     prepare_transcript_ticket=$1
+    prepare_transcript_stage_ignore=${2:-true}
     prepare_transcript_base=${prepare_transcript_ticket##*/}
     transcript_file=.coderail/loop/${prepare_transcript_base%.md}.txt
 
     transcript_ignore_created=$(loop_setup "$project_dir") ||
         fatal "failed to set up ticket loop transcript directory"
 
-    if [ "$transcript_ignore_created" = true ]; then
+    loop_verify_ignore_policy "$project_dir" ||
+        fatal "ticket loop ignore policy is invalid: .coderail/loop/.gitignore"
+
+    if [ "$transcript_ignore_created" = true ] &&
+        [ "$prepare_transcript_stage_ignore" = true ]
+    then
         git add -f -- .coderail/loop/.gitignore ||
             fatal "failed to stage ticket loop transcript ignore file"
     fi
 
     git check-ignore -q -- "$transcript_file" ||
         fatal "ticket loop transcript is not ignored: $transcript_file"
+}
+
+run_drift_check() {
+    discovery_file=.coderail/DISCOVERY.md
+
+    if [ ! -e "$discovery_file" ] && [ ! -L "$discovery_file" ]; then
+        return 0
+    fi
+
+    prepare_transcript drift false
+    append_phase_delimiter drift
+
+    log_notice "ticket loop reconciling discovery drift"
+    if ! invoke_agent_to_transcript "" drift "$@"; then
+        fatal "drift reconciliation agent failed"
+    fi
+
+    if ! discovery_state=$(loop_discovery_state "$discovery_file"); then
+        fatal "discovery resolution contract is invalid"
+    fi
+
+    case "$discovery_state" in
+        resolved)
+            rm -- "$discovery_file" ||
+                fatal "failed to remove resolved discovery document"
+            stage_post_agent_changes
+            ;;
+        unresolved)
+            stage_post_agent_changes
+            fatal "discovery reconciliation requires user input"
+            ;;
+        *)
+            fatal "unknown discovery resolution state: $discovery_state"
+            ;;
+    esac
+}
+
+run_exit_drift_check() {
+    case "$drift_check" in
+        end)
+            run_drift_check "$@"
+            ;;
+        *[!0123456789]*|'')
+            ;;
+        *)
+            if [ "$drift_count" -gt 0 ]; then
+                run_drift_check "$@"
+                drift_count=0
+            fi
+            ;;
+    esac
 }
 
 append_phase_delimiter() {
@@ -302,6 +382,21 @@ set_auto_review() {
     auto_review_set=true
 }
 
+set_drift_check() {
+    [ "$drift_check_set" = false ] || error "--drift-check provided multiple times"
+
+    case "$1" in
+        never|each|end)
+            ;;
+        ''|*[!0123456789]*|0)
+            error "--drift-check must be never, each, end, or a positive integer"
+            ;;
+    esac
+
+    drift_check=$1
+    drift_check_set=true
+}
+
 set_tool() {
     [ -z "$tool" ] || error "unexpected argument: $1"
 
@@ -321,6 +416,8 @@ max_set=false
 all_tickets=false
 auto_review=${auto_review:-false}
 auto_review_set=false
+drift_check=each
+drift_check_set=false
 tool=
 has_tool_args=false
 
@@ -345,6 +442,19 @@ while [ "$#" -gt 0 ]; do
             ;;
         --all)
             set_all
+            shift
+            ;;
+        --drift-check=)
+            error "--drift-check requires a value"
+            ;;
+        --drift-check=*)
+            set_drift_check "${1#--drift-check=}"
+            shift
+            ;;
+        --drift-check)
+            shift
+            [ "$#" -gt 0 ] || error "--drift-check requires a value"
+            set_drift_check "$1"
             shift
             ;;
         --auto-review)
@@ -408,9 +518,15 @@ else
 fi
 
 processed_count=0
+drift_count=0
+
+if [ "$drift_check" != never ]; then
+    run_drift_check "$@"
+fi
 
 while :; do
     if [ "$all_tickets" = false ] && [ "$processed_count" -ge "$max" ]; then
+        run_exit_drift_check "$@"
         exit 0
     fi
 
@@ -420,7 +536,16 @@ while :; do
 
     log_notice "ticket loop selecting next ticket"
     if ! select_next_ticket; then
-        exit 0
+        if [ "$drift_check" = end ]; then
+            run_drift_check "$@"
+            log_notice "ticket loop selecting next ticket"
+            if ! select_next_ticket; then
+                exit 0
+            fi
+        else
+            run_exit_drift_check "$@"
+            exit 0
+        fi
     fi
 
     next_ticket_id=$(ticket_id_from_name "$next_ticket")
@@ -481,6 +606,22 @@ while :; do
     stage_post_agent_changes
 
     processed_count=$((processed_count + 1))
+
+    case "$drift_check" in
+        each)
+            run_drift_check "$@"
+            ;;
+        *[!0123456789]*|'')
+            ;;
+        *)
+            drift_count=$((drift_count + 1))
+            if [ "$drift_count" -ge "$drift_check" ]; then
+                run_drift_check "$@"
+                drift_count=0
+            fi
+            ;;
+    esac
+
     ticket_duration=$(elapsed_duration "$ticket_started_at")
     log_info "         completed in $ticket_duration"
 done

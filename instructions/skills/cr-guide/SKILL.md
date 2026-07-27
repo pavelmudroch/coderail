@@ -87,7 +87,8 @@ complete.
 | `.coderail/RESEARCH.md` | Research synthesis when requested | Temporary |
 | `.coderail/REVIEW.md` | Manual review findings | Temporary |
 | `.coderail/tickets/{open,active,closed}` | Branch-local work graph | Temporary |
-| `.coderail/loop/*.txt` | Ignored implementation/review transcripts | Local diagnostic |
+| `.coderail/DISCOVERY.md` | Captured specification drift awaiting reconciliation | Temporary |
+| `.coderail/loop/*.txt` | Ignored implementation, review, and drift transcripts | Local diagnostic |
 
 Repository configuration uses `config.ini`; a legacy `conf.ini` remains a
 deprecated fallback and emits a migration warning.
@@ -220,6 +221,12 @@ staged. It can then:
 2. Ask a configured or selected supported tool for a `cr-commit` message.
 3. Show that message and create the commit only after another confirmation.
 
+For automatic generation only, `work finish` adds a private, initially absent
+file path to that normal instruction. The tool writes only the raw Conventional
+Commit message there. Finish validates and removes the file before proposing
+the read message; agent prose remains diagnostic. This does not change direct
+`cr-commit`, which remains human-oriented.
+
 ## Shared Workflow
 
 ### 1. Establish Direction
@@ -291,6 +298,7 @@ Use only after explicit user choice:
 ```sh
 cr ticket loop
 cr ticket loop --max 2 --auto-review codex -- --model <model>
+cr ticket loop --drift-check end --all claude
 cr ticket loop --all claude
 ```
 
@@ -299,15 +307,27 @@ permissions and network access. It requires a completely clean Git worktree,
 including no staged changes.
 
 The loop selects ready tickets, invokes `cr-ticket-implement`, requires a
-satisfied closure, stages all post-agent changes, and repeats. The default
-maximum is five successful implementation handoffs. `--max` counts handoffs,
-not unique tickets. `--all` continues through newly ready, reopened, and
-review-created tickets until none remain.
+satisfied closure, stages implementation/review changes, reconciles discovery
+drift, and repeats. The default maximum is five successful implementation
+handoffs. `--max` counts handoffs, not unique tickets. `--all` continues
+through newly ready, reopened, review-created, and end-reconciliation tickets
+until none remain.
+
+`--drift-check` defaults to `each`: check an existing discovery at startup and
+after each successful implementation/review iteration. `never` skips checks;
+`end` checks startup, exhausted queues, and the processing limit; a positive
+integer checks complete intervals plus a non-empty partial interval at exit.
+Drift never consumes a
+processing slot. `cr-ticket-implement` captures drift as `resolved: false`;
+`cr-drift` verifies it and writes the resolution marker. The loop command,
+not either skill, validates the marker, stages reconciliation, and deletes only
+explicitly resolved discoveries. An unresolved marker stops for user input.
 
 Agent output is not streamed. Inspect:
 
 ```sh
 tail -f .coderail/loop/0001-ticket-name.txt
+tail -f .coderail/loop/drift.txt
 ```
 
 With `--auto-review`, tickets closed as `done` receive `cr-review-auto`:

@@ -145,6 +145,15 @@ assert_no_staged_changes() {
         fail "$work_dir has staged changes"
 }
 
+assert_staged_path() {
+    work_dir=$1
+    expected_path=$2
+    staged_paths=$tmp_dir/staged-paths
+
+    git -C "$work_dir" diff --cached --name-only > "$staged_paths"
+    assert_contains "$staged_paths" "$expected_path"
+}
+
 assert_success() {
     [ "$run_status" -eq 0 ] || fail "expected success, got status $run_status"
 }
@@ -215,6 +224,19 @@ write_loop_ignore() {
     printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
 }
 
+write_discovery() {
+    work_dir=$1
+
+    mkdir -p "$work_dir/.coderail"
+    cat > "$work_dir/.coderail/DISCOVERY.md" <<'EOF'
+---
+resolved: false
+---
+
+# Discovery
+EOF
+}
+
 create_home() {
     home_dir=$tmp_dir/home-$1
 
@@ -256,7 +278,14 @@ set -eu
 
 prompt=$1
 prompt_kind=
+ticket_reference=
 case "$prompt" in
+    '$cr-drift')
+        prompt_kind=drift
+        ;;
+    '/cr-drift')
+        prompt_kind=drift
+        ;;
     '$cr-ticket-implement @"'*'"')
         prompt_kind=implementation
         ticket_reference=${prompt#'$cr-ticket-implement @"'}
@@ -283,7 +312,7 @@ case "$prompt" in
         ;;
 esac
 
-[ -n "$ticket_reference" ] || {
+[ "$prompt_kind" = drift ] || [ -n "$ticket_reference" ] || {
     echo "fake agent expected ticket reference" >&2
     exit 65
 }
@@ -317,6 +346,60 @@ if [ "${FAKE_AGENT_FAIL_ON:-}" = "$count" ]; then
     printf 'failed %s\n' "$ticket_reference" > "work-$count.txt"
     echo "fake agent failure" >&2
     exit 7
+fi
+
+if [ "$prompt_kind" = drift ]; then
+    case "${FAKE_AGENT_DRIFT_RESULT:-resolved}" in
+        resolved)
+            cat > .coderail/DISCOVERY.md <<'DISCOVERY'
+---
+resolved: true
+---
+
+# Reconciled discovery
+DISCOVERY
+            printf 'reconciled\n' > "drift-$count.txt"
+            ;;
+        unresolved)
+            cat > .coderail/DISCOVERY.md <<'DISCOVERY'
+---
+resolved: false
+---
+
+# Needs user decision
+DISCOVERY
+            printf 'needs decision\n' > "drift-$count.txt"
+            ;;
+        malformed)
+            printf '%s\n' '# Missing resolution marker' > .coderail/DISCOVERY.md
+            printf 'invalid contract\n' > "drift-$count.txt"
+            ;;
+        *)
+            echo "unknown fake drift result: $FAKE_AGENT_DRIFT_RESULT" >&2
+            exit 66
+            ;;
+    esac
+
+    if [ "${FAKE_AGENT_DRIFT_TICKET_ACTION:-}" = create-once ] &&
+        [ ! -f "$FAKE_AGENT_COUNT_FILE.drifted" ]
+    then
+        : > "$FAKE_AGENT_COUNT_FILE.drifted"
+        cat > .coderail/tickets/open/0002-drift-created.md <<'TICKET'
+---
+id: 0002
+slug: drift-created
+title: Drift Created
+status: open
+created_at: 2024-06-01T12:00:00Z
+updated_at: 2024-06-01T12:00:00Z
+dependencies:
+---
+
+# Drift Created
+TICKET
+    fi
+
+    exit 0
 fi
 
 if [ "$prompt_kind" = review ]; then
@@ -356,6 +439,18 @@ if [ "$prompt_kind" = review ]; then
 fi
 
 printf 'implemented %s\n' "$ticket_reference" > "work-$count.txt"
+
+if [ "${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY:-}" = true ] ||
+    [ "${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON:-}" = "$count" ]
+then
+    cat > .coderail/DISCOVERY.md <<'DISCOVERY'
+---
+resolved: false
+---
+
+# Implementation discovery
+DISCOVERY
+fi
 
 close_reason=${FAKE_AGENT_CLOSE_REASON:-done}
 case "$close_reason" in
@@ -417,8 +512,8 @@ EOF
 #!/usr/bin/env sh
 set -eu
 
-[ "$#" -eq 3 ] || {
-    echo "fake prompt agent expected 3 arguments" >&2
+[ "$#" -ge 3 ] || {
+    echo "fake prompt agent expected at least 3 arguments" >&2
     exit 64
 }
 
@@ -429,12 +524,28 @@ case "${0##*/}" in
     *) exit 65 ;;
 esac
 
-[ "$1" = "$permission_flag" ] && [ "$2" = -p ] || {
-    echo "fake prompt agent expected permission and -p arguments" >&2
+[ "$1" = "$permission_flag" ] || {
+    echo "fake prompt agent expected permission argument" >&2
     exit 65
 }
 
-exec "$(dirname "$0")/fake-agent" "$3"
+previous_arg=
+last_arg=
+for prompt_agent_arg do
+    previous_arg=$last_arg
+    last_arg=$prompt_agent_arg
+done
+
+[ "$previous_arg" = -p ] || {
+    echo "fake prompt agent expected -p before prompt" >&2
+    exit 65
+}
+
+if [ -n "${FAKE_PROMPT_AGENT_LOG:-}" ]; then
+    printf '%s\n' "$@" >> "$FAKE_PROMPT_AGENT_LOG"
+fi
+
+exec "$(dirname "$0")/fake-agent" "$last_arg"
 EOF
         chmod +x "$fake_dir/$fake_tool"
     done
@@ -499,6 +610,10 @@ run_loop_with_fake() {
     FAKE_AGENT_DUPLICATE_OF=${FAKE_AGENT_DUPLICATE_OF-} \
     FAKE_AGENT_FAIL_ON=${FAKE_AGENT_FAIL_ON-} \
     FAKE_AGENT_HANDOFF_OUTPUT=${FAKE_AGENT_HANDOFF_OUTPUT-} \
+    FAKE_AGENT_DRIFT_RESULT=${FAKE_AGENT_DRIFT_RESULT-} \
+    FAKE_AGENT_DRIFT_TICKET_ACTION=${FAKE_AGENT_DRIFT_TICKET_ACTION-} \
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY-} \
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON=${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON-} \
     FAKE_AGENT_LOG=$run_fake_agent_log \
     FAKE_AGENT_REVIEW_RESULT=${FAKE_AGENT_REVIEW_RESULT-} \
     FAKE_AGENT_STDERR=${FAKE_AGENT_STDERR-} \
@@ -531,6 +646,10 @@ run_quiet_loop_with_fake() {
     FAKE_AGENT_DUPLICATE_OF=${FAKE_AGENT_DUPLICATE_OF-} \
     FAKE_AGENT_FAIL_ON=${FAKE_AGENT_FAIL_ON-} \
     FAKE_AGENT_HANDOFF_OUTPUT=${FAKE_AGENT_HANDOFF_OUTPUT-} \
+    FAKE_AGENT_DRIFT_RESULT=${FAKE_AGENT_DRIFT_RESULT-} \
+    FAKE_AGENT_DRIFT_TICKET_ACTION=${FAKE_AGENT_DRIFT_TICKET_ACTION-} \
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY-} \
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON=${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON-} \
     FAKE_AGENT_LOG=$run_fake_agent_log \
     FAKE_AGENT_REVIEW_RESULT=${FAKE_AGENT_REVIEW_RESULT-} \
     FAKE_AGENT_STDERR=${FAKE_AGENT_STDERR-} \
@@ -563,6 +682,10 @@ run_verbose_loop_with_fake() {
     FAKE_AGENT_DUPLICATE_OF=${FAKE_AGENT_DUPLICATE_OF-} \
     FAKE_AGENT_FAIL_ON=${FAKE_AGENT_FAIL_ON-} \
     FAKE_AGENT_HANDOFF_OUTPUT=${FAKE_AGENT_HANDOFF_OUTPUT-} \
+    FAKE_AGENT_DRIFT_RESULT=${FAKE_AGENT_DRIFT_RESULT-} \
+    FAKE_AGENT_DRIFT_TICKET_ACTION=${FAKE_AGENT_DRIFT_TICKET_ACTION-} \
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY-} \
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON=${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON-} \
     FAKE_AGENT_LOG=$run_fake_agent_log \
     FAKE_AGENT_REVIEW_RESULT=${FAKE_AGENT_REVIEW_RESULT-} \
     FAKE_AGENT_STDERR=${FAKE_AGENT_STDERR-} \
@@ -594,6 +717,10 @@ run_loop_with_fake_combined() {
     FAKE_AGENT_DUPLICATE_OF=${FAKE_AGENT_DUPLICATE_OF-} \
     FAKE_AGENT_FAIL_ON=${FAKE_AGENT_FAIL_ON-} \
     FAKE_AGENT_HANDOFF_OUTPUT=${FAKE_AGENT_HANDOFF_OUTPUT-} \
+    FAKE_AGENT_DRIFT_RESULT=${FAKE_AGENT_DRIFT_RESULT-} \
+    FAKE_AGENT_DRIFT_TICKET_ACTION=${FAKE_AGENT_DRIFT_TICKET_ACTION-} \
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY-} \
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON=${FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON-} \
     FAKE_AGENT_LOG=$run_fake_agent_log \
     FAKE_AGENT_REVIEW_RESULT=${FAKE_AGENT_REVIEW_RESULT-} \
     FAKE_AGENT_STDERR=${FAKE_AGENT_STDERR-} \
@@ -724,6 +851,392 @@ assert_loop_accepts_auto_review() {
     assert_success
     assert_file_empty "$run_stdout"
     assert_file_empty "$run_stderr"
+}
+
+assert_loop_accepts_drift_check_values() {
+    work_dir=$(create_project drift-check-values)
+
+    for drift_check in never each end 2; do
+        run_loop "$work_dir" --drift-check "$drift_check" codex
+
+        assert_success
+        assert_file_empty "$run_stdout"
+        assert_file_empty "$run_stderr"
+
+        run_loop "$work_dir" --drift-check="$drift_check" codex
+
+        assert_success
+        assert_file_empty "$run_stdout"
+        assert_file_empty "$run_stderr"
+    done
+}
+
+assert_loop_rejects_invalid_drift_check() {
+    work_dir=$(create_project invalid-drift-check)
+
+    run_loop "$work_dir" --drift-check each --drift-check end codex
+
+    assert_usage_failure
+    assert_contains "$run_stderr" "--drift-check provided multiple times"
+
+    run_loop "$work_dir" --drift-check
+
+    assert_usage_failure
+    assert_contains "$run_stderr" "--drift-check requires a value"
+
+    run_loop "$work_dir" --drift-check=
+
+    assert_usage_failure
+    assert_contains "$run_stderr" "--drift-check requires a value"
+
+    run_loop "$work_dir" --drift-check 0 codex
+
+    assert_usage_failure
+    assert_contains "$run_stderr" "--drift-check must be never, each, end, or a positive integer"
+
+    run_loop "$work_dir" --drift-check sometimes codex
+
+    assert_usage_failure
+    assert_contains "$run_stderr" "--drift-check must be never, each, end, or a positive integer"
+}
+
+assert_loop_defaults_to_each_drift_check() {
+    work_dir=$(create_project default-drift-check)
+    fake_dir=$tmp_dir/fake-default-drift-check
+
+    write_fake_agent "$fake_dir"
+    write_discovery "$work_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-default-drift.md" 0001 default-drift "Default Drift" open "" ""
+    commit_all "$work_dir" "Add discovery and ticket"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --max 1 codex
+
+    assert_success
+    assert_file_content "$run_fake_agent_log" '$cr-drift
+$cr-ticket-implement @".coderail/tickets/open/0001-default-drift.md"'
+    assert_no_path "$work_dir/.coderail/DISCOVERY.md"
+}
+
+assert_loop_skips_all_drift_checks_in_never_mode() {
+    work_dir=$(create_project never-drift-check)
+    fake_dir=$tmp_dir/fake-never-drift-check
+
+    write_fake_agent "$fake_dir"
+    write_discovery "$work_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-never-drift.md" 0001 never-drift "Never Drift" open "" ""
+    commit_all "$work_dir" "Add discovery and ticket"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --drift-check never --max 1 codex
+
+    assert_success
+    assert_file_content \
+        "$run_fake_agent_log" \
+        '$cr-ticket-implement @".coderail/tickets/open/0001-never-drift.md"'
+    assert_file "$work_dir/.coderail/DISCOVERY.md"
+}
+
+assert_loop_reviews_before_scheduled_drift_check() {
+    work_dir=$(create_project review-before-drift)
+    fake_dir=$tmp_dir/fake-review-before-drift
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-review-before-drift.md" 0001 review-before-drift "Review Before Drift" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=true \
+        run_loop_with_fake "$work_dir" "$fake_dir" --auto-review --max 1 codex
+
+    assert_success
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-review-before-drift.md"
+$cr-review-auto @"0001"
+$cr-drift'
+}
+
+assert_loop_checks_numeric_drift_intervals_and_partial_exit() {
+    work_dir=$(create_project numeric-drift-interval)
+    fake_dir=$tmp_dir/fake-numeric-drift-interval
+
+    write_fake_agent "$fake_dir"
+    for ticket_id in 0001 0002 0003; do
+        write_ticket \
+            "$work_dir/.coderail/tickets/open/$ticket_id-numeric-drift.md" \
+            "$ticket_id" \
+            numeric-drift \
+            "Numeric Drift" \
+            open \
+            "" \
+            ""
+    done
+    commit_all "$work_dir" "Add tickets"
+
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=true \
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check 2 --all codex
+
+    assert_success
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-numeric-drift.md"
+$cr-ticket-implement @".coderail/tickets/open/0002-numeric-drift.md"
+$cr-drift
+$cr-ticket-implement @".coderail/tickets/open/0003-numeric-drift.md"
+$cr-drift'
+}
+
+assert_loop_resets_numeric_cadence_after_noop_check() {
+    work_dir=$(create_project numeric-drift-noop-reset)
+    fake_dir=$tmp_dir/fake-numeric-drift-noop-reset
+
+    write_fake_agent "$fake_dir"
+    for ticket_id in 0001 0002 0003; do
+        write_ticket \
+            "$work_dir/.coderail/tickets/open/$ticket_id-noop-reset.md" \
+            "$ticket_id" \
+            noop-reset \
+            "Noop Reset" \
+            open \
+            "" \
+            ""
+    done
+    commit_all "$work_dir" "Add tickets"
+
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY_ON=3 \
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check 2 --all codex
+
+    assert_success
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-noop-reset.md"
+$cr-ticket-implement @".coderail/tickets/open/0002-noop-reset.md"
+$cr-ticket-implement @".coderail/tickets/open/0003-noop-reset.md"
+$cr-drift'
+}
+
+assert_loop_stabilizes_end_drift_with_new_ticket() {
+    work_dir=$(create_project end-drift-stable)
+    fake_dir=$tmp_dir/fake-end-drift-stable
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-end-drift.md" 0001 end-drift "End Drift" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=true \
+    FAKE_AGENT_DRIFT_TICKET_ACTION=create-once \
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check end --all codex
+
+    assert_success
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-end-drift.md"
+$cr-drift
+$cr-ticket-implement @".coderail/tickets/open/0002-drift-created.md"
+$cr-drift'
+    assert_file "$work_dir/.coderail/tickets/closed/0002-drift-created.md"
+}
+
+assert_loop_keeps_max_hard_after_end_drift() {
+    work_dir=$(create_project end-drift-max)
+    fake_dir=$tmp_dir/fake-end-drift-max
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-end-drift-max.md" 0001 end-drift-max "End Drift Max" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=true \
+    FAKE_AGENT_DRIFT_TICKET_ACTION=create-once \
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check end --max 1 codex
+
+    assert_success
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-end-drift-max.md"
+$cr-drift'
+    assert_file "$work_dir/.coderail/tickets/open/0002-drift-created.md"
+}
+
+assert_loop_counts_reopened_auto_review_before_drift() {
+    work_dir=$(create_project review-reopen-drift-count)
+    fake_dir=$tmp_dir/fake-review-reopen-drift-count
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-review-reopen-drift.md" 0001 review-reopen-drift "Review Reopen Drift" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=true \
+    FAKE_AGENT_REVIEW_RESULT=reopen-once \
+        run_loop_with_fake "$work_dir" "$fake_dir" --auto-review --drift-check 1 --max 1 codex
+
+    assert_success
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-review-reopen-drift.md"
+$cr-review-auto @"0001"
+$cr-drift'
+    assert_file "$work_dir/.coderail/tickets/open/0001-review-reopen-drift.md"
+}
+
+assert_loop_does_not_count_failed_agent_phases() {
+    work_dir=$(create_project failed-drift-count)
+    fake_dir=$tmp_dir/fake-failed-drift-count
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-failed-drift-count.md" 0001 failed-drift-count "Failed Drift Count" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_FAIL_ON=1 \
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check 1 --max 1 codex
+
+    assert_failure
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-failed-drift-count.md"'
+
+    work_dir=$(create_project failed-review-drift-count)
+    fake_dir=$tmp_dir/fake-failed-review-drift-count
+
+    write_fake_agent "$fake_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-failed-review-drift.md" 0001 failed-review-drift "Failed Review Drift" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    FAKE_AGENT_IMPLEMENTATION_WRITES_DISCOVERY=true \
+    FAKE_AGENT_FAIL_ON=2 \
+        run_loop_with_fake "$work_dir" "$fake_dir" --auto-review --drift-check 1 --max 1 codex
+
+    assert_failure
+    assert_file_content "$run_fake_agent_log" '$cr-ticket-implement @".coderail/tickets/open/0001-failed-review-drift.md"
+$cr-review-auto @"0001"'
+}
+
+assert_loop_invokes_drift_with_supported_tools() {
+    for tool in codex copilot claude gemini; do
+        work_dir=$(create_project "drift-command-form-$tool")
+        fake_dir=$tmp_dir/fake-drift-command-form-$tool
+        expected_prompt=/cr-drift
+
+        if [ "$tool" = codex ]; then
+            expected_prompt='$cr-drift'
+        fi
+
+        write_fake_agent "$fake_dir"
+        write_discovery "$work_dir"
+        commit_all "$work_dir" "Add discovery"
+
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check end "$tool"
+
+        assert_success
+        assert_file_content "$run_fake_agent_log" "$expected_prompt"
+    done
+}
+
+assert_loop_forwards_tool_args_to_drift() {
+    for tool in codex copilot claude gemini; do
+        work_dir=$(create_project "drift-tool-args-$tool")
+        fake_dir=$tmp_dir/fake-drift-tool-args-$tool
+        tool_log=$fake_dir/tool.log
+
+        write_fake_agent "$fake_dir"
+        write_discovery "$work_dir"
+        commit_all "$work_dir" "Add discovery"
+
+        if [ "$tool" = codex ]; then
+            FAKE_CODEX_LOG=$tool_log \
+                run_loop_with_fake "$work_dir" "$fake_dir" --drift-check end "$tool" -- --model "gpt 5" --json
+
+            assert_file_content "$tool_log" "--sandbox
+workspace-write
+-c
+sandbox_workspace_write.network_access=true
+exec
+--model
+gpt 5
+--json
+\$cr-drift"
+        else
+            FAKE_PROMPT_AGENT_LOG=$tool_log \
+                run_loop_with_fake "$work_dir" "$fake_dir" --drift-check end "$tool" -- --model "gpt 5" --json
+
+            case "$tool" in
+                claude) permission_flag=--dangerously-skip-permissions ;;
+                gemini) permission_flag=--approval-mode=yolo ;;
+                copilot) permission_flag=--yolo ;;
+            esac
+            assert_file_content "$tool_log" "$permission_flag
+--model
+gpt 5
+--json
+-p
+/cr-drift"
+        fi
+
+        assert_success
+    done
+}
+
+assert_loop_resolves_discovery_and_stages_reconciliation() {
+    work_dir=$(create_project resolved-drift)
+    fake_dir=$tmp_dir/fake-resolved-drift
+    transcript=$work_dir/.coderail/loop/drift.txt
+
+    write_fake_agent "$fake_dir"
+    write_discovery "$work_dir"
+    commit_all "$work_dir" "Add discovery"
+
+    FAKE_AGENT_STDOUT='drift stdout' \
+    FAKE_AGENT_STDERR='drift stderr' \
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check each codex
+
+    assert_success
+    assert_no_path "$work_dir/.coderail/DISCOVERY.md"
+    assert_staged_path "$work_dir" .coderail/DISCOVERY.md
+    assert_staged_path "$work_dir" drift-1.txt
+    assert_file "$transcript"
+    assert_contains "$transcript" "--- "
+    assert_contains "$transcript" "drift ---"
+    assert_contains "$transcript" "drift stdout"
+    assert_contains "$transcript" "drift stderr"
+    assert_ignored "$work_dir" .coderail/loop/drift.txt
+}
+
+assert_loop_stops_for_unresolved_discovery() {
+    work_dir=$(create_project unresolved-drift)
+    fake_dir=$tmp_dir/fake-unresolved-drift
+
+    write_fake_agent "$fake_dir"
+    write_discovery "$work_dir"
+    commit_all "$work_dir" "Add discovery"
+
+    FAKE_AGENT_DRIFT_RESULT=unresolved \
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check each codex
+
+    assert_failure
+    assert_contains "$run_stderr" "discovery reconciliation requires user input"
+    assert_file "$work_dir/.coderail/DISCOVERY.md"
+    assert_staged_path "$work_dir" .coderail/DISCOVERY.md
+    assert_staged_path "$work_dir" drift-1.txt
+    assert_file_content "$run_fake_agent_log" '$cr-drift'
+}
+
+assert_loop_rejects_invalid_discovery_resolution_contract() {
+    work_dir=$(create_project invalid-drift-contract)
+    fake_dir=$tmp_dir/fake-invalid-drift-contract
+
+    write_fake_agent "$fake_dir"
+    write_discovery "$work_dir"
+    commit_all "$work_dir" "Add discovery"
+
+    FAKE_AGENT_DRIFT_RESULT=malformed \
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check each codex
+
+    assert_failure
+    assert_contains "$run_stderr" "discovery resolution contract is invalid"
+    assert_file_content "$work_dir/.coderail/DISCOVERY.md" '# Missing resolution marker'
+    assert_no_staged_changes "$work_dir"
+    assert_file "$work_dir/drift-1.txt"
+}
+
+assert_loop_preserves_agent_failure_without_staging() {
+    work_dir=$(create_project failed-drift-agent)
+    fake_dir=$tmp_dir/fake-failed-drift-agent
+
+    write_fake_agent "$fake_dir"
+    write_discovery "$work_dir"
+    commit_all "$work_dir" "Add discovery"
+
+    FAKE_AGENT_FAIL_ON=1 \
+        run_loop_with_fake "$work_dir" "$fake_dir" --drift-check each codex
+
+    assert_failure
+    assert_contains "$run_stderr" "drift reconciliation agent failed"
+    assert_file "$work_dir/.coderail/DISCOVERY.md"
+    assert_no_staged_changes "$work_dir"
+    assert_file "$work_dir/.coderail/loop/drift.txt"
 }
 
 assert_loop_rejects_repeated_max() {
@@ -1254,6 +1767,8 @@ assert_loop_writes_mapped_transcript() {
     stderr="fake agent stderr"
 
     write_fake_agent "$fake_dir"
+    write_loop_ignore "$work_dir"
+    printf 'existing diagnostic\n' > "$work_dir/.coderail/loop/existing.txt"
     write_ticket "$work_dir/.coderail/tickets/open/0001-mapped-transcript.md" 0001 mapped-transcript "Mapped Transcript" open "" ""
     commit_all "$work_dir" "Add ticket"
 
@@ -1265,6 +1780,9 @@ assert_loop_writes_mapped_transcript() {
     assert_file "$transcript"
     assert_contains "$transcript" "$stdout"
     assert_contains "$transcript" "$stderr"
+    assert_file_content \
+        "$work_dir/.coderail/loop/existing.txt" \
+        "existing diagnostic"
     assert_not_contains "$run_stdout" "$stdout"
     assert_not_contains "$run_stderr" "$stderr"
     assert_ignored "$work_dir" .coderail/loop/0001-mapped-transcript.txt
@@ -1567,21 +2085,23 @@ assert_loop_force_stages_new_ignore_in_ignored_directory() {
     assert_file "$work_dir/work-1.txt"
 }
 
-assert_loop_rejects_unignored_transcript() {
-    work_dir=$(create_project unignored-transcript)
-    fake_dir=$tmp_dir/fake-unignored-transcript
-    transcript=.coderail/loop/0001-unignored-transcript.txt
+assert_loop_rejects_invalid_ignore_policy() {
+    work_dir=$(create_project invalid-ignore-policy)
+    fake_dir=$tmp_dir/fake-invalid-ignore-policy
+    transcript=.coderail/loop/0001-invalid-ignore-policy.txt
 
     write_fake_agent "$fake_dir"
     mkdir -p "$work_dir/.coderail/loop"
-    printf '%s\n' '!.gitignore' > "$work_dir/.coderail/loop/.gitignore"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-unignored-transcript.md" 0001 unignored-transcript "Unignored Transcript" open "" ""
+    printf '*\n!.gitignore\n!exposed.txt\n' > "$work_dir/.coderail/loop/.gitignore"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-invalid-ignore-policy.md" 0001 invalid-ignore-policy "Invalid Ignore Policy" open "" ""
     commit_all "$work_dir" "Add ticket and custom ignore"
 
     run_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
     assert_failure
-    assert_contains "$run_stderr" "ticket loop transcript is not ignored: $transcript"
+    assert_contains \
+        "$run_stderr" \
+        "ticket loop ignore policy is invalid: .coderail/loop/.gitignore"
     assert_no_path "$run_fake_agent_count"
     assert_no_path "$work_dir/$transcript"
 }
@@ -1940,6 +2460,23 @@ test "Loop accepts short max" assert_loop_accepts_short_max
 test "Loop accepts long max" assert_loop_accepts_long_max
 test "Loop accepts all" assert_loop_accepts_all
 test "Loop accepts auto review" assert_loop_accepts_auto_review
+test "Loop accepts drift-check values" assert_loop_accepts_drift_check_values
+test "Loop rejects invalid drift-check values" assert_loop_rejects_invalid_drift_check
+test "Loop defaults drift checking to each" assert_loop_defaults_to_each_drift_check
+test "Loop skips drift checking in never mode" assert_loop_skips_all_drift_checks_in_never_mode
+test "Loop reviews before scheduled drift checking" assert_loop_reviews_before_scheduled_drift_check
+test "Loop checks numeric drift intervals and partial exit" assert_loop_checks_numeric_drift_intervals_and_partial_exit
+test "Loop resets numeric cadence after no-op drift check" assert_loop_resets_numeric_cadence_after_noop_check
+test "Loop stabilizes end drift with new tickets" assert_loop_stabilizes_end_drift_with_new_ticket
+test "Loop keeps max hard after end drift" assert_loop_keeps_max_hard_after_end_drift
+test "Loop counts reopened auto review before drift" assert_loop_counts_reopened_auto_review_before_drift
+test "Loop does not count failed agent phases" assert_loop_does_not_count_failed_agent_phases
+test "Loop invokes drift with supported tools" assert_loop_invokes_drift_with_supported_tools
+test "Loop forwards tool arguments to drift" assert_loop_forwards_tool_args_to_drift
+test "Loop resolves discovery and stages reconciliation" assert_loop_resolves_discovery_and_stages_reconciliation
+test "Loop stops for unresolved discovery" assert_loop_stops_for_unresolved_discovery
+test "Loop rejects invalid discovery resolution contract" assert_loop_rejects_invalid_discovery_resolution_contract
+test "Loop preserves drift agent failure without staging" assert_loop_preserves_agent_failure_without_staging
 test "Loop rejects repeated max" assert_loop_rejects_repeated_max
 test "Loop rejects a second auto review option" assert_loop_rejects_second_auto_review_option
 test "Loop rejects all with max" assert_loop_rejects_all_with_max
@@ -1985,7 +2522,7 @@ test "Loop uses ready snapshot headings" assert_loop_uses_ready_snapshot_heading
 test "Loop updates headings for reopened and follow-up tickets" assert_loop_updates_headings_for_reopened_and_follow_up_tickets
 test "Loop stages new ignore before failed handoff" assert_loop_stages_new_ignore_before_failed_handoff
 test "Loop force stages new ignore in ignored directory" assert_loop_force_stages_new_ignore_in_ignored_directory
-test "Loop rejects unignored transcript" assert_loop_rejects_unignored_transcript
+test "Loop rejects invalid ignore policy" assert_loop_rejects_invalid_ignore_policy
 test "Loop stages post-agent changes" assert_loop_stages_post_agent_changes
 test "Loop stages clean auto review" assert_loop_stages_clean_auto_review
 test "Loop reimplements reopened ticket with max" assert_loop_reimplements_reopened_ticket_with_max

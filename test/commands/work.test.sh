@@ -27,7 +27,8 @@ assert_file() {
 }
 
 assert_path_missing() {
-    [ ! -e "$1" ] || fail "unexpected path: $1"
+    [ ! -e "$1" ] && [ ! -L "$1" ] ||
+        fail "unexpected path: $1"
 }
 
 assert_file_empty() {
@@ -75,6 +76,10 @@ assert_no_staged_changes() {
     git -C "$1" diff --cached --quiet || fail "$1 has staged changes"
 }
 
+assert_no_unstaged_changes() {
+    git -C "$1" diff --quiet || fail "$1 has unstaged changes"
+}
+
 assert_clean_worktree() {
     worktree_status=$(git -C "$1" status --porcelain --untracked-files=all)
     [ -z "$worktree_status" ] || fail "$1 has worktree changes"
@@ -112,6 +117,19 @@ assert_untracked() {
     if git -C "$1" ls-files --error-unmatch -- "$2" >/dev/null 2>&1; then
         fail "$2 should be untracked"
     fi
+}
+
+assert_ignored() {
+    git -C "$1" check-ignore -q -- "$2" ||
+        fail "$2 is not ignored"
+}
+
+assert_no_loop_paths_staged() {
+    staged_loop_paths=$tmp_dir/staged-loop-paths
+
+    git -C "$1" diff --cached --name-only -- .coderail/loop \
+        > "$staged_loop_paths"
+    assert_file_empty "$staged_loop_paths"
 }
 
 assert_head_commit_message() {
@@ -209,7 +227,24 @@ run_cr() {
     run_stderr=$tmp_dir/run.stderr
 
     set +e
-    "$CR" --cwd "$work_dir" "$@" > "$run_stdout" 2> "$run_stderr" < /dev/null
+    HOME="$tmp_dir/empty-home" \
+        "$CR" --cwd "$work_dir" "$@" > "$run_stdout" 2> "$run_stderr" < /dev/null
+    run_status=$?
+    set -e
+}
+
+run_cr_from_dir() {
+    work_dir=$1
+    shift
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+
+    set +e
+    (
+        cd "$work_dir"
+        HOME="$tmp_dir/empty-home" "$CR" "$@"
+    ) > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
 }
@@ -239,7 +274,9 @@ run_cr_with_input() {
     run_stderr=$tmp_dir/run.stderr
 
     set +e
-    printf '%s' "$input" | "$CR" --cwd "$work_dir" "$@" > "$run_stdout" 2> "$run_stderr"
+    printf '%s' "$input" |
+        HOME="$tmp_dir/empty-home" \
+            "$CR" --cwd "$work_dir" "$@" > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
 }
@@ -258,12 +295,86 @@ set -eu
 printf '%s\n' "${0##*/}" > "$FAKE_COMMIT_LOG"
 printf '%s\n' "$@" >> "$FAKE_COMMIT_LOG"
 
+commit_exchange_file=$(printf '%s\n' "$@" |
+    sed -n 's/^Write only the raw commit message to this private exchange file: //p')
+[ -n "$commit_exchange_file" ] || {
+    echo 'fake commit agent did not receive an exchange file' >&2
+    exit 9
+}
+
+printf 'exchange=%s\n' "$commit_exchange_file" >> "$FAKE_COMMIT_LOG"
+
+if [ -e "$commit_exchange_file" ] || [ -L "$commit_exchange_file" ]; then
+    echo 'fake commit agent received a pre-existing exchange file' >&2
+    exit 10
+fi
+
+case "${FAKE_COMMIT_ARTIFACT:-write}" in
+    write)
+        printf '%s' "${FAKE_COMMIT_MESSAGE:?}" > "$commit_exchange_file"
+        ;;
+    absent)
+        ;;
+    symlink)
+        printf '%s' "${FAKE_COMMIT_MESSAGE:?}" > "$commit_exchange_file.target"
+        ln -s "$commit_exchange_file.target" "$commit_exchange_file"
+        ;;
+    non-regular)
+        mkdir "$commit_exchange_file"
+        ;;
+    named-pipe)
+        mkfifo "$commit_exchange_file"
+        (
+            exec 3<> "$commit_exchange_file"
+            printf '%s' "${FAKE_COMMIT_MESSAGE:?}" >&3
+            sleep 2
+        ) &
+        ;;
+    unreadable)
+        printf '%s' "${FAKE_COMMIT_MESSAGE:?}" > "$commit_exchange_file"
+        chmod 000 "$commit_exchange_file"
+        ;;
+    empty)
+        : > "$commit_exchange_file"
+        ;;
+    oversized)
+        printf 'feat: ' > "$commit_exchange_file"
+        awk 'BEGIN { for (count = 0; count < 65531; count++) printf "a" }' \
+            >> "$commit_exchange_file"
+        ;;
+    maximum)
+        printf 'feat: ' > "$commit_exchange_file"
+        awk 'BEGIN { for (count = 0; count < 65530; count++) printf "a" }' \
+            >> "$commit_exchange_file"
+        ;;
+    nul)
+        printf 'feat: valid\000body' > "$commit_exchange_file"
+        ;;
+    carriage-return)
+        printf 'feat: valid\rbody' > "$commit_exchange_file"
+        ;;
+    *)
+        echo "unknown fake commit artifact: ${FAKE_COMMIT_ARTIFACT}" >&2
+        exit 11
+        ;;
+esac
+
+if [ -n "${FAKE_COMMIT_STDERR:-}" ]; then
+    printf '%s\n' "$FAKE_COMMIT_STDERR" >&2
+fi
+
+if [ -n "${FAKE_COMMIT_OUTPUT:-}" ]; then
+    printf '%s\n' "$FAKE_COMMIT_OUTPUT"
+fi
+
 if [ "${FAKE_COMMIT_FAIL:-false}" = true ]; then
-    echo 'fake commit agent failure' >&2
     exit 7
 fi
 
-printf '%s\n' "${FAKE_COMMIT_OUTPUT:?}"
+if [ -n "${FAKE_COMMIT_SIGNAL:-}" ]; then
+    kill "-$FAKE_COMMIT_SIGNAL" "$PPID"
+    exit 0
+fi
 EOF
     chmod 755 "$fake_dir/fake-commit-agent"
 
@@ -286,12 +397,36 @@ run_finish_with_fake_agent() {
     set +e
     printf '%s' "$input" |
         FAKE_COMMIT_FAIL=${FAKE_COMMIT_FAIL-false} \
+        FAKE_COMMIT_SIGNAL=${FAKE_COMMIT_SIGNAL-} \
         FAKE_COMMIT_LOG=$run_fake_commit_log \
+        FAKE_COMMIT_ARTIFACT=${FAKE_COMMIT_ARTIFACT-write} \
+        FAKE_COMMIT_MESSAGE=${FAKE_COMMIT_MESSAGE-} \
         FAKE_COMMIT_OUTPUT=${FAKE_COMMIT_OUTPUT-} \
+        FAKE_COMMIT_STDERR=${FAKE_COMMIT_STDERR-} \
+        TMPDIR=$TEMP_DIR \
+        HOME="$tmp_dir/empty-home" \
         PATH="$fake_dir:$PATH" \
         "$CR" --cwd "$work_dir" work finish > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
+}
+
+assert_exchange_artifact_removed() {
+    exchange_file=$(sed -n 's/^exchange=//p' "$run_fake_commit_log")
+
+    [ -n "$exchange_file" ] || fail 'fake commit agent did not record exchange file'
+    assert_path_missing "$exchange_file"
+}
+
+write_loop_diagnostics() {
+    work_dir=$1
+
+    mkdir -p "$work_dir/.coderail/loop"
+    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
+    printf 'sensitive diagnostic\n' \
+        > "$work_dir/.coderail/loop/diagnostic.txt"
+    git -C "$work_dir" add -f .coderail/loop/.gitignore
+    git -C "$work_dir" commit -q -m 'Keep loop diagnostics local'
 }
 
 run_finish_with_path() {
@@ -304,6 +439,7 @@ run_finish_with_path() {
 
     set +e
     printf '%s' "$input" |
+        HOME="$tmp_dir/empty-home" \
         PATH="$path" "$CR" --cwd "$work_dir" work finish > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
@@ -644,9 +780,99 @@ assert_finish_returns_to_work_branch_when_base_is_dirty() {
     assert_file_content "$work_dir/base-dirty.txt" 'base dirty'
 }
 
+assert_finish_recovers_from_invalid_base_loop_policy() {
+    work_dir=$(create_git_project finish-invalid-base-loop-policy)
+
+    mkdir -p "$work_dir/.coderail/loop"
+    printf '*\n!.gitignore\n!diagnostic.txt\n' \
+        > "$work_dir/.coderail/loop/.gitignore"
+    commit_all "$work_dir" 'Add invalid base loop ignore policy'
+    base_branch=$(git -C "$work_dir" branch --show-current)
+    start_recorded_work "$work_dir"
+    write_loop_diagnostics "$work_dir"
+
+    git_dir=$(git -C "$work_dir" rev-parse --absolute-git-dir)
+    git_exclude=$git_dir/info/exclude
+    expected_git_exclude=$tmp_dir/invalid-base-git-exclude
+    base_ignore=$tmp_dir/invalid-base-loop-ignore
+    cp "$git_exclude" "$expected_git_exclude"
+
+    run_cr "$work_dir" work finish
+
+    assert_failure
+    assert_contains \
+        "$run_stderr" \
+        'loop ignore policy is invalid on base branch'
+    assert_branch "$work_dir" coderail/finish-feature
+    assert_file_content \
+        "$work_dir/.coderail/loop/diagnostic.txt" \
+        'sensitive diagnostic'
+    assert_ignored "$work_dir" .coderail/loop/diagnostic.txt
+    assert_no_loop_paths_staged "$work_dir"
+    git -C "$work_dir" show \
+        "$base_branch:.coderail/loop/.gitignore" > "$base_ignore"
+    assert_file_content "$base_ignore" '*
+!.gitignore
+!diagnostic.txt'
+    cmp "$expected_git_exclude" "$git_exclude" >/dev/null ||
+        fail 'failure cleanup changed the Git exclude policy'
+}
+
+assert_finish_preserves_diagnostics_when_invalid_base_recovery_is_interrupted() {
+    work_dir=$(create_git_project finish-invalid-base-loop-policy-signal)
+    fake_dir=$tmp_dir/fake-invalid-base-loop-policy-signal
+    real_git=$(command -v git)
+
+    mkdir -p "$work_dir/.coderail/loop"
+    printf '*\n!.gitignore\n!diagnostic.txt\n' \
+        > "$work_dir/.coderail/loop/.gitignore"
+    commit_all "$work_dir" 'Add invalid base loop ignore policy'
+    base_branch=$(git -C "$work_dir" branch --show-current)
+    start_recorded_work "$work_dir"
+    write_loop_diagnostics "$work_dir"
+
+    mkdir "$fake_dir"
+    printf '%s\n' \
+        '#!/usr/bin/env sh' \
+        '"$FAKE_REAL_GIT" "$@"' \
+        'git_status=$?' \
+        'if [ "$git_status" -eq 0 ] &&' \
+        '    [ "$1" = switch ] &&' \
+        '    [ "${3:-}" = "$FAKE_FINISH_SIGNAL_BRANCH" ]; then' \
+        '    kill -TERM "$PPID"' \
+        'fi' \
+        'exit "$git_status"' > "$fake_dir/git"
+    chmod 755 "$fake_dir/git"
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+    set +e
+    FAKE_REAL_GIT=$real_git \
+    FAKE_FINISH_SIGNAL_BRANCH=$base_branch \
+    PATH="$fake_dir:$PATH" \
+        "$CR" --cwd "$work_dir" work finish > "$run_stdout" 2> "$run_stderr" < /dev/null
+    run_status=$?
+    set -e
+
+    [ "$run_status" -eq 143 ] ||
+        fail "expected signal status 143, got $run_status"
+    assert_branch "$work_dir" coderail/finish-feature
+    assert_file_content \
+        "$work_dir/.coderail/loop/diagnostic.txt" \
+        'sensitive diagnostic'
+    assert_ignored "$work_dir" .coderail/loop/diagnostic.txt
+    assert_no_loop_paths_staged "$work_dir"
+    git -C "$work_dir" show \
+        "$base_branch:.coderail/loop/.gitignore" > "$tmp_dir/invalid-base-signal-loop-ignore"
+    assert_file_content "$tmp_dir/invalid-base-signal-loop-ignore" '*
+!.gitignore
+!diagnostic.txt'
+}
+
 assert_finish_requires_ticket_readiness_before_checkpoint() {
     work_dir=$(create_recorded_work finish-ticket-readiness)
     ticket_file=$work_dir/.coderail/tickets/active/0001-pending-ticket.md
+    write_loop_diagnostics "$work_dir"
     head_before=$(git -C "$work_dir" rev-parse HEAD)
 
     write_ticket "$ticket_file" 0001 pending-ticket 'Pending Ticket' active ''
@@ -660,6 +886,10 @@ assert_finish_requires_ticket_readiness_before_checkpoint() {
     [ "$(git -C "$work_dir" rev-parse HEAD)" = "$head_before" ] ||
         fail 'finish created a checkpoint before ticket readiness'
     assert_branch "$work_dir" coderail/finish-feature
+    assert_file_content \
+        "$work_dir/.coderail/loop/diagnostic.txt" \
+        'sensitive diagnostic'
+    assert_ignored "$work_dir" .coderail/loop/diagnostic.txt
 }
 
 assert_finish_checkpoints_and_stages_code_integration() {
@@ -772,6 +1002,7 @@ assert_finish_recovers_code_conflicts_to_work_branch() {
     printf 'base version\n' > "$work_dir/code.txt"
     commit_all "$work_dir" 'Change code on base'
     git -C "$work_dir" switch -q coderail/finish-feature
+    write_loop_diagnostics "$work_dir"
 
     run_cr "$work_dir" work finish
 
@@ -779,6 +1010,10 @@ assert_finish_recovers_code_conflicts_to_work_branch() {
     assert_contains "$run_stderr" 'error: squash integration has conflicts; merge the base branch into the work branch before retrying'
     assert_branch "$work_dir" coderail/finish-feature
     assert_clean_worktree "$work_dir"
+    assert_file_content \
+        "$work_dir/.coderail/loop/diagnostic.txt" \
+        'sensitive diagnostic'
+    assert_ignored "$work_dir" .coderail/loop/diagnostic.txt
 }
 
 assert_finish_recovers_failed_squash_to_work_branch() {
@@ -807,6 +1042,7 @@ assert_finish_reports_noop_after_workflow_cleanup() {
     work_dir=$(create_recorded_work finish-noop)
     base_branch=$(git -C "$work_dir" show coderail/finish-feature:.coderail/work.ini |
         sed -n 's/^base_branch=//p')
+    write_loop_diagnostics "$work_dir"
 
     run_cr "$work_dir" work finish
 
@@ -814,12 +1050,14 @@ assert_finish_reports_noop_after_workflow_cleanup() {
     assert_contains "$run_stdout" 'work produced no integration changes'
     assert_branch "$work_dir" "$base_branch"
     assert_no_staged_changes "$work_dir"
+    assert_path_missing "$work_dir/.coderail/loop"
 }
 
 assert_finish_cancels_automatic_commit_on_negative_or_eof() {
     negative_dir=$(create_recorded_work finish-automatic-negative)
     negative_base=$(git -C "$negative_dir" show coderail/finish-feature:.coderail/work.ini |
         sed -n 's/^base_branch=//p')
+    write_loop_diagnostics "$negative_dir"
     printf 'negative\n' > "$negative_dir/negative.txt"
     git -C "$negative_dir" add negative.txt
 
@@ -829,6 +1067,8 @@ assert_finish_cancels_automatic_commit_on_negative_or_eof() {
     assert_success
     assert_branch "$negative_dir" "$negative_base"
     assert_staged_file_content "$negative_dir" negative.txt 'negative'
+    assert_path_missing "$negative_dir/.coderail/loop"
+    assert_no_loop_paths_staged "$negative_dir"
 
     eof_dir=$(create_recorded_work finish-automatic-eof)
     eof_base=$(git -C "$eof_dir" show coderail/finish-feature:.coderail/work.ini |
@@ -863,27 +1103,229 @@ n
     git -C "$default_dir" add .coderail/config.ini default.txt
     write_fake_commit_agent "$fake_dir"
 
-    FAKE_COMMIT_OUTPUT='Summary: Default automatic commit
-
-Commit:
-feat(work): keep staged result
-
-Command:
-git commit -m ignored' \
+    FAKE_COMMIT_MESSAGE='feat(work): keep staged result' \
+    FAKE_COMMIT_OUTPUT='agent prose must remain diagnostic only' \
         run_finish_with_fake_agent "$default_dir" "$fake_dir" '
 n
 '
 
     assert_success
-    assert_file_content "$run_fake_commit_log" 'codex
---sandbox
-workspace-write
--c
-sandbox_workspace_write.network_access=true
-exec
-$cr-commit'
+    assert_contains "$run_fake_commit_log" 'codex'
+    assert_contains "$run_fake_commit_log" '$cr-commit'
+    assert_contains \
+        "$run_fake_commit_log" \
+        'Write only the raw commit message to this private exchange file: '
+    assert_exchange_artifact_removed
     assert_not_contains "$run_stdout" 'Select commit tool'
     assert_staged_file_content "$default_dir" default.txt 'default'
+}
+
+assert_finish_exchanges_subject_and_multiline_messages_for_all_tools() {
+    for commit_tool in codex copilot claude gemini; do
+        case "$commit_tool" in
+            codex)
+                commit_skill_invocation='$cr-commit'
+                ;;
+            copilot|claude|gemini)
+                commit_skill_invocation='/cr-commit'
+                ;;
+        esac
+
+        for message_kind in subject multiline; do
+            work_dir=$(create_recorded_work "finish-$commit_tool-$message_kind")
+            fake_dir=$tmp_dir/fake-$commit_tool-$message_kind
+
+            printf 'default_tool = %s\n' "$commit_tool" \
+                > "$work_dir/.coderail/config.ini"
+            printf '%s %s\n' "$commit_tool" "$message_kind" \
+                > "$work_dir/$commit_tool-$message_kind.txt"
+            git -C "$work_dir" add .coderail/config.ini \
+                "$commit_tool-$message_kind.txt"
+            write_fake_commit_agent "$fake_dir"
+
+            case "$message_kind" in
+                subject)
+                    commit_message="feat($commit_tool): exchange subject"
+                    ;;
+                multiline)
+                    commit_message="fix($commit_tool): preserve body
+
+Keep this body opaque.
+Footer: exact bytes"
+                    ;;
+            esac
+
+            FAKE_COMMIT_MESSAGE="$commit_message" \
+            FAKE_COMMIT_OUTPUT='agent stdout must remain diagnostic only' \
+            FAKE_COMMIT_STDERR='agent stderr must remain diagnostic only' \
+                run_finish_with_fake_agent "$work_dir" "$fake_dir" 'y
+y
+'
+
+            assert_success
+            assert_head_commit_message "$work_dir" "$commit_message"
+            assert_contains "$run_fake_commit_log" "$commit_tool"
+            assert_contains \
+                "$run_fake_commit_log" \
+                "$commit_skill_invocation"
+            assert_contains \
+                "$run_fake_commit_log" \
+                'Write only the raw commit message to this private exchange file: '
+            assert_not_contains "$run_stdout" 'agent stdout must remain diagnostic only'
+            assert_not_contains "$run_stderr" 'agent stderr must remain diagnostic only'
+            assert_exchange_artifact_removed
+        done
+    done
+}
+
+assert_finish_accepts_allowed_commit_headers_and_maximum_message() {
+    header_index=0
+
+    for commit_message in \
+        'feat: add behavior' \
+        'fix(scope): correct behavior' \
+        'refactor(scope)!: change behavior' \
+        'docs: explain behavior' \
+        'test: cover behavior' \
+        'style: format behavior' \
+        'chore: maintain behavior'
+    do
+        header_index=$((header_index + 1))
+        work_dir=$(create_recorded_work "finish-valid-header-$header_index")
+        fake_dir=$tmp_dir/fake-valid-header-$header_index
+
+        printf 'default_tool = codex\n' > "$work_dir/.coderail/config.ini"
+        printf 'valid header\n' > "$work_dir/valid-header.txt"
+        git -C "$work_dir" add .coderail/config.ini valid-header.txt
+        write_fake_commit_agent "$fake_dir"
+
+        FAKE_COMMIT_MESSAGE="$commit_message" \
+            run_finish_with_fake_agent "$work_dir" "$fake_dir" 'y
+y
+'
+
+        assert_success
+        assert_head_commit_message "$work_dir" "$commit_message"
+        assert_exchange_artifact_removed
+    done
+
+    maximum_dir=$(create_recorded_work finish-maximum-message)
+    maximum_fake_dir=$tmp_dir/fake-maximum-message
+    printf 'default_tool = codex\n' > "$maximum_dir/.coderail/config.ini"
+    printf 'maximum message\n' > "$maximum_dir/maximum-message.txt"
+    git -C "$maximum_dir" add .coderail/config.ini maximum-message.txt
+    write_fake_commit_agent "$maximum_fake_dir"
+
+    FAKE_COMMIT_ARTIFACT=maximum \
+        run_finish_with_fake_agent "$maximum_dir" "$maximum_fake_dir" 'y
+y
+'
+
+    assert_success
+    maximum_subject_size=$(git -C "$maximum_dir" log -1 --format=%s | wc -c)
+    [ "$maximum_subject_size" -eq 65537 ] ||
+        fail "expected 65536-byte maximum subject, got $maximum_subject_size"
+    assert_exchange_artifact_removed
+}
+
+assert_finish_rejects_invalid_commit_message_artifacts() {
+    for artifact_mode in \
+        absent \
+        symlink \
+        non-regular \
+        named-pipe \
+        unreadable \
+        empty \
+        oversized \
+        nul \
+        carriage-return
+    do
+        work_dir=$(create_recorded_work "finish-invalid-$artifact_mode")
+        fake_dir=$tmp_dir/fake-invalid-$artifact_mode
+
+        printf 'default_tool = codex\n' > "$work_dir/.coderail/config.ini"
+        printf 'invalid %s\n' "$artifact_mode" \
+            > "$work_dir/invalid-$artifact_mode.txt"
+        git -C "$work_dir" add .coderail/config.ini \
+            "invalid-$artifact_mode.txt"
+        write_fake_commit_agent "$fake_dir"
+
+        FAKE_COMMIT_ARTIFACT=$artifact_mode \
+        FAKE_COMMIT_MESSAGE='feat: valid artifact content' \
+        FAKE_COMMIT_OUTPUT='agent stdout must not become a message' \
+        FAKE_COMMIT_STDERR='agent stderr must not become a message' \
+            run_finish_with_fake_agent "$work_dir" "$fake_dir" 'y
+'
+
+        assert_failure
+        assert_contains \
+            "$run_stderr" \
+            'automatic commit failed: invalid commit-message exchange artifact'
+        assert_not_contains "$run_stdout" 'Proposed commit message:'
+        assert_not_contains "$run_stdout" 'agent stdout must not become a message'
+        assert_not_contains "$run_stderr" 'agent stderr must not become a message'
+        assert_staged_file_content \
+            "$work_dir" \
+            "invalid-$artifact_mode.txt" \
+            "invalid $artifact_mode"
+        [ "$(git -C "$work_dir" log -1 --format=%s)" = 'Initial project' ] ||
+            fail 'invalid exchange artifact created an integration commit'
+        assert_exchange_artifact_removed
+    done
+
+    malformed_dir=$(create_recorded_work finish-invalid-malformed-header)
+    malformed_fake_dir=$tmp_dir/fake-invalid-malformed-header
+    printf 'default_tool = codex\n' > "$malformed_dir/.coderail/config.ini"
+    printf 'invalid malformed header\n' > "$malformed_dir/invalid-malformed-header.txt"
+    git -C "$malformed_dir" add .coderail/config.ini invalid-malformed-header.txt
+    write_fake_commit_agent "$malformed_fake_dir"
+
+    FAKE_COMMIT_MESSAGE='unsupported(scope): malformed header' \
+    FAKE_COMMIT_OUTPUT='agent stdout must not become a message' \
+        run_finish_with_fake_agent "$malformed_dir" "$malformed_fake_dir" 'y
+'
+
+    assert_failure
+    assert_contains \
+        "$run_stderr" \
+        'automatic commit failed: invalid commit-message exchange artifact'
+    assert_not_contains "$run_stdout" 'Proposed commit message:'
+    assert_exchange_artifact_removed
+}
+
+assert_finish_starts_exchange_files_absent_and_never_reuses_stale_artifacts() {
+    failed_dir=$(create_recorded_work finish-stale-artifact)
+    failed_fake_dir=$tmp_dir/fake-stale-artifact
+    printf 'default_tool = codex\n' > "$failed_dir/.coderail/config.ini"
+    printf 'stale artifact\n' > "$failed_dir/stale-artifact.txt"
+    git -C "$failed_dir" add .coderail/config.ini stale-artifact.txt
+    write_fake_commit_agent "$failed_fake_dir"
+
+    FAKE_COMMIT_ARTIFACT=empty \
+        run_finish_with_fake_agent "$failed_dir" "$failed_fake_dir" 'y
+'
+
+    assert_failure
+    stale_exchange_file=$(sed -n 's/^exchange=//p' "$run_fake_commit_log")
+    assert_exchange_artifact_removed
+
+    fresh_dir=$(create_recorded_work finish-fresh-artifact)
+    fresh_fake_dir=$tmp_dir/fake-fresh-artifact
+    printf 'default_tool = codex\n' > "$fresh_dir/.coderail/config.ini"
+    printf 'fresh artifact\n' > "$fresh_dir/fresh-artifact.txt"
+    git -C "$fresh_dir" add .coderail/config.ini fresh-artifact.txt
+    write_fake_commit_agent "$fresh_fake_dir"
+
+    FAKE_COMMIT_MESSAGE='chore: use fresh exchange artifact' \
+        run_finish_with_fake_agent "$fresh_dir" "$fresh_fake_dir" 'y
+y
+'
+
+    assert_success
+    fresh_exchange_file=$(sed -n 's/^exchange=//p' "$run_fake_commit_log")
+    [ "$stale_exchange_file" != "$fresh_exchange_file" ] ||
+        fail 'automatic commit reused an exchange file'
+    assert_exchange_artifact_removed
 }
 
 assert_finish_selects_or_cancels_commit_tool() {
@@ -893,13 +1335,8 @@ assert_finish_selects_or_cancels_commit_tool() {
     git -C "$selected_dir" add selected.txt
     write_fake_commit_agent "$selected_fake_dir"
 
-    FAKE_COMMIT_OUTPUT='Summary: Selected tool
-
-Commit:
-feat(work): select commit tool
-
-Command:
-git commit -m ignored' \
+    FAKE_COMMIT_MESSAGE='feat(work): select commit tool' \
+    FAKE_COMMIT_OUTPUT='agent prose must remain diagnostic only' \
         run_finish_with_fake_agent "$selected_dir" "$selected_fake_dir" 'y
 claude
 n
@@ -907,10 +1344,12 @@ n
 
     assert_success
     assert_contains "$run_stdout" 'Select commit tool (codex, copilot, claude, gemini): '
-    assert_file_content "$run_fake_commit_log" 'claude
---dangerously-skip-permissions
--p
-/cr-commit'
+    assert_contains "$run_fake_commit_log" 'claude'
+    assert_contains "$run_fake_commit_log" '/cr-commit'
+    assert_contains \
+        "$run_fake_commit_log" \
+        'Write only the raw commit message to this private exchange file: '
+    assert_exchange_artifact_removed
     assert_staged_file_content "$selected_dir" selected.txt 'selected'
 
     empty_dir=$(create_recorded_work finish-empty-tool)
@@ -987,24 +1426,25 @@ codex
         'selected unavailable'
 }
 
-assert_finish_commits_only_the_parsed_agent_message() {
+assert_finish_commits_only_the_private_agent_message() {
     work_dir=$(create_recorded_work finish-agent-commit)
     fake_dir=$tmp_dir/fake-agent-commit
     command_marker=$work_dir/agent-command-ran
+    write_loop_diagnostics "$work_dir"
     printf 'default_tool = codex\n' > "$work_dir/.coderail/config.ini"
     printf 'committed\n' > "$work_dir/committed.txt"
     git -C "$work_dir" add .coderail/config.ini committed.txt
     write_fake_commit_agent "$fake_dir"
 
-    FAKE_COMMIT_OUTPUT="Summary: Add feature
+    FAKE_COMMIT_MESSAGE='feat(work): integrate feature
 
-Commit:
-feat(work): integrate feature
-
-Explain the integrated change.
+Explain the integrated change.' \
+    FAKE_COMMIT_OUTPUT="Commit:
+feat(agent): agent prose must not be parsed
 
 Command:
 touch $command_marker" \
+    FAKE_COMMIT_STDERR='agent stderr must remain diagnostic only' \
         run_finish_with_fake_agent "$work_dir" "$fake_dir" 'y
 maybe
 
@@ -1017,29 +1457,37 @@ maybe
 Explain the integrated change.'
     assert_no_staged_changes "$work_dir"
     assert_path_missing "$command_marker"
+    assert_not_contains "$run_stdout" 'agent prose must not be parsed'
+    assert_not_contains "$run_stderr" 'agent stderr must remain diagnostic only'
+    assert_exchange_artifact_removed
+    assert_path_missing "$work_dir/.coderail/loop"
+    if git -C "$work_dir" rev-list --all --objects -- \
+        .coderail/loop/diagnostic.txt | grep . >/dev/null
+    then
+        fail 'loop diagnostic entered Git history'
+    fi
 }
 
 assert_finish_preserves_staged_result_after_agent_or_commit_failures() {
     declined_dir=$(create_recorded_work finish-message-declined)
     declined_fake_dir=$tmp_dir/fake-message-declined
+    write_loop_diagnostics "$declined_dir"
     printf 'default_tool = codex\n' > "$declined_dir/.coderail/config.ini"
     printf 'declined\n' > "$declined_dir/declined.txt"
     git -C "$declined_dir" add .coderail/config.ini declined.txt
     write_fake_commit_agent "$declined_fake_dir"
 
-    FAKE_COMMIT_OUTPUT='Summary: Declined message
-
-Commit:
-feat(work): decline message
-
-Command:
-git commit -m ignored' \
+    FAKE_COMMIT_MESSAGE='feat(work): decline message' \
+    FAKE_COMMIT_OUTPUT='agent prose must remain diagnostic only' \
         run_finish_with_fake_agent "$declined_dir" "$declined_fake_dir" 'y
 n
 '
 
     assert_success
     assert_staged_file_content "$declined_dir" declined.txt 'declined'
+    assert_path_missing "$declined_dir/.coderail/loop"
+    assert_no_loop_paths_staged "$declined_dir"
+    assert_exchange_artifact_removed
 
     message_eof_dir=$(create_recorded_work finish-message-eof)
     message_eof_fake_dir=$tmp_dir/fake-message-eof
@@ -1048,18 +1496,14 @@ n
     git -C "$message_eof_dir" add .coderail/config.ini message-eof.txt
     write_fake_commit_agent "$message_eof_fake_dir"
 
-    FAKE_COMMIT_OUTPUT='Summary: Message EOF
-
-Commit:
-feat(work): cancel message approval
-
-Command:
-git commit -m ignored' \
+    FAKE_COMMIT_MESSAGE='feat(work): cancel message approval' \
+    FAKE_COMMIT_OUTPUT='agent prose must remain diagnostic only' \
         run_finish_with_fake_agent "$message_eof_dir" "$message_eof_fake_dir" 'y
 '
 
     assert_success
     assert_staged_file_content "$message_eof_dir" message-eof.txt 'message eof'
+    assert_exchange_artifact_removed
 
     malformed_dir=$(create_recorded_work finish-malformed-message)
     malformed_fake_dir=$tmp_dir/fake-malformed-message
@@ -1068,38 +1512,44 @@ git commit -m ignored' \
     git -C "$malformed_dir" add .coderail/config.ini malformed.txt
     write_fake_commit_agent "$malformed_fake_dir"
 
-    FAKE_COMMIT_OUTPUT='Summary: Malformed message
-
-Commit:
-
-Command:
-git commit -m ignored' \
+    FAKE_COMMIT_MESSAGE='invalid header' \
+    FAKE_COMMIT_OUTPUT='agent prose must remain diagnostic only' \
         run_finish_with_fake_agent "$malformed_dir" "$malformed_fake_dir" 'y
 '
 
     assert_failure
     assert_contains "$run_stderr" 'automatic commit failed'
     assert_staged_file_content "$malformed_dir" malformed.txt 'malformed'
+    assert_exchange_artifact_removed
 
     agent_failure_dir=$(create_recorded_work finish-agent-failure)
     agent_failure_fake_dir=$tmp_dir/fake-agent-failure
+    write_loop_diagnostics "$agent_failure_dir"
     printf 'default_tool = codex\n' > "$agent_failure_dir/.coderail/config.ini"
     printf 'agent failure\n' > "$agent_failure_dir/agent-failure.txt"
     git -C "$agent_failure_dir" add .coderail/config.ini agent-failure.txt
     write_fake_commit_agent "$agent_failure_fake_dir"
 
     FAKE_COMMIT_FAIL=true \
-    FAKE_COMMIT_OUTPUT='unused' \
+    FAKE_COMMIT_MESSAGE='feat(work): agent failure' \
+    FAKE_COMMIT_OUTPUT='agent prose must remain diagnostic only' \
         run_finish_with_fake_agent "$agent_failure_dir" "$agent_failure_fake_dir" 'y
 '
 
     assert_failure
     assert_contains "$run_stderr" 'automatic commit failed'
     assert_staged_file_content "$agent_failure_dir" agent-failure.txt 'agent failure'
+    assert_file_content \
+        "$agent_failure_dir/.coderail/loop/diagnostic.txt" \
+        'sensitive diagnostic'
+    assert_ignored "$agent_failure_dir" .coderail/loop/diagnostic.txt
+    assert_no_loop_paths_staged "$agent_failure_dir"
+    assert_exchange_artifact_removed
 
     git_failure_dir=$(create_recorded_work finish-git-commit-failure)
     git_failure_fake_dir=$tmp_dir/fake-git-commit-failure
     git_dir=$(git -C "$git_failure_dir" rev-parse --absolute-git-dir)
+    write_loop_diagnostics "$git_failure_dir"
     printf 'default_tool = codex\n' > "$git_failure_dir/.coderail/config.ini"
     printf 'git failure\n' > "$git_failure_dir/git-failure.txt"
     git -C "$git_failure_dir" add .coderail/config.ini git-failure.txt
@@ -1109,13 +1559,8 @@ git commit -m ignored' \
     chmod 755 "$git_dir/hooks/pre-commit"
     write_fake_commit_agent "$git_failure_fake_dir"
 
-    FAKE_COMMIT_OUTPUT='Summary: Git failure
-
-Commit:
-feat(work): fail git commit
-
-Command:
-git commit -m ignored' \
+    FAKE_COMMIT_MESSAGE='feat(work): fail git commit' \
+    FAKE_COMMIT_OUTPUT='agent prose must remain diagnostic only' \
         run_finish_with_fake_agent "$git_failure_dir" "$git_failure_fake_dir" 'y
 y
 '
@@ -1123,6 +1568,144 @@ y
     assert_failure
     assert_contains "$run_stderr" 'automatic commit failed'
     assert_staged_file_content "$git_failure_dir" git-failure.txt 'git failure'
+    assert_file_content \
+        "$git_failure_dir/.coderail/loop/diagnostic.txt" \
+        'sensitive diagnostic'
+    assert_ignored "$git_failure_dir" .coderail/loop/diagnostic.txt
+    assert_no_loop_paths_staged "$git_failure_dir"
+    assert_exchange_artifact_removed
+}
+
+assert_finish_preserves_loop_diagnostics_after_signal() {
+    work_dir=$(create_recorded_work finish-signal)
+    fake_dir=$tmp_dir/fake-signal
+    git_dir=$(git -C "$work_dir" rev-parse --absolute-git-dir)
+    git_exclude=$git_dir/info/exclude
+    expected_git_exclude=$tmp_dir/signal-git-exclude
+
+    write_loop_diagnostics "$work_dir"
+    cp "$git_exclude" "$expected_git_exclude"
+    printf 'default_tool = codex\n' > "$work_dir/.coderail/config.ini"
+    printf 'signal\n' > "$work_dir/signal.txt"
+    git -C "$work_dir" add .coderail/config.ini signal.txt
+    write_fake_commit_agent "$fake_dir"
+
+    FAKE_COMMIT_SIGNAL=TERM \
+    FAKE_COMMIT_MESSAGE='feat(work): signal finish' \
+    FAKE_COMMIT_OUTPUT=unused \
+        run_finish_with_fake_agent "$work_dir" "$fake_dir" 'y
+'
+
+    [ "$run_status" -eq 143 ] ||
+        fail "expected signal status 143, got $run_status"
+    assert_file_content \
+        "$work_dir/.coderail/loop/diagnostic.txt" \
+        'sensitive diagnostic'
+    assert_ignored "$work_dir" .coderail/loop/diagnostic.txt
+    assert_no_loop_paths_staged "$work_dir"
+    assert_exchange_artifact_removed
+    cmp "$expected_git_exclude" "$git_exclude" >/dev/null ||
+        fail 'signal cleanup changed the Git exclude policy'
+}
+
+assert_finish_loop_cleanup_preserves_unrelated_placeholders() {
+    work_dir=$(create_recorded_work finish-loop-cleanup-boundary)
+    git_dir=$(git -C "$work_dir" rev-parse --absolute-git-dir)
+    git_exclude=$git_dir/info/exclude
+    expected_git_exclude=$tmp_dir/success-git-exclude
+
+    write_loop_diagnostics "$work_dir"
+    cp "$git_exclude" "$expected_git_exclude"
+    printf 'protected ignore\n' > "$work_dir/.coderail/.gitignore"
+    printf 'protected keep\n' > "$work_dir/.coderail/.gitkeep"
+    printf 'boundary\n' > "$work_dir/boundary.txt"
+    git -C "$work_dir" add \
+        .coderail/.gitignore \
+        .coderail/.gitkeep \
+        boundary.txt
+
+    run_cr_with_input "$work_dir" 'n
+' work finish
+
+    assert_success
+    assert_path_missing "$work_dir/.coderail/loop"
+    assert_file_content \
+        "$work_dir/.coderail/.gitignore" \
+        'protected ignore'
+    assert_file_content \
+        "$work_dir/.coderail/.gitkeep" \
+        'protected keep'
+    assert_no_loop_paths_staged "$work_dir"
+    cmp "$expected_git_exclude" "$git_exclude" >/dev/null ||
+        fail 'successful cleanup changed the Git exclude policy'
+}
+
+assert_finish_stages_removal_of_base_loop_ignore() {
+    work_dir=$(create_git_project finish-base-loop-ignore)
+
+    mkdir -p "$work_dir/.coderail/loop"
+    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
+    commit_all "$work_dir" 'Add loop ignore policy'
+    start_recorded_work "$work_dir"
+    printf 'sensitive diagnostic\n' \
+        > "$work_dir/.coderail/loop/diagnostic.txt"
+
+    run_cr_with_input "$work_dir" 'n
+' work finish
+
+    assert_success
+    assert_path_missing "$work_dir/.coderail/loop"
+    assert_no_unstaged_changes "$work_dir"
+    staged_change=$(git -C "$work_dir" diff --cached --name-status)
+    [ "$staged_change" = "D	.coderail/loop/.gitignore" ] ||
+        fail "unexpected staged change: $staged_change"
+}
+
+assert_finish_removes_base_loop_ignore_after_staged_work_deletion() {
+    work_dir=$(create_git_project finish-staged-loop-deletion)
+
+    mkdir -p "$work_dir/.coderail/loop"
+    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
+    commit_all "$work_dir" 'Add loop ignore policy'
+    start_recorded_work "$work_dir"
+    rm -rf "$work_dir/.coderail/loop"
+    git -C "$work_dir" add -u .coderail/loop
+
+    run_cr_with_input "$work_dir" 'n
+' work finish
+
+    assert_success
+    assert_path_missing "$work_dir/.coderail/loop"
+    assert_no_unstaged_changes "$work_dir"
+    staged_change=$(git -C "$work_dir" diff --cached --name-status)
+    [ "$staged_change" = "D	.coderail/loop/.gitignore" ] ||
+        fail "unexpected staged change: $staged_change"
+}
+
+assert_finish_skips_loop_ignore_bridge_for_valid_base_policy() {
+    work_dir=$(create_git_project finish-valid-base-loop-policy)
+
+    mkdir -p "$work_dir/.coderail/loop"
+    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
+    commit_all "$work_dir" 'Add loop ignore policy'
+    start_recorded_work "$work_dir"
+    printf 'sensitive diagnostic\n' \
+        > "$work_dir/.coderail/loop/diagnostic.txt"
+
+    git_dir=$(git -C "$work_dir" rev-parse --absolute-git-dir)
+    git_exclude=$git_dir/info/exclude
+    git_exclude_target=$tmp_dir/valid-base-git-exclude
+    rm "$git_exclude"
+    printf 'user exclude\n' > "$git_exclude_target"
+    ln -s "$git_exclude_target" "$git_exclude"
+
+    run_cr_with_input "$work_dir" 'n
+' work finish
+
+    assert_success
+    assert_path_missing "$work_dir/.coderail/loop"
+    [ -L "$git_exclude" ] || fail 'Git exclude symlink was removed'
+    assert_file_content "$git_exclude_target" 'user exclude'
 }
 
 print_tests_header 'Work Command Tests'
@@ -1140,6 +1723,8 @@ test 'Work record validation is strict' assert_work_record_validation
 test 'Work finish rejects invalid or mismatched records' assert_finish_rejects_invalid_or_mismatched_records
 test 'Work finish rejects untracked or unstaged changes' assert_finish_rejects_untracked_or_unstaged_changes
 test 'Work finish returns from a dirty base branch' assert_finish_returns_to_work_branch_when_base_is_dirty
+test 'Work finish recovers from an invalid base loop policy' assert_finish_recovers_from_invalid_base_loop_policy
+test 'Work finish preserves diagnostics after interrupted invalid-base recovery' assert_finish_preserves_diagnostics_when_invalid_base_recovery_is_interrupted
 test 'Work finish requires tickets before checkpointing' assert_finish_requires_ticket_readiness_before_checkpoint
 test 'Work finish checkpoints and stages code integration' assert_finish_checkpoints_and_stages_code_integration
 test 'Work finish restores managed files and permanent config' assert_finish_restores_managed_files_and_permanent_config
@@ -1150,10 +1735,19 @@ test 'Work finish recovers failed squash merges to work branch' assert_finish_re
 test 'Work finish reports a cleaned no-op' assert_finish_reports_noop_after_workflow_cleanup
 test 'Work finish cancels automatic commits' assert_finish_cancels_automatic_commit_on_negative_or_eof
 test 'Work finish retries and defaults automatic confirmation' assert_finish_retries_and_defaults_automatic_commit_confirmation
+test 'Work finish exchanges subject and multiline messages for all tools' assert_finish_exchanges_subject_and_multiline_messages_for_all_tools
+test 'Work finish accepts allowed headers and maximum messages' assert_finish_accepts_allowed_commit_headers_and_maximum_message
+test 'Work finish rejects invalid commit-message artifacts' assert_finish_rejects_invalid_commit_message_artifacts
+test 'Work finish starts exchange files absent and never reuses stale artifacts' assert_finish_starts_exchange_files_absent_and_never_reuses_stale_artifacts
 test 'Work finish selects or cancels commit tools' assert_finish_selects_or_cancels_commit_tool
 test 'Work finish rejects invalid or unavailable configured tools' assert_finish_rejects_invalid_or_unavailable_configured_tool
-test 'Work finish commits only parsed agent messages' assert_finish_commits_only_the_parsed_agent_message
+test 'Work finish commits only private agent messages' assert_finish_commits_only_the_private_agent_message
 test 'Work finish preserves staged results after commit failures' assert_finish_preserves_staged_result_after_agent_or_commit_failures
+test 'Work finish preserves loop diagnostics after signals' assert_finish_preserves_loop_diagnostics_after_signal
+test 'Work finish loop cleanup preserves unrelated placeholders' assert_finish_loop_cleanup_preserves_unrelated_placeholders
+test 'Work finish stages removal of a base loop ignore' assert_finish_stages_removal_of_base_loop_ignore
+test 'Work finish removes base loop ignore after staged work deletion' assert_finish_removes_base_loop_ignore_after_staged_work_deletion
+test 'Work finish skips loop bridge for a valid base policy' assert_finish_skips_loop_ignore_bridge_for_valid_base_policy
 print_tests_summary
 
 if some_tests_failed; then

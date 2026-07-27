@@ -15,6 +15,7 @@ ROOT_DIR=$(
 )
 
 . "$ROOT_DIR/lib/utils/ticket.sh"
+. "$ROOT_DIR/lib/utils/loop.sh"
 . "$ROOT_DIR/lib/utils/work.sh"
 
 usage() {
@@ -105,16 +106,17 @@ invoke_commit_agent() {
         codex)
             exec "$selected_tool" --sandbox workspace-write \
                 -c 'sandbox_workspace_write.network_access=true' \
-                exec '$cr-commit'
+                exec "$commit_agent_prompt"
             ;;
         claude)
-            exec "$selected_tool" --dangerously-skip-permissions -p '/cr-commit'
+            exec "$selected_tool" --dangerously-skip-permissions -p \
+                "$commit_agent_prompt"
             ;;
         gemini)
-            exec "$selected_tool" --approval-mode=yolo -p '/cr-commit'
+            exec "$selected_tool" --approval-mode=yolo -p "$commit_agent_prompt"
             ;;
         copilot)
-            exec "$selected_tool" --yolo -p '/cr-commit'
+            exec "$selected_tool" --yolo -p "$commit_agent_prompt"
             ;;
         *)
             automatic_commit_failure "unsupported tool: $selected_tool"
@@ -155,49 +157,43 @@ abort() {
     exit "$1"
 }
 
-parse_commit_message() {
-    awk '
-        $0 == "Commit:" {
-            if (commit_started) {
-                exit 1
-            }
-            commit_started = 1
-            next
-        }
-        $0 == "Command:" {
-            if (!commit_started) {
-                exit 1
-            }
-            command_started = 1
-            exit
-        }
-        commit_started {
-            lines[++line_count] = $0
-        }
-        END {
-            if (!commit_started || !command_started) {
-                exit 1
-            }
+remove_commit_message() {
+    if [ -e "$commit_message_file" ] || [ -L "$commit_message_file" ]; then
+        rm -rf "$commit_message_file" ||
+            return 1
+    fi
 
-            while (line_count > 0 && lines[1] ~ /^[[:space:]]*$/) {
-                for (line_index = 1; line_index < line_count; line_index++) {
-                    lines[line_index] = lines[line_index + 1]
-                }
-                line_count--
-            }
-            while (line_count > 0 && lines[line_count] ~ /^[[:space:]]*$/) {
-                line_count--
-            }
+    [ ! -e "$commit_message_file" ] && [ ! -L "$commit_message_file" ]
+}
 
-            if (line_count == 0) {
-                exit 1
-            }
+read_commit_message() {
+    [ -f "$commit_message_file" ] &&
+        [ ! -L "$commit_message_file" ] &&
+        [ -r "$commit_message_file" ] ||
+        return 1
 
-            for (line_index = 1; line_index <= line_count; line_index++) {
-                print lines[line_index]
+    commit_message_size=$(wc -c < "$commit_message_file" | tr -d '[:space:]') ||
+        return 1
+    [ "$commit_message_size" -ge 1 ] &&
+        [ "$commit_message_size" -le 65536 ] ||
+        return 1
+
+    if LC_ALL=C od -An -v -tx1 "$commit_message_file" |
+        grep -Eq '(^| )(00|0d)( |$)'
+    then
+        return 1
+    fi
+
+    commit_message=$(cat "$commit_message_file"; printf .) || return 1
+    commit_message=${commit_message%.}
+    remove_commit_message || return 1
+
+    printf '%s\n' "$commit_message" |
+        LC_ALL=C awk '
+            NR == 1 {
+                exit $0 !~ /^(feat|fix|refactor|docs|test|style|chore)(\([^()\001-\037\177]+\))?!?: [^\001-\040\177][^\001-\037\177]*$/
             }
-        }
-    ' "$agent_output" > "$commit_message_file"
+        '
 }
 
 collect_managed_paths() {
@@ -206,6 +202,9 @@ collect_managed_paths() {
     git ls-tree -r --name-only "$managed_ref" -- .coderail |
         while IFS= read -r managed_path || [ -n "$managed_path" ]; do
             case "$managed_path" in
+                .coderail/loop/.gitignore)
+                    printf '%s\n' "$managed_path"
+                    ;;
                 .coderail/config.ini|.coderail/conf.ini|.coderail/test.map|*/.gitignore|*/.gitkeep)
                     ;;
                 .coderail/*)
@@ -238,13 +237,83 @@ remove_child_only_managed_paths() {
 
         git rm --quiet --force --ignore-unmatch --cached -- "$work_managed_path" ||
             fatal "failed to remove work workflow file: $work_managed_path"
+        [ "$work_managed_path" = .coderail/loop/.gitignore ] &&
+            continue
         rm -f "$work_managed_path" ||
             fatal "failed to remove work workflow file: $work_managed_path"
     done < "$work_managed_paths"
 }
 
 return_to_work_branch() {
-    git switch --quiet "$recorded_work_branch"
+    if [ "$loop_diagnostics_present" = true ] &&
+        ! git cat-file -e HEAD:.coderail/loop/.gitignore 2>/dev/null
+    then
+        rm -f .coderail/loop/.gitignore ||
+            return 1
+    fi
+
+    git switch --quiet "$recorded_work_branch" ||
+        return 1
+
+    if [ "$loop_diagnostics_present" = true ]; then
+        loop_setup . >/dev/null &&
+            loop_verify_ignore_policy .
+    fi
+}
+
+setup_loop_ignore_bridge() {
+    [ "$loop_diagnostics_present" = true ] ||
+        return 0
+
+    loop_base_ignore_file=$tmp_dir/base-loop-gitignore
+    if git ls-tree "$recorded_base_branch" -- .coderail/loop/.gitignore |
+        grep -q '^100[0-9][0-9][0-9] blob ' &&
+        git show "$recorded_base_branch:.coderail/loop/.gitignore" \
+            > "$loop_base_ignore_file" 2>/dev/null &&
+        printf '*\n!.gitignore\n' | cmp "$loop_base_ignore_file" - >/dev/null 2>&1
+    then
+        return 0
+    fi
+
+    loop_bridge_file=$(git rev-parse --git-path info/exclude) ||
+        return 1
+    loop_bridge_backup=$tmp_dir/base-git-exclude
+    loop_bridge_file_existed=false
+
+    mkdir -p "$(dirname "$loop_bridge_file")" ||
+        return 1
+
+    if [ -e "$loop_bridge_file" ] || [ -L "$loop_bridge_file" ]; then
+        [ -f "$loop_bridge_file" ] &&
+            [ ! -L "$loop_bridge_file" ] ||
+            return 1
+        cp "$loop_bridge_file" "$loop_bridge_backup" ||
+            return 1
+        loop_bridge_file_existed=true
+    else
+        : > "$loop_bridge_backup" ||
+            return 1
+    fi
+
+    printf '\n%s\n' '/.coderail/loop/' >> "$loop_bridge_file" ||
+        return 1
+
+    loop_bridge_active=true
+}
+
+remove_loop_ignore_bridge() {
+    [ "$loop_bridge_active" = true ] ||
+        return 0
+
+    if [ "$loop_bridge_file_existed" = true ]; then
+        cat "$loop_bridge_backup" > "$loop_bridge_file" ||
+            return 1
+    else
+        rm -f "$loop_bridge_file" ||
+            return 1
+    fi
+
+    loop_bridge_active=false
 }
 
 while [ "$#" -gt 0 ]; do
@@ -297,6 +366,13 @@ recorded_work_name=$work_name
 git show-ref --verify --quiet "refs/heads/$recorded_base_branch" ||
     fatal "base branch not found: $recorded_base_branch"
 
+loop_diagnostics_present=false
+if [ -e .coderail/loop ] || [ -L .coderail/loop ]; then
+    loop_verify_ignore_policy . ||
+        fatal "loop ignore policy is invalid: .coderail/loop/.gitignore"
+    loop_diagnostics_present=true
+fi
+
 untracked_files=$(git ls-files --others --exclude-standard) ||
     fatal "failed to query Git worktree"
 [ -z "$untracked_files" ] ||
@@ -314,9 +390,49 @@ TEMP_DIR=${TMPDIR:-/tmp}
 TEMP_DIR=${TEMP_DIR%/}
 tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-work-finish.XXXXXX") ||
     fatal "failed to create temporary directory"
+chmod 700 "$tmp_dir" ||
+    fatal "failed to secure temporary directory"
+
+loop_bridge_active=false
+loop_bridge_backup=
+loop_bridge_file=
+loop_bridge_file_existed=false
 
 cleanup() {
+    cleanup_status=$?
+
+    if ! remove_commit_message; then
+        echo "error: failed to remove commit-message exchange artifact" >&2
+        [ "$cleanup_status" -ne 0 ] ||
+            cleanup_status=1
+    fi
+
+    if [ "$cleanup_status" -eq 0 ]; then
+        if ! loop_remove .; then
+            echo "error: failed to remove loop diagnostic directory" >&2
+            cleanup_status=1
+        fi
+    elif [ "$loop_diagnostics_present" = true ]; then
+        if ! loop_verify_ignore_policy .; then
+            if ! return_to_work_branch; then
+                echo "error: failed to preserve loop diagnostic ignore policy" >&2
+            fi
+        elif ! loop_setup . >/dev/null ||
+            ! loop_verify_ignore_policy .
+        then
+            echo "error: failed to preserve loop diagnostic ignore policy" >&2
+        fi
+    fi
+
+    if ! remove_loop_ignore_bridge; then
+        echo "error: failed to remove loop diagnostic ignore bridge" >&2
+        [ "$cleanup_status" -ne 0 ] ||
+            cleanup_status=1
+    fi
+
     rm -rf "$tmp_dir"
+    trap - EXIT
+    exit "$cleanup_status"
 }
 trap cleanup EXIT
 trap 'abort 129' HUP
@@ -330,6 +446,7 @@ committed_record=$tmp_dir/work.ini
 squash_unmerged_paths=$tmp_dir/squash-unmerged-paths
 agent_output=$tmp_dir/agent-output
 commit_message_file=$tmp_dir/commit-message
+commit_message=
 
 ticket_collect_files . "$ticket_files" "$tmp_dir" ||
     fatal "failed to collect tickets"
@@ -356,8 +473,23 @@ work_read_record "$committed_record" ||
 collect_managed_paths "$recorded_work_branch" > "$work_managed_paths" ||
     fatal "failed to capture work workflow files"
 
+setup_loop_ignore_bridge ||
+    fatal "failed to set up loop diagnostic ignore bridge"
+
 git switch --quiet "$recorded_base_branch" ||
     fatal "failed to switch to base branch: $recorded_base_branch"
+
+if [ "$loop_diagnostics_present" = true ]; then
+    loop_setup . >/dev/null ||
+        fatal "failed to set up loop diagnostic directory on base branch"
+    if ! loop_verify_ignore_policy .; then
+        if return_to_work_branch; then
+            fatal "loop ignore policy is invalid on base branch: .coderail/loop/.gitignore"
+        else
+            fatal "loop ignore policy is invalid on base branch: .coderail/loop/.gitignore; failed to return to work branch"
+        fi
+    fi
+fi
 
 base_worktree_status=$(git status --porcelain --untracked-files=all) ||
     fatal "failed to query base worktree"
@@ -406,6 +538,10 @@ if [ "$squash_status" -ne 0 ] && [ ! -s "$squash_unmerged_paths" ]; then
     fi
 fi
 
+git rm --quiet --force --ignore-unmatch --cached -- \
+    .coderail/loop/.gitignore ||
+    fatal "failed to remove loop diagnostic ignore from integration"
+
 if git diff --cached --quiet; then
     echo "work produced no integration changes"
     exit 0
@@ -428,6 +564,24 @@ fi
 commit_agent_pid=
 commit_spinner_pid=
 
+[ ! -e "$commit_message_file" ] && [ ! -L "$commit_message_file" ] ||
+    automatic_commit_failure "commit-message exchange artifact already exists"
+
+case "$selected_tool" in
+    codex)
+        commit_skill_invocation='$cr-commit'
+        ;;
+    copilot|claude|gemini)
+        commit_skill_invocation='/cr-commit'
+        ;;
+esac
+
+commit_agent_prompt=$(printf '%s\n' \
+    "$commit_skill_invocation" \
+    '' \
+    "Write only the raw commit message to this private exchange file: $commit_message_file" \
+    'Do not write a summary, command, markdown, or other prose to that file.')
+
 invoke_commit_agent > "$agent_output" 2>&1 &
 commit_agent_pid=$!
 
@@ -443,21 +597,28 @@ else
     commit_agent_status=$?
     commit_agent_pid=
     stop_commit_generation
+    remove_commit_message ||
+        automatic_commit_failure "failed to remove commit-message exchange artifact"
     [ "$commit_agent_status" -eq 130 ] && exit 130
     automatic_commit_failure "failed to generate commit message"
 fi
 
-if ! parse_commit_message; then
-    automatic_commit_failure "could not parse generated commit message"
+if ! read_commit_message; then
+    remove_commit_message ||
+        automatic_commit_failure "failed to remove commit-message exchange artifact"
+    automatic_commit_failure "invalid commit-message exchange artifact"
 fi
 
+[ ! -e "$commit_message_file" ] && [ ! -L "$commit_message_file" ] ||
+    automatic_commit_failure "commit-message exchange artifact changed"
+
 printf 'Proposed commit message:\n\n'
-cat "$commit_message_file"
+printf '%s' "$commit_message"
 printf '\n'
 
 if ! prompt_yes_no 'Use this commit message?'; then
     exit 0
 fi
 
-git commit -q -F "$commit_message_file" ||
+printf '%s' "$commit_message" | git commit -q -F - ||
     automatic_commit_failure "failed to create integration commit"

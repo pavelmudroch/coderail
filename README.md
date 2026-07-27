@@ -465,10 +465,22 @@ unstaged files, and all tickets resolved. It switches to the recorded base branc
 stages a squash integration, and removes branch-local Coderail workflow files
 from that integration while preserving the base branch configuration.
 
+Loop diagnostics remain available after failed or interrupted finish attempts.
+Every successful finish removes the complete `.coderail/loop/` directory,
+including success paths that leave integration changes staged for manual
+commit. The temporary work branch remains available as the intentional durable
+history of the work.
+
 This is more automated than the manual lifecycle, but it does not push and
 does not create a commit without confirmation. You can inspect and commit the
 staged integration yourself, or confirm a configured or selected supported
 tool's proposed integration commit message.
+
+For automatic generation only, `work finish` gives the tool a unique private
+file for the raw Conventional Commit message. It validates the single-use file
+then removes it before showing the message for confirmation; agent standard
+output and error remain diagnostics, never commit-message input. Direct
+`cr-commit` remains the human-oriented instruction for proposing a message.
 
 ## Configuration
 
@@ -975,7 +987,9 @@ It repeatedly:
 3. Requires the agent to close the ticket as satisfied.
 4. When automatic review is enabled and the ticket closes as `done`, hands its stable ID to an autonomous reviewer.
 5. Stages all post-agent changes after the ticket is closed as satisfied.
-6. Continues until the configured limit is reached or no ready ticket remains.
+6. Runs review if configured and the ticket closed as `done`.
+7. Reconciles recorded specification drift at the configured cadence.
+8. Continues until the configured limit is reached or no ready ticket remains.
 
 Usage:
 
@@ -1006,6 +1020,7 @@ Options:
 ```txt
 -m <count>, --max <count>  Maximum successful implementation handoffs; default is 5
 --all                      Process all ready open tickets; incompatible with --max
+--drift-check <cadence>    Reconcile drift: never, each, end, or a positive integer; default each
 --auto-review              Run an autonomous review after each ticket closes as done
 --no-auto-review           Do not run autonomous reviews after tickets close as done
 ```
@@ -1021,17 +1036,45 @@ dependent follow-up ticket while the reviewed ticket stays closed.
 
 `--max` counts successful implementation handoffs, not unique ticket IDs. Reimplementing a reopened ticket consumes another slot. `--all` can continue through reopened tickets and review-created follow-up tickets until none are ready.
 
-Each agent phase appends its combined standard output and error to the fixed
-per-ticket transcript `.coderail/loop/<ticket-basename>.txt`. Agent output is
-not streamed to the terminal. Inspect the current handoff with:
+`--drift-check` is command-only; it is not a configuration key. The default
+`each` checks an existing discovery at startup and after every successful
+implementation/review iteration. `never` skips all checks. `end` checks at
+startup and whenever the runnable queue is exhausted or the processing limit
+is reached, processing tickets made runnable by reconciliation until stable
+when `--all` is used. A positive
+integer checks at startup, after each full successful-iteration interval, and
+once for a non-empty partial interval at exit. Drift checks do not consume a
+`--max` slot; `--max` remains a hard processing cap.
+
+Implementation captures specification drift in `.coderail/DISCOVERY.md` with
+`resolved: false`; it does not reconcile or delete that document. When a check
+finds it, the loop invokes `cr-drift`. That skill verifies findings and updates
+the specification before affected tickets, then writes the explicit resolution
+marker. The command validates that marker: `true` stages reconciliation changes
+and removes the document; `false` stages the changes and stops for a user
+decision. Invalid markers and failed drift agents preserve the document and
+leave that invocation's changes unstaged.
+
+Each implementation and review phase appends its combined standard output and
+error to `.coderail/loop/<ticket-basename>.txt`; drift uses the dedicated
+`.coderail/loop/drift.txt`. Agent output is not streamed to the terminal.
+Inspect the current handoff with:
 
 ```sh
 tail -f .coderail/loop/0001-demo.txt
 ```
 
-`cr init` creates `.coderail/loop/.gitignore` so these local transcripts stay
-out of Git. Repeated implementation and review handoffs append to the same
-ticket transcript.
+`cr init` creates `.coderail/loop/.gitignore` with `*` and `!.gitignore`, so
+the ignore file is the only loop-output file eligible for Git. Repeated
+implementation and review handoffs append to the same ticket transcript.
+Diagnostics remain available after successful and failed ticket-loop
+invocations, then every successful `cr work finish` removes the complete loop
+directory without a separate prompt. Failed or interrupted finish attempts
+preserve it.
+
+Ignored diagnostics are local and temporary, but may still contain secrets
+from agent output. Inspect and handle them accordingly. The temporary work
+branch, not these raw diagnostics, is the intentional durable history.
 
 By default, the terminal shows compact ticket progress: the title, ticket
 file, transcript inspection command, phase status, and durations. For a
