@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - New skill `cr-forge` for shaping the idea before specification, ment to replace `cr-scope` skill.
+- `cr-drift` skill for reconciling verified implementation discoveries with the specification and affected tickets.
 - `cr work start` creates and records a local work branch.
 - `cr work finish` stages a squash integration of recorded work onto its starting branch.
 
 ### Changed
 
 - `cr clean` preserves `.coderail/work.ini` work records.
+- `cr-ticket-implement` records specification drift in `.coderail/DISCOVERY.md` for later reconciliation.
 
 ## [v1.2.0] - 2026-07-17
 

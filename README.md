@@ -22,6 +22,7 @@ Coderail automates repetitive development mechanics while keeping direction, rev
   * [Create and review a specification](#create-and-review-a-specification)
   * [Create and review tickets](#create-and-review-tickets)
   * [Implement tickets](#implement-tickets)
+  * [Reconcile specification drift](#reconcile-specification-drift)
   * [Update documentation](#update-documentation)
   * [Review the complete change](#review-the-complete-change)
   * [Manual: clean and integrate](#manual-clean-and-integrate)
@@ -342,8 +343,9 @@ The implementation workflow:
 2. Completes its tasks in order.
 3. Reviews agent or worker output.
 4. Runs repository validation through `cr test`.
-5. Records a concise implementation summary.
-6. Closes the ticket only after successful verification.
+5. Records detected specification drift in `.coderail/DISCOVERY.md`.
+6. Records a concise implementation summary.
+7. Closes the ticket only after successful verification.
 
 Completed implementation changes can be committed to the feature branch at ticket-sized checkpoints.
 
@@ -358,6 +360,16 @@ cr ticket loop
 The loop requires a Git repository and a completely clean worktree when it starts. Commit or remove newly created or modified ticket files before starting it.
 
 The loop is explicitly invoked and bounded by the user. It is intended to remove repetitive ticket handoff work, not to replace human review or run indefinitely.
+
+### Reconcile specification drift
+
+When implementation reveals that the specification no longer matches repository reality, `cr-ticket-implement` records the finding in:
+
+```txt
+.coderail/DISCOVERY.md
+```
+
+Invoke `cr-drift` to verify each discovery against the repository. It updates the specification first, then reconciles only the affected tickets. Verified, rejected, and stale discoveries are resolved; discoveries that need an architectural decision remain for the user. Discoveries are evidence, not a source of truth.
 
 ### Update documentation
 
