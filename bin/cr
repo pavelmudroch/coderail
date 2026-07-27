@@ -31,6 +31,7 @@ export CODERAIL_BIN_PATH
 
 . "$ROOT_DIR/lib/utils/log.sh"
 . "$ROOT_DIR/lib/utils/args.sh"
+. "$ROOT_DIR/lib/utils/config.sh"
 
 usage() {
     cat <<'EOF'
@@ -98,6 +99,11 @@ run_global_command() {
     sh "$script" "$@"
 }
 
+load_config_from_base() {
+    load_effective_config "$1"
+    export default_tool auto_review
+}
+
 work_dir=.
 work_dir_set=0
 export log_verbose=0
@@ -110,12 +116,14 @@ while [ "$#" -gt 0 ]; do
         -h|--help)
             shift
             require_no_args "$@"
+            load_config_from_base .
             usage
             exit 0
             ;;
         --version)
             shift
             require_no_args "$@"
+            load_config_from_base .
             version
             exit 0
             ;;
@@ -142,12 +150,15 @@ while [ "$#" -gt 0 ]; do
         upgrade|install|uninstall)
             command=$1
             shift
+            load_config_from_base .
             run_global_command "$command" "$@"
             exit 0
             ;;
         init|clean|work|ticket|test)
             command=$1
             shift
+            [ -d "$work_dir" ] || error "--cwd is not a directory: $work_dir"
+            load_config_from_base "$work_dir"
             run_command "$command" "$@"
             exit 0
             ;;

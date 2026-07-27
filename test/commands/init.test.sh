@@ -63,6 +63,11 @@ assert_file_content() {
         fail "$file content differs"
 }
 
+assert_file_contains() {
+    grep -F -- "$2" "$1" >/dev/null ||
+        fail "$1 does not contain: $2"
+}
+
 assert_init_succeeds() {
     work_dir=$1
 
@@ -91,7 +96,7 @@ assert_clean_init() {
     assert_empty_dir "$work_dir/.coderail/tickets"
     assert_file_content "$work_dir/.coderail/loop/.gitignore" "*
 !.gitignore"
-    assert_file_content "$work_dir/.coderail/conf.ini" "# characters after '#' are comments
+    assert_file_content "$work_dir/.coderail/config.ini" "# characters after '#' are comments
 # default_tool = codex # set the default tool for cr"
     assert_file_content "$work_dir/.coderail/test.map" "# first '#' starts a Coderail comment, even inside quoted shell text
 
@@ -118,12 +123,12 @@ assert_init_preserves_existing_files() {
     work_dir=$tmp_dir/existing-files
 
     mkdir -p "$work_dir/.coderail"
-    printf 'user conf\n' > "$work_dir/.coderail/conf.ini"
+    printf 'default_tool = codex\n' > "$work_dir/.coderail/config.ini"
     printf 'project file\n' > "$work_dir/project.txt"
 
     assert_init_succeeds "$work_dir"
 
-    assert_file_content "$work_dir/.coderail/conf.ini" "user conf"
+    assert_file_content "$work_dir/.coderail/config.ini" "default_tool = codex"
     assert_file_content "$work_dir/project.txt" "project file"
     assert_empty_dir "$work_dir/.coderail/tickets"
     assert_file_content "$work_dir/.coderail/test.map" "# first '#' starts a Coderail comment, even inside quoted shell text
@@ -134,6 +139,34 @@ assert_init_preserves_existing_files() {
 # Use captures in section patterns for commands that need selected path
 # [{path:**}]
 # shellcheck {path}"
+}
+
+assert_init_preserves_legacy_config() {
+    work_dir=$tmp_dir/legacy-config
+
+    mkdir -p "$work_dir/.coderail"
+    printf 'default_tool = codex\n' > "$work_dir/.coderail/conf.ini"
+
+    assert_init_succeeds "$work_dir"
+
+    assert_file_content "$work_dir/.coderail/conf.ini" "default_tool = codex"
+    assert_file_content "$work_dir/.coderail/config.ini" "# characters after '#' are comments
+# default_tool = codex # set the default tool for cr"
+}
+
+assert_readme_documents_repository_config_migration() {
+    readme=$SCRIPT_DIR/../../README.md
+
+    assert_file_contains "$readme" '### `.coderail/config.ini`'
+    assert_file_contains "$readme" '`.coderail/conf.ini` is a deprecated fallback'
+    assert_file_contains "$readme" 'rename it to `config.ini`'
+    assert_file_contains "$readme" '`config.ini` takes precedence over `conf.ini`'
+    assert_file_contains "$readme" '`default_tool`'
+    assert_file_contains "$readme" '`auto_review`'
+    assert_file_contains "$readme" '`codex`, `claude`, `copilot`, or `gemini`'
+    assert_file_contains "$readme" '`true` or `false`'
+    assert_file_contains "$readme" '`--auto-review`'
+    assert_file_contains "$readme" '`--no-auto-review`'
 }
 
 assert_init_without_write_permission_fails() {
@@ -160,9 +193,11 @@ assert_init_target_file_fails() {
 print_tests_header "Init Tests"
 test "Clean init creates coderail files" assert_clean_init
 test "Init preserves existing files" assert_init_preserves_existing_files
+test "Init preserves legacy config" assert_init_preserves_legacy_config
 test "Init preserves existing loop ignore" assert_init_preserves_existing_loop_ignore
 test "Init without write permission fails" assert_init_without_write_permission_fails
 test "Init target file fails" assert_init_target_file_fails
+test "README documents repository config migration" assert_readme_documents_repository_config_migration
 
 print_tests_summary
 

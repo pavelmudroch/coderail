@@ -79,7 +79,7 @@ complete.
 | Path | Role | Lifetime |
 | --- | --- | --- |
 | `~/.coderail/config.ini` | User default, currently `default_tool` | User-local |
-| `.coderail/conf.ini` | Repository defaults; overrides user config | Permanent |
+| `.coderail/config.ini` | Repository defaults; overrides user config | Permanent |
 | `.coderail/test.map` | Maps selected paths to validation commands | Permanent |
 | `.coderail/work.ini` | Managed-work base branch, work branch, and name | One managed branch lifecycle |
 | `.coderail/IDEA.md` | Current forged direction | Temporary |
@@ -89,7 +89,11 @@ complete.
 | `.coderail/tickets/{open,active,closed}` | Branch-local work graph | Temporary |
 | `.coderail/loop/*.txt` | Ignored implementation/review transcripts | Local diagnostic |
 
-`cr clean` preserves `conf.ini`, `test.map`, and `work.ini`. Managed
+Repository configuration uses `config.ini`; a legacy `conf.ini` remains a
+deprecated fallback and emits a migration warning.
+
+`cr clean` preserves `config.ini`, the legacy `conf.ini` fallback, `test.map`,
+and `work.ini`. Managed
 `cr work finish` omits child workflow files from the squash integration and
 restores workflow files already present on the base branch.
 
@@ -146,7 +150,7 @@ forced.
 Configure a default agent tool when useful:
 
 ```ini
-# ~/.coderail/config.ini or .coderail/conf.ini
+# ~/.coderail/config.ini or .coderail/config.ini
 default_tool = codex
 ```
 

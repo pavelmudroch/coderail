@@ -247,7 +247,7 @@ write_repo_config() {
     shift
 
     mkdir -p "$work_dir/.coderail"
-    printf '%s\n' "$@" > "$work_dir/.coderail/conf.ini"
+    printf '%s\n' "$@" > "$work_dir/.coderail/config.ini"
 }
 
 assert_root_instruction() {
@@ -609,6 +609,29 @@ assert_repo_default_tool_overrides_user_install() {
     assert_installed_files_in_home "$home_dir" claude
 }
 
+assert_install_rejects_missing_default_tool() {
+    home_dir=$tmp_dir/home-default-missing
+    work_dir=$tmp_dir/work-default-missing
+    error_file=$tmp_dir/default-missing.err
+
+    mkdir "$home_dir" "$work_dir"
+
+    set +e
+    (
+        cd "$work_dir"
+        HOME=$home_dir "$CR" install
+    ) >/dev/null 2>"$error_file"
+    status=$?
+    set -e
+
+    [ "$status" -ne 0 ] || fail 'install unexpectedly succeeded without a tool'
+    assert_contains "$error_file" 'error: missing tool'
+    assert_path_missing "$home_dir/.codex"
+    assert_path_missing "$home_dir/.copilot"
+    assert_path_missing "$home_dir/.claude"
+    assert_path_missing "$home_dir/.gemini"
+}
+
 assert_default_tool_comments_install() {
     home_dir=$tmp_dir/home-default-comments
     work_dir=$tmp_dir/work-default-comments
@@ -640,21 +663,20 @@ assert_invalid_default_tool_install_fails() {
     set -e
 
     [ "$status" -ne 0 ] || fail "install unexpectedly succeeded with invalid default tool"
-    assert_contains "$error_file" "unknown tool: unknown"
+    assert_contains "$error_file" 'invalid value for default_tool: unknown'
     assert_path_missing "$home_dir/.unknown"
 }
 
-assert_explicit_tools_ignore_invalid_default_install() {
+assert_explicit_tool_overrides_effective_default_install() {
     home_dir=$tmp_dir/home-default-explicit
     work_dir=$tmp_dir/work-default-explicit
 
     mkdir "$home_dir" "$work_dir"
-    write_user_config "$home_dir" "default_tool = unknown-user"
-    write_repo_config "$work_dir" "default_tool = unknown-repo"
+    write_repo_config "$work_dir" "default_tool = codex"
 
-    assert_install_succeeds_from_dir "$work_dir" "$home_dir" codex claude
+    assert_install_succeeds_from_dir "$work_dir" "$home_dir" claude
 
-    assert_installed_files_in_home "$home_dir" codex
+    assert_path_missing "$home_dir/.codex"
     assert_installed_files_in_home "$home_dir" claude
 }
 
@@ -866,9 +888,10 @@ test "Cwd is ignored for install" assert_cwd_ignored_for_install
 test "Install multiple tools" assert_multi_tool_install
 test "Install uses user default tool" assert_user_default_tool_install
 test "Repo default tool overrides user default for install" assert_repo_default_tool_overrides_user_install
+test "Install rejects missing default tool" assert_install_rejects_missing_default_tool
 test "Default tool install handles comments" assert_default_tool_comments_install
 test "Invalid default tool fails install" assert_invalid_default_tool_install_fails
-test "Explicit install tools ignore invalid default" assert_explicit_tools_ignore_invalid_default_install
+test "Explicit install tool overrides effective default" assert_explicit_tool_overrides_effective_default_install
 test "Default tool install honors target override" assert_default_tool_home_override_install
 test "Policy keys normalize per tool" assert_policy_key_normalization
 test "Conflicting policy fails" assert_conflicting_policy_fails

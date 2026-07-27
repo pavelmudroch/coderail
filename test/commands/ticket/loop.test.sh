@@ -236,8 +236,8 @@ write_repo_config() {
     shift
 
     mkdir -p "$work_dir/.coderail"
-    printf '%s\n' "$@" > "$work_dir/.coderail/conf.ini"
-    git -C "$work_dir" add .coderail/conf.ini
+    printf '%s\n' "$@" > "$work_dir/.coderail/config.ini"
+    git -C "$work_dir" add .coderail/config.ini
     git -C "$work_dir" commit -q -m "Set repo config"
 }
 
@@ -655,6 +655,7 @@ assert_loop_short_help() {
     assert_contains "$run_stdout" "Usage:"
     assert_contains "$run_stdout" "cr ticket loop"
     assert_contains "$run_stdout" "--auto-review"
+    assert_contains "$run_stdout" "--no-auto-review"
     assert_not_contains "$run_stdout" "--output-dir"
     assert_not_contains "$run_stdout" "--progress-only"
     assert_file_empty "$run_stderr"
@@ -669,6 +670,7 @@ assert_loop_long_help() {
     assert_contains "$run_stdout" "Usage:"
     assert_contains "$run_stdout" "cr ticket loop"
     assert_contains "$run_stdout" "--auto-review"
+    assert_contains "$run_stdout" "--no-auto-review"
     assert_not_contains "$run_stdout" "--output-dir"
     assert_not_contains "$run_stdout" "--progress-only"
     assert_file_empty "$run_stderr"
@@ -734,15 +736,33 @@ assert_loop_rejects_repeated_max() {
     assert_contains "$run_stderr" "--max provided multiple times"
 }
 
-assert_loop_rejects_repeated_auto_review() {
-    work_dir=$(create_project repeated-auto-review)
+assert_loop_rejects_second_auto_review_option() {
+    work_dir=$(create_project second-auto-review-option)
 
     run_loop "$work_dir" --auto-review --auto-review codex
 
     assert_usage_failure
     assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "--auto-review provided multiple times"
+    assert_contains "$run_stderr" "review option provided multiple times"
     assert_contains "$run_stderr" "Usage:"
+
+    run_loop "$work_dir" --no-auto-review --no-auto-review codex
+
+    assert_usage_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "review option provided multiple times"
+
+    run_loop "$work_dir" --auto-review --no-auto-review codex
+
+    assert_usage_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "review option provided multiple times"
+
+    run_loop "$work_dir" --no-auto-review --auto-review codex
+
+    assert_usage_failure
+    assert_file_empty "$run_stdout"
+    assert_contains "$run_stderr" "review option provided multiple times"
 }
 
 assert_loop_rejects_all_with_max() {
@@ -935,8 +955,8 @@ assert_loop_explicit_tool_wins() {
     work_dir=$(create_project explicit-tool)
     home_dir=$(create_home explicit-tool)
 
-    write_user_config "$home_dir" "default_tool = unknown-user"
-    write_repo_config "$work_dir" "default_tool = unknown-repo"
+    write_user_config "$home_dir" "default_tool = claude"
+    write_repo_config "$work_dir" "default_tool = gemini"
 
     run_verbose_loop_with_home "$work_dir" "$home_dir" codex
 
@@ -994,7 +1014,7 @@ assert_loop_rejects_unknown_explicit_tool() {
     assert_contains "$run_stderr" "unknown tool: unknown"
 }
 
-assert_loop_rejects_unknown_default_tool() {
+assert_loop_rejects_invalid_default_tool_config() {
     work_dir=$(create_project unknown-default-tool)
     home_dir=$(create_home unknown-default-tool)
 
@@ -1004,7 +1024,77 @@ assert_loop_rejects_unknown_default_tool() {
 
     assert_usage_failure
     assert_file_empty "$run_stdout"
-    assert_contains "$run_stderr" "unknown tool: unknown"
+    assert_contains "$run_stderr" "invalid value for default_tool: unknown"
+}
+
+assert_loop_uses_configured_auto_review() {
+    work_dir=$(create_project configured-auto-review)
+    fake_dir=$tmp_dir/fake-configured-auto-review
+
+    write_fake_agent "$fake_dir"
+    write_repo_config "$work_dir" \
+        "default_tool = codex" \
+        "auto_review = true"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-configured-auto-review.md" 0001 configured-auto-review "Configured Auto Review" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --all
+
+    assert_success
+    assert_line_count "$run_fake_agent_log" 2
+    assert_file "$work_dir/.coderail/tickets/closed/0001-configured-auto-review.md"
+}
+
+assert_loop_leaves_configured_auto_review_disabled() {
+    work_dir=$(create_project configured-no-auto-review)
+    fake_dir=$tmp_dir/fake-configured-no-auto-review
+
+    write_fake_agent "$fake_dir"
+    write_repo_config "$work_dir" \
+        "default_tool = codex" \
+        "auto_review = false"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-configured-no-auto-review.md" 0001 configured-no-auto-review "Configured No Auto Review" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --all
+
+    assert_success
+    assert_line_count "$run_fake_agent_log" 1
+    assert_file "$work_dir/.coderail/tickets/closed/0001-configured-no-auto-review.md"
+}
+
+assert_loop_auto_review_overrides_configured_false() {
+    work_dir=$(create_project configured-false-auto-review)
+    fake_dir=$tmp_dir/fake-configured-false-auto-review
+
+    write_fake_agent "$fake_dir"
+    write_repo_config "$work_dir" \
+        "default_tool = codex" \
+        "auto_review = false"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-configured-false-auto-review.md" 0001 configured-false-auto-review "Configured False Auto Review" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --all --auto-review
+
+    assert_success
+    assert_line_count "$run_fake_agent_log" 2
+}
+
+assert_loop_no_auto_review_overrides_configured_true() {
+    work_dir=$(create_project configured-true-no-auto-review)
+    fake_dir=$tmp_dir/fake-configured-true-no-auto-review
+
+    write_fake_agent "$fake_dir"
+    write_repo_config "$work_dir" \
+        "default_tool = codex" \
+        "auto_review = true"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-configured-true-no-auto-review.md" 0001 configured-true-no-auto-review "Configured True No Auto Review" open "" ""
+    commit_all "$work_dir" "Add ticket"
+
+    run_loop_with_fake "$work_dir" "$fake_dir" --all --no-auto-review
+
+    assert_success
+    assert_line_count "$run_fake_agent_log" 1
 }
 
 assert_loop_allows_clean_startup() {
@@ -1851,7 +1941,7 @@ test "Loop accepts long max" assert_loop_accepts_long_max
 test "Loop accepts all" assert_loop_accepts_all
 test "Loop accepts auto review" assert_loop_accepts_auto_review
 test "Loop rejects repeated max" assert_loop_rejects_repeated_max
-test "Loop rejects repeated auto review" assert_loop_rejects_repeated_auto_review
+test "Loop rejects a second auto review option" assert_loop_rejects_second_auto_review_option
 test "Loop rejects all with max" assert_loop_rejects_all_with_max
 test "Loop rejects missing max value" assert_loop_rejects_missing_max_value
 test "Loop rejects invalid max value" assert_loop_rejects_invalid_max_value
@@ -1869,7 +1959,11 @@ test "Loop uses user default tool" assert_loop_uses_user_default_tool
 test "Loop repo default overrides user default" assert_loop_repo_default_overrides_user_default
 test "Loop rejects missing default tool" assert_loop_rejects_missing_default_tool
 test "Loop rejects unknown explicit tool" assert_loop_rejects_unknown_explicit_tool
-test "Loop rejects unknown default tool" assert_loop_rejects_unknown_default_tool
+test "Loop rejects invalid default tool config" assert_loop_rejects_invalid_default_tool_config
+test "Loop uses configured auto review" assert_loop_uses_configured_auto_review
+test "Loop leaves configured auto review disabled" assert_loop_leaves_configured_auto_review_disabled
+test "Loop auto review overrides configured false" assert_loop_auto_review_overrides_configured_false
+test "Loop no auto review overrides configured true" assert_loop_no_auto_review_overrides_configured_true
 test "Loop allows clean startup" assert_loop_allows_clean_startup
 test "Loop rejects staged startup changes" assert_loop_rejects_staged_startup_changes
 test "Loop rejects unstaged startup changes" assert_loop_rejects_unstaged_startup_changes

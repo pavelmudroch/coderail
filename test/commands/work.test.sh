@@ -48,6 +48,12 @@ assert_contains() {
     grep -F -- "$2" "$1" >/dev/null || fail "$1 does not contain: $2"
 }
 
+assert_not_contains() {
+    if grep -F -- "$2" "$1" >/dev/null; then
+        fail "$1 unexpectedly contains: $2"
+    fi
+}
+
 assert_success() {
     [ "$run_status" -eq 0 ] || fail "expected success, got status $run_status"
 }
@@ -121,7 +127,7 @@ create_project() {
     project_dir=$tmp_dir/$1
 
     mkdir -p "$project_dir/.coderail"
-    printf 'repo config\n' > "$project_dir/.coderail/conf.ini"
+    printf '# user config\n' > "$project_dir/.coderail/config.ini"
     printf '[default]\ntrue\n' > "$project_dir/.coderail/test.map"
 
     printf '%s\n' "$project_dir"
@@ -204,6 +210,22 @@ run_cr() {
 
     set +e
     "$CR" --cwd "$work_dir" "$@" > "$run_stdout" 2> "$run_stderr" < /dev/null
+    run_status=$?
+    set -e
+}
+
+run_cr_from_dir() {
+    work_dir=$1
+    shift
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+
+    set +e
+    (
+        cd "$work_dir"
+        "$CR" "$@"
+    ) > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
 }
@@ -306,7 +328,7 @@ assert_top_level_help_lists_work() {
     work_dir=$tmp_dir/top-level-help
     mkdir "$work_dir"
 
-    run_cr "$work_dir" --help
+    run_cr_from_dir "$work_dir" --help
 
     assert_success
     assert_contains "$run_stdout" '  work          Manage branch-local work'
@@ -447,7 +469,6 @@ work_name=Add Feature!"
     assert_path_missing "$work_dir/.coderail/notes/plan.md"
     assert_file_content "$work_dir/.coderail/.gitignore" 'protected ignore'
     assert_file_content "$work_dir/.coderail/.gitkeep" 'protected keep'
-    assert_file_content "$work_dir/.coderail/conf.ini" 'repo config'
     assert_file_content "$work_dir/.coderail/test.map" '[default]
 true'
 }
@@ -656,7 +677,6 @@ assert_finish_checkpoints_and_stages_code_integration() {
     [ "$(git -C "$work_dir" log -1 --format=%s coderail/finish-feature)" = \
         'chore(work): save work progress' ] || fail 'missing work checkpoint commit'
     assert_staged_file_content "$work_dir" feature.txt 'feature'
-    assert_head_file_content "$work_dir" .coderail/conf.ini 'repo config'
 }
 
 assert_finish_restores_managed_files_and_permanent_config() {
@@ -673,7 +693,7 @@ assert_finish_restores_managed_files_and_permanent_config() {
     printf 'work child\n' > "$work_dir/.coderail/child.md"
     printf 'protected ignore\n' > "$work_dir/.coderail/.gitignore"
     printf 'protected keep\n' > "$work_dir/.coderail/.gitkeep"
-    printf 'updated config\n' > "$work_dir/.coderail/conf.ini"
+    printf '# updated config\n' > "$work_dir/.coderail/config.ini"
     printf 'updated map\n' > "$work_dir/.coderail/test.map"
     printf 'feature\n' > "$work_dir/feature.txt"
     git -C "$work_dir" add -A
@@ -689,7 +709,7 @@ assert_finish_restores_managed_files_and_permanent_config() {
     assert_staged_file_content "$work_dir" feature.txt 'feature'
     assert_staged_file_content "$work_dir" .coderail/.gitignore 'protected ignore'
     assert_staged_file_content "$work_dir" .coderail/.gitkeep 'protected keep'
-    assert_staged_file_content "$work_dir" .coderail/conf.ini 'updated config'
+    assert_staged_file_content "$work_dir" .coderail/config.ini '# updated config'
     assert_staged_file_content "$work_dir" .coderail/test.map 'updated map'
 }
 
@@ -838,9 +858,9 @@ n
 
     default_dir=$(create_recorded_work finish-automatic-default)
     fake_dir=$tmp_dir/fake-automatic-default
-    printf 'default_tool = codex\n' > "$default_dir/.coderail/conf.ini"
+    printf 'default_tool = codex\n' > "$default_dir/.coderail/config.ini"
     printf 'default\n' > "$default_dir/default.txt"
-    git -C "$default_dir" add .coderail/conf.ini default.txt
+    git -C "$default_dir" add .coderail/config.ini default.txt
     write_fake_commit_agent "$fake_dir"
 
     FAKE_COMMIT_OUTPUT='Summary: Default automatic commit
@@ -862,6 +882,7 @@ workspace-write
 sandbox_workspace_write.network_access=true
 exec
 $cr-commit'
+    assert_not_contains "$run_stdout" 'Select commit tool'
     assert_staged_file_content "$default_dir" default.txt 'default'
 }
 
@@ -885,6 +906,7 @@ n
 '
 
     assert_success
+    assert_contains "$run_stdout" 'Select commit tool (codex, copilot, claude, gemini): '
     assert_file_content "$run_fake_commit_log" 'claude
 --dangerously-skip-permissions
 -p
@@ -926,21 +948,21 @@ unknown
 
 assert_finish_rejects_invalid_or_unavailable_configured_tool() {
     invalid_dir=$(create_recorded_work finish-invalid-default-tool)
-    printf 'default_tool = unknown\n' > "$invalid_dir/.coderail/conf.ini"
+    printf 'default_tool = unknown\n' > "$invalid_dir/.coderail/config.ini"
     printf 'invalid\n' > "$invalid_dir/invalid.txt"
-    git -C "$invalid_dir" add .coderail/conf.ini invalid.txt
+    git -C "$invalid_dir" add .coderail/config.ini invalid.txt
 
     run_cr_with_input "$invalid_dir" 'y
 ' work finish
 
     assert_failure
-    assert_contains "$run_stderr" 'automatic commit failed'
+    assert_contains "$run_stderr" 'invalid value for default_tool: unknown'
     assert_staged_file_content "$invalid_dir" invalid.txt 'invalid'
 
     unavailable_dir=$(create_recorded_work finish-unavailable-default-tool)
-    printf 'default_tool = codex\n' > "$unavailable_dir/.coderail/conf.ini"
+    printf 'default_tool = codex\n' > "$unavailable_dir/.coderail/config.ini"
     printf 'unavailable\n' > "$unavailable_dir/unavailable.txt"
-    git -C "$unavailable_dir" add .coderail/conf.ini unavailable.txt
+    git -C "$unavailable_dir" add .coderail/config.ini unavailable.txt
 
     run_finish_with_path "$unavailable_dir" '/usr/bin:/bin' 'y
 '
@@ -969,9 +991,9 @@ assert_finish_commits_only_the_parsed_agent_message() {
     work_dir=$(create_recorded_work finish-agent-commit)
     fake_dir=$tmp_dir/fake-agent-commit
     command_marker=$work_dir/agent-command-ran
-    printf 'default_tool = codex\n' > "$work_dir/.coderail/conf.ini"
+    printf 'default_tool = codex\n' > "$work_dir/.coderail/config.ini"
     printf 'committed\n' > "$work_dir/committed.txt"
-    git -C "$work_dir" add .coderail/conf.ini committed.txt
+    git -C "$work_dir" add .coderail/config.ini committed.txt
     write_fake_commit_agent "$fake_dir"
 
     FAKE_COMMIT_OUTPUT="Summary: Add feature
@@ -1000,9 +1022,9 @@ Explain the integrated change.'
 assert_finish_preserves_staged_result_after_agent_or_commit_failures() {
     declined_dir=$(create_recorded_work finish-message-declined)
     declined_fake_dir=$tmp_dir/fake-message-declined
-    printf 'default_tool = codex\n' > "$declined_dir/.coderail/conf.ini"
+    printf 'default_tool = codex\n' > "$declined_dir/.coderail/config.ini"
     printf 'declined\n' > "$declined_dir/declined.txt"
-    git -C "$declined_dir" add .coderail/conf.ini declined.txt
+    git -C "$declined_dir" add .coderail/config.ini declined.txt
     write_fake_commit_agent "$declined_fake_dir"
 
     FAKE_COMMIT_OUTPUT='Summary: Declined message
@@ -1021,9 +1043,9 @@ n
 
     message_eof_dir=$(create_recorded_work finish-message-eof)
     message_eof_fake_dir=$tmp_dir/fake-message-eof
-    printf 'default_tool = codex\n' > "$message_eof_dir/.coderail/conf.ini"
+    printf 'default_tool = codex\n' > "$message_eof_dir/.coderail/config.ini"
     printf 'message eof\n' > "$message_eof_dir/message-eof.txt"
-    git -C "$message_eof_dir" add .coderail/conf.ini message-eof.txt
+    git -C "$message_eof_dir" add .coderail/config.ini message-eof.txt
     write_fake_commit_agent "$message_eof_fake_dir"
 
     FAKE_COMMIT_OUTPUT='Summary: Message EOF
@@ -1041,9 +1063,9 @@ git commit -m ignored' \
 
     malformed_dir=$(create_recorded_work finish-malformed-message)
     malformed_fake_dir=$tmp_dir/fake-malformed-message
-    printf 'default_tool = codex\n' > "$malformed_dir/.coderail/conf.ini"
+    printf 'default_tool = codex\n' > "$malformed_dir/.coderail/config.ini"
     printf 'malformed\n' > "$malformed_dir/malformed.txt"
-    git -C "$malformed_dir" add .coderail/conf.ini malformed.txt
+    git -C "$malformed_dir" add .coderail/config.ini malformed.txt
     write_fake_commit_agent "$malformed_fake_dir"
 
     FAKE_COMMIT_OUTPUT='Summary: Malformed message
@@ -1061,9 +1083,9 @@ git commit -m ignored' \
 
     agent_failure_dir=$(create_recorded_work finish-agent-failure)
     agent_failure_fake_dir=$tmp_dir/fake-agent-failure
-    printf 'default_tool = codex\n' > "$agent_failure_dir/.coderail/conf.ini"
+    printf 'default_tool = codex\n' > "$agent_failure_dir/.coderail/config.ini"
     printf 'agent failure\n' > "$agent_failure_dir/agent-failure.txt"
-    git -C "$agent_failure_dir" add .coderail/conf.ini agent-failure.txt
+    git -C "$agent_failure_dir" add .coderail/config.ini agent-failure.txt
     write_fake_commit_agent "$agent_failure_fake_dir"
 
     FAKE_COMMIT_FAIL=true \
@@ -1078,9 +1100,9 @@ git commit -m ignored' \
     git_failure_dir=$(create_recorded_work finish-git-commit-failure)
     git_failure_fake_dir=$tmp_dir/fake-git-commit-failure
     git_dir=$(git -C "$git_failure_dir" rev-parse --absolute-git-dir)
-    printf 'default_tool = codex\n' > "$git_failure_dir/.coderail/conf.ini"
+    printf 'default_tool = codex\n' > "$git_failure_dir/.coderail/config.ini"
     printf 'git failure\n' > "$git_failure_dir/git-failure.txt"
-    git -C "$git_failure_dir" add .coderail/conf.ini git-failure.txt
+    git -C "$git_failure_dir" add .coderail/config.ini git-failure.txt
     git -C "$git_failure_dir" commit -q -m 'Prepare integration commit'
     mkdir -p "$git_dir/hooks"
     printf '%s\n' '#!/usr/bin/env sh' 'exit 1' > "$git_dir/hooks/pre-commit"

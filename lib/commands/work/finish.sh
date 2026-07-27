@@ -16,7 +16,6 @@ ROOT_DIR=$(
 
 . "$ROOT_DIR/lib/utils/ticket.sh"
 . "$ROOT_DIR/lib/utils/work.sh"
-. "$ROOT_DIR/lib/utils/config.sh"
 
 usage() {
     cat <<'EOF'
@@ -73,9 +72,7 @@ prompt_yes_no() {
 }
 
 select_commit_tool() {
-    load_default_tool
-
-    if [ -n "$default_tool" ]; then
+    if [ -n "${default_tool:-}" ]; then
         selected_tool=$default_tool
         case "$selected_tool" in
             codex|copilot|claude|gemini)
@@ -209,7 +206,7 @@ collect_managed_paths() {
     git ls-tree -r --name-only "$managed_ref" -- .coderail |
         while IFS= read -r managed_path || [ -n "$managed_path" ]; do
             case "$managed_path" in
-                .coderail/conf.ini|.coderail/test.map|*/.gitignore|*/.gitkeep)
+                .coderail/config.ini|.coderail/conf.ini|.coderail/test.map|*/.gitignore|*/.gitkeep)
                     ;;
                 .coderail/*)
                     printf '%s\n' "$managed_path"

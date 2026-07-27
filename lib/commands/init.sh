@@ -88,7 +88,7 @@ log_notice "current working directory: $PWD"
 create_dir .coderail
 create_dir .coderail/tickets
 loop_setup . >/dev/null
-create_file .coderail/conf.ini <<'EOF'
+create_file .coderail/config.ini <<'EOF'
 # characters after '#' are comments
 # default_tool = codex # set the default tool for cr
 EOF

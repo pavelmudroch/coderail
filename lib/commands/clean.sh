@@ -162,6 +162,7 @@ ticket_files=$tmp_dir/ticket-files
 unsafe_stale_files=$tmp_dir/unsafe-stale-files
 
 find .coderail -type f \
+    ! -path .coderail/config.ini \
     ! -path .coderail/conf.ini \
     ! -path .coderail/test.map \
     ! -path .coderail/work.ini \

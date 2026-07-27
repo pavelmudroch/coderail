@@ -15,7 +15,6 @@ ROOT_DIR=$(
 )
 
 . "$ROOT_DIR/lib/utils/log.sh"
-. "$ROOT_DIR/lib/utils/config.sh"
 . "$ROOT_DIR/lib/utils/loop.sh"
 . "$ROOT_DIR/lib/utils/ticket.sh"
 
@@ -38,6 +37,7 @@ Options:
                     (default: 5)
   --all             Loop through all open tickets with satisfied dependencies.
   --auto-review     Run an autonomous review after each ticket closes as done.
+  --no-auto-review  Do not run autonomous reviews after tickets close as done.
 
 Arguments:
   <tool>      The agent cli tool to use for tickets. If not specified, the
@@ -296,9 +296,10 @@ set_all() {
 }
 
 set_auto_review() {
-    [ "$auto_review" = false ] || error "--auto-review provided multiple times"
+    [ "$auto_review_set" = false ] || error "review option provided multiple times"
 
-    auto_review=true
+    auto_review=$1
+    auto_review_set=true
 }
 
 set_tool() {
@@ -318,7 +319,8 @@ set_tool() {
 max=5
 max_set=false
 all_tickets=false
-auto_review=false
+auto_review=${auto_review:-false}
+auto_review_set=false
 tool=
 has_tool_args=false
 
@@ -346,7 +348,11 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         --auto-review)
-            set_auto_review
+            set_auto_review true
+            shift
+            ;;
+        --no-auto-review)
+            set_auto_review false
             shift
             ;;
         --)
@@ -375,7 +381,7 @@ if [ "$has_tool_args" = false ]; then
 fi
 
 if [ -z "$tool" ]; then
-    load_default_tool
+    default_tool=${default_tool:-}
     [ -n "$default_tool" ] || error "missing tool"
     set_tool "$default_tool"
 fi

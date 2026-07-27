@@ -157,7 +157,7 @@ write_repo_config() {
     shift
 
     mkdir -p "$work_dir/.coderail"
-    printf '%s\n' "$@" > "$work_dir/.coderail/conf.ini"
+    printf '%s\n' "$@" > "$work_dir/.coderail/config.ini"
 }
 
 assert_tool_installed() {
@@ -365,18 +365,39 @@ assert_repo_default_tool_overrides_user_uninstall() {
     assert_tool_uninstalled "$home_dir" claude
 }
 
-assert_explicit_tools_ignore_invalid_default_uninstall() {
+assert_uninstall_rejects_missing_default_tool() {
+    home_dir=$tmp_dir/home-default-missing
+    work_dir=$tmp_dir/work-default-missing
+    error_file=$tmp_dir/default-missing.err
+
+    mkdir "$home_dir" "$work_dir"
+    assert_install_succeeds "$home_dir" codex
+
+    set +e
+    (
+        cd "$work_dir"
+        HOME=$home_dir "$CR" uninstall
+    ) >/dev/null 2>"$error_file"
+    status=$?
+    set -e
+
+    [ "$status" -ne 0 ] || fail 'uninstall unexpectedly succeeded without a tool'
+    assert_contains "$error_file" 'error: missing tool'
+    assert_tool_installed "$home_dir" codex
+}
+
+assert_explicit_tool_overrides_effective_default_uninstall() {
     home_dir=$tmp_dir/home-default-explicit
     work_dir=$tmp_dir/work-default-explicit
 
     mkdir "$home_dir" "$work_dir"
-    assert_install_succeeds "$home_dir" codex
-    write_user_config "$home_dir" "default_tool = unknown-user"
-    write_repo_config "$work_dir" "default_tool = unknown-repo"
+    assert_install_succeeds "$home_dir" codex claude
+    write_repo_config "$work_dir" "default_tool = codex"
 
-    assert_uninstall_succeeds_from_dir "$work_dir" "$home_dir" codex
+    assert_uninstall_succeeds_from_dir "$work_dir" "$home_dir" claude
 
-    assert_tool_uninstalled "$home_dir" codex
+    assert_tool_installed "$home_dir" codex
+    assert_tool_uninstalled "$home_dir" claude
 }
 
 assert_uninstall_preserves_unselected_tool() {
@@ -427,7 +448,8 @@ test "Cwd is ignored for uninstall" assert_cwd_ignored_for_uninstall
 test "Uninstall multiple tools" assert_multi_tool_uninstall
 test "Uninstall uses user default tool" assert_user_default_tool_uninstall
 test "Repo default tool overrides user default for uninstall" assert_repo_default_tool_overrides_user_uninstall
-test "Explicit uninstall tools ignore invalid default" assert_explicit_tools_ignore_invalid_default_uninstall
+test "Uninstall rejects missing default tool" assert_uninstall_rejects_missing_default_tool
+test "Explicit uninstall tool overrides effective default" assert_explicit_tool_overrides_effective_default_uninstall
 test "Uninstall preserves unselected tool" assert_uninstall_preserves_unselected_tool
 
 for tool in codex copilot claude gemini; do

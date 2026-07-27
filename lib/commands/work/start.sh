@@ -112,6 +112,7 @@ git switch --quiet -c "$work_branch" ||
     fatal "failed to create work branch: $work_branch"
 
 find .coderail -type f \
+    ! -path .coderail/config.ini \
     ! -path .coderail/conf.ini \
     ! -path .coderail/test.map \
     ! -name .gitignore \

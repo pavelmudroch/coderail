@@ -15,7 +15,6 @@ ROOT_DIR=$(
 )
 
 . "$ROOT_DIR/lib/utils/log.sh"
-. "$ROOT_DIR/lib/utils/config.sh"
 
 usage() {
     cat <<'EOF'
@@ -265,8 +264,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$tool_count" -eq 0 ]; then
-    load_default_tool
-    [ -n "$default_tool" ] || error "missing tool"
+    [ -n "${default_tool:-}" ] || error "missing tool"
     add_tool "$default_tool"
 fi
 

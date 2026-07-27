@@ -15,6 +15,10 @@ PROJECT_ROOT=$(
 TEMP_DIR="${TMPDIR:-/tmp}"
 TEMP_DIR=${TEMP_DIR%/}
 tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-upgrade-test.XXXXXX")
+test_home_dir=$tmp_dir/home
+test_work_dir=$tmp_dir/work
+
+mkdir "$test_home_dir" "$test_work_dir"
 
 . "$PROJECT_ROOT/test/suite.sh"
 
@@ -86,6 +90,7 @@ create_cli_install() {
     cp "$PROJECT_ROOT/lib/commands/upgrade.sh" "$install_root/lib/commands/upgrade.sh"
     cp "$PROJECT_ROOT/lib/utils/archive_apply.sh" "$install_root/lib/utils/archive_apply.sh"
     cp "$PROJECT_ROOT/lib/utils/args.sh" "$install_root/lib/utils/args.sh"
+    cp "$PROJECT_ROOT/lib/utils/config.sh" "$install_root/lib/utils/config.sh"
     cp "$PROJECT_ROOT/lib/utils/log.sh" "$install_root/lib/utils/log.sh"
     chmod 755 "$install_root/bin/cr"
     write_manifest "$install_root"
@@ -240,7 +245,10 @@ run_upgrade() {
     run_stderr=$tmp_dir/run.stderr
 
     set +e
-    "$install_root/bin/cr" upgrade "$@" > "$run_stdout" 2> "$run_stderr"
+    (
+        cd "$test_work_dir" &&
+            HOME=$test_home_dir "$install_root/bin/cr" upgrade "$@"
+    ) > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
 }
@@ -253,7 +261,10 @@ run_cr_command() {
     run_stderr=$tmp_dir/run.stderr
 
     set +e
-    "$install_root/bin/cr" "$@" > "$run_stdout" 2> "$run_stderr"
+    (
+        cd "$test_work_dir" &&
+            HOME=$test_home_dir "$install_root/bin/cr" "$@"
+    ) > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
 }
@@ -270,7 +281,9 @@ run_upgrade_with_env() {
     set +e
     (
         cd "$run_dir" &&
-            CODERAIL_INSTALL_DIR=$install_dir_override "$install_root/bin/cr" upgrade "$@"
+            HOME=$test_home_dir \
+                CODERAIL_INSTALL_DIR=$install_dir_override \
+                "$install_root/bin/cr" upgrade "$@"
     ) > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
@@ -284,7 +297,10 @@ run_upgrade_cwd_option() {
     run_stderr=$tmp_dir/run.stderr
 
     set +e
-    "$install_root/bin/cr" --cwd "$work_dir" upgrade > "$run_stdout" 2> "$run_stderr"
+    (
+        cd "$test_work_dir" &&
+            HOME=$test_home_dir "$install_root/bin/cr" --cwd "$work_dir" upgrade
+    ) > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
 }
@@ -299,7 +315,10 @@ run_upgrade_symlink() {
     ln -s "$install_root/bin/cr" "$link_path"
 
     set +e
-    "$link_path" upgrade > "$run_stdout" 2> "$run_stderr"
+    (
+        cd "$test_work_dir" &&
+            HOME=$test_home_dir "$link_path" upgrade
+    ) > "$run_stdout" 2> "$run_stderr"
     run_status=$?
     set -e
 }

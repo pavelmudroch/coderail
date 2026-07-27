@@ -78,7 +78,7 @@ create_project() {
     project_dir=$tmp_dir/$1
 
     mkdir -p "$project_dir/.coderail"
-    printf 'user conf\n' > "$project_dir/.coderail/conf.ini"
+    printf '# user config\n' > "$project_dir/.coderail/config.ini"
     printf '[default]\ntrue\n' > "$project_dir/.coderail/test.map"
 
     printf '%s\n' "$project_dir"
@@ -206,7 +206,7 @@ assert_noop_preserves_config_files() {
     assert_success
     assert_stdout_content "nothing to clean"
     assert_file_empty "$run_stderr"
-    assert_file_content "$work_dir/.coderail/conf.ini" "user conf"
+    assert_file_content "$work_dir/.coderail/config.ini" "# user config"
     assert_file_content "$work_dir/.coderail/test.map" "[default]
 true"
     assert_file_content "$work_dir/.coderail/work.ini" "base_branch=main
@@ -252,7 +252,7 @@ assert_empty_directories_are_ignored() {
     assert_success
     assert_stdout_content "nothing to clean"
     assert_file_empty "$run_stderr"
-    assert_file "$work_dir/.coderail/conf.ini"
+    assert_file "$work_dir/.coderail/config.ini"
     assert_file "$work_dir/.coderail/test.map"
 }
 
@@ -416,7 +416,7 @@ assert_clean_removes_done_tickets_and_stale_files() {
     assert_stdout_content "remove .coderail/notes.md
 remove .coderail/tickets/closed/0001-done-ticket.md"
     assert_file_empty "$run_stderr"
-    assert_file "$work_dir/.coderail/conf.ini"
+    assert_file "$work_dir/.coderail/config.ini"
     assert_file "$work_dir/.coderail/test.map"
     assert_path_missing "$stale_file"
     assert_path_missing "$done_file"
@@ -434,7 +434,7 @@ remove .coderail/notes/nested.txt
 remove .coderail/tickets/closed/0001-done-ticket.md
 remove .coderail/z.txt"
     assert_file_empty "$run_stderr"
-    assert_file "$work_dir/.coderail/conf.ini"
+    assert_file "$work_dir/.coderail/config.ini"
     assert_file "$work_dir/.coderail/test.map"
     assert_file "$work_dir/.coderail/SCOPE.md"
     assert_file "$work_dir/.coderail/SPEC.md"
@@ -472,7 +472,7 @@ assert_clean_actual_matches_dry_run_plan() {
     cmp "$dry_run_stdout" "$run_stdout" >/dev/null ||
         fail "actual clean output differs from dry-run"
     assert_file_empty "$run_stderr"
-    assert_file "$actual_dir/.coderail/conf.ini"
+    assert_file "$actual_dir/.coderail/config.ini"
     assert_file "$actual_dir/.coderail/test.map"
     assert_path_missing "$actual_dir/.coderail/SCOPE.md"
     assert_path_missing "$actual_dir/.coderail/SPEC.md"

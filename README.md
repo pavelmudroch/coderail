@@ -29,7 +29,8 @@ Coderail automates repetitive development mechanics while keeping direction, rev
   * [Managed: finish work](#managed-finish-work)
 * [Configuration](#configuration)
   * [`~/.coderail/config.ini`](#coderailconfigini)
-  * [`.coderail/conf.ini`](#coderailconfini)
+  * [`.coderail/config.ini`](#coderailconfigini-1)
+  * [Legacy `.coderail/conf.ini` fallback](#legacy-coderailconfini-fallback)
   * [`.coderail/test.map`](#coderailtestmap)
   * [`.coderail/work.ini`](#coderailworkini)
 * [Command Reference](#command-reference)
@@ -420,7 +421,8 @@ cr clean
 `cr clean` preserves permanent repository configuration:
 
 ```txt
-.coderail/conf.ini
+.coderail/config.ini
+.coderail/conf.ini (legacy fallback)
 .coderail/test.map
 ```
 
@@ -474,18 +476,34 @@ tool's proposed integration commit message.
 
 User-local Coderail settings live here.
 
-### `.coderail/conf.ini`
+### `.coderail/config.ini`
 
-Repository-local Coderail settings live here and override user-local settings.
+This is the canonical repository configuration. Its settings override
+user-local settings.
 
-Example:
+### Legacy `.coderail/conf.ini` fallback
+
+Existing `.coderail/conf.ini` is a deprecated fallback. It remains supported,
+but Coderail warns to rename it to `config.ini`. When both files exist,
+`config.ini` takes precedence over `conf.ini` for matching settings.
+
+Supported settings:
 
 ```ini
 default_tool = codex
+auto_review = true
 ```
+
+`default_tool` selects `codex`, `claude`, `copilot`, or `gemini`.
+`auto_review` accepts `true` or `false` and controls the initial review setting
+for `cr ticket loop`.
 
 When no tool argument is provided, `cr install`, `cr uninstall`, `cr ticket loop`,
 and automatic commit-message generation in `cr work finish` use `default_tool`.
+
+`--auto-review` enables reviews for one ticket-loop invocation, and
+`--no-auto-review` disables them. Either explicit option overrides
+`auto_review`.
 
 ### `.coderail/test.map`
 
@@ -622,7 +640,7 @@ It creates the following files and directories when they do not already exist:
 .coderail/tickets/
 .coderail/loop/
 .coderail/loop/.gitignore
-.coderail/conf.ini
+.coderail/config.ini
 .coderail/test.map
 ```
 
@@ -828,7 +846,8 @@ cr clean [options]
 It preserves:
 
 ```txt
-.coderail/conf.ini
+.coderail/config.ini
+.coderail/conf.ini (legacy fallback)
 .coderail/test.map
 .coderail/work.ini
 ```
@@ -954,7 +973,7 @@ It repeatedly:
 1. Selects an open ticket whose dependencies are satisfied.
 2. Hands the ticket to a supported agent CLI for implementation.
 3. Requires the agent to close the ticket as satisfied.
-4. When `--auto-review` is set and the ticket closed as `done`, hands its stable ID to an autonomous reviewer.
+4. When automatic review is enabled and the ticket closes as `done`, hands its stable ID to an autonomous reviewer.
 5. Stages all post-agent changes after the ticket is closed as satisfied.
 6. Continues until the configured limit is reached or no ready ticket remains.
 
@@ -988,9 +1007,17 @@ Options:
 -m <count>, --max <count>  Maximum successful implementation handoffs; default is 5
 --all                      Process all ready open tickets; incompatible with --max
 --auto-review              Run an autonomous review after each ticket closes as done
+--no-auto-review           Do not run autonomous reviews after tickets close as done
 ```
 
-`--auto-review` is opt-in. It runs the normal implementation handoff first, then reviews tickets closed as `done`. A clean review leaves the ticket closed and its changes are staged normally. A within-scope finding adds tasks to and reopens the source ticket; the reopened-ticket checkpoint is staged, then the ticket returns to normal dependency-aware scheduling. A broader finding creates a dependent follow-up ticket while the reviewed ticket stays closed.
+Automatic review is disabled by default. `auto_review = true` enables it, and
+either `--auto-review` or `--no-auto-review` overrides that setting for the
+invocation. It runs the normal implementation handoff first, then reviews
+tickets closed as `done`. A clean review leaves the ticket closed and its
+changes are staged normally. A within-scope finding adds tasks to and reopens
+the source ticket; the reopened-ticket checkpoint is staged, then the ticket
+returns to normal dependency-aware scheduling. A broader finding creates a
+dependent follow-up ticket while the reviewed ticket stays closed.
 
 `--max` counts successful implementation handoffs, not unique ticket IDs. Reimplementing a reopened ticket consumes another slot. `--all` can continue through reopened tickets and review-created follow-up tickets until none are ready.
 
