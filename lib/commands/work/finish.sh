@@ -202,9 +202,6 @@ collect_managed_paths() {
     git ls-tree -r --name-only "$managed_ref" -- .coderail |
         while IFS= read -r managed_path || [ -n "$managed_path" ]; do
             case "$managed_path" in
-                .coderail/loop/.gitignore)
-                    printf '%s\n' "$managed_path"
-                    ;;
                 .coderail/config.ini|.coderail/conf.ini|.coderail/test.map|*/.gitignore|*/.gitkeep)
                     ;;
                 .coderail/*)
@@ -237,83 +234,13 @@ remove_child_only_managed_paths() {
 
         git rm --quiet --force --ignore-unmatch --cached -- "$work_managed_path" ||
             fatal "failed to remove work workflow file: $work_managed_path"
-        [ "$work_managed_path" = .coderail/loop/.gitignore ] &&
-            continue
         rm -f "$work_managed_path" ||
             fatal "failed to remove work workflow file: $work_managed_path"
     done < "$work_managed_paths"
 }
 
 return_to_work_branch() {
-    if [ "$loop_diagnostics_present" = true ] &&
-        ! git cat-file -e HEAD:.coderail/loop/.gitignore 2>/dev/null
-    then
-        rm -f .coderail/loop/.gitignore ||
-            return 1
-    fi
-
-    git switch --quiet "$recorded_work_branch" ||
-        return 1
-
-    if [ "$loop_diagnostics_present" = true ]; then
-        loop_setup . >/dev/null &&
-            loop_verify_ignore_policy .
-    fi
-}
-
-setup_loop_ignore_bridge() {
-    [ "$loop_diagnostics_present" = true ] ||
-        return 0
-
-    loop_base_ignore_file=$tmp_dir/base-loop-gitignore
-    if git ls-tree "$recorded_base_branch" -- .coderail/loop/.gitignore |
-        grep -q '^100[0-9][0-9][0-9] blob ' &&
-        git show "$recorded_base_branch:.coderail/loop/.gitignore" \
-            > "$loop_base_ignore_file" 2>/dev/null &&
-        printf '*\n!.gitignore\n' | cmp "$loop_base_ignore_file" - >/dev/null 2>&1
-    then
-        return 0
-    fi
-
-    loop_bridge_file=$(git rev-parse --git-path info/exclude) ||
-        return 1
-    loop_bridge_backup=$tmp_dir/base-git-exclude
-    loop_bridge_file_existed=false
-
-    mkdir -p "$(dirname "$loop_bridge_file")" ||
-        return 1
-
-    if [ -e "$loop_bridge_file" ] || [ -L "$loop_bridge_file" ]; then
-        [ -f "$loop_bridge_file" ] &&
-            [ ! -L "$loop_bridge_file" ] ||
-            return 1
-        cp "$loop_bridge_file" "$loop_bridge_backup" ||
-            return 1
-        loop_bridge_file_existed=true
-    else
-        : > "$loop_bridge_backup" ||
-            return 1
-    fi
-
-    printf '\n%s\n' '/.coderail/loop/' >> "$loop_bridge_file" ||
-        return 1
-
-    loop_bridge_active=true
-}
-
-remove_loop_ignore_bridge() {
-    [ "$loop_bridge_active" = true ] ||
-        return 0
-
-    if [ "$loop_bridge_file_existed" = true ]; then
-        cat "$loop_bridge_backup" > "$loop_bridge_file" ||
-            return 1
-    else
-        rm -f "$loop_bridge_file" ||
-            return 1
-    fi
-
-    loop_bridge_active=false
+    git switch --quiet "$recorded_work_branch"
 }
 
 while [ "$#" -gt 0 ]; do
@@ -366,13 +293,6 @@ recorded_work_name=$work_name
 git show-ref --verify --quiet "refs/heads/$recorded_base_branch" ||
     fatal "base branch not found: $recorded_base_branch"
 
-loop_diagnostics_present=false
-if [ -e .coderail/loop ] || [ -L .coderail/loop ]; then
-    loop_verify_ignore_policy . ||
-        fatal "loop ignore policy is invalid: .coderail/loop/.gitignore"
-    loop_diagnostics_present=true
-fi
-
 untracked_files=$(git ls-files --others --exclude-standard) ||
     fatal "failed to query Git worktree"
 [ -z "$untracked_files" ] ||
@@ -393,39 +313,11 @@ tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-work-finish.XXXXXX") ||
 chmod 700 "$tmp_dir" ||
     fatal "failed to secure temporary directory"
 
-loop_bridge_active=false
-loop_bridge_backup=
-loop_bridge_file=
-loop_bridge_file_existed=false
-
 cleanup() {
     cleanup_status=$?
 
     if ! remove_commit_message; then
         echo "error: failed to remove commit-message exchange artifact" >&2
-        [ "$cleanup_status" -ne 0 ] ||
-            cleanup_status=1
-    fi
-
-    if [ "$cleanup_status" -eq 0 ]; then
-        if ! loop_remove .; then
-            echo "error: failed to remove loop diagnostic directory" >&2
-            cleanup_status=1
-        fi
-    elif [ "$loop_diagnostics_present" = true ]; then
-        if ! loop_verify_ignore_policy .; then
-            if ! return_to_work_branch; then
-                echo "error: failed to preserve loop diagnostic ignore policy" >&2
-            fi
-        elif ! loop_setup . >/dev/null ||
-            ! loop_verify_ignore_policy .
-        then
-            echo "error: failed to preserve loop diagnostic ignore policy" >&2
-        fi
-    fi
-
-    if ! remove_loop_ignore_bridge; then
-        echo "error: failed to remove loop diagnostic ignore bridge" >&2
         [ "$cleanup_status" -ne 0 ] ||
             cleanup_status=1
     fi
@@ -473,25 +365,11 @@ work_read_record "$committed_record" ||
 collect_managed_paths "$recorded_work_branch" > "$work_managed_paths" ||
     fatal "failed to capture work workflow files"
 
-setup_loop_ignore_bridge ||
-    fatal "failed to set up loop diagnostic ignore bridge"
-
 git switch --quiet "$recorded_base_branch" ||
     fatal "failed to switch to base branch: $recorded_base_branch"
 
-if [ "$loop_diagnostics_present" = true ]; then
-    loop_setup . >/dev/null ||
-        fatal "failed to set up loop diagnostic directory on base branch"
-    if ! loop_verify_ignore_policy .; then
-        if return_to_work_branch; then
-            fatal "loop ignore policy is invalid on base branch: .coderail/loop/.gitignore"
-        else
-            fatal "loop ignore policy is invalid on base branch: .coderail/loop/.gitignore; failed to return to work branch"
-        fi
-    fi
-fi
-
-base_worktree_status=$(git status --porcelain --untracked-files=all) ||
+base_worktree_status=$(git status --porcelain --untracked-files=all |
+    awk '$0 !~ /^\?\? \.coderail\/loop\//') ||
     fatal "failed to query base worktree"
 if [ -n "$base_worktree_status" ]; then
     if return_to_work_branch; then
@@ -538,9 +416,10 @@ if [ "$squash_status" -ne 0 ] && [ ! -s "$squash_unmerged_paths" ]; then
     fi
 fi
 
-git rm --quiet --force --ignore-unmatch --cached -- \
-    .coderail/loop/.gitignore ||
-    fatal "failed to remove loop diagnostic ignore from integration"
+loop_remove . ||
+    fatal "failed to remove loop diagnostic directory"
+git add -u -- .coderail ||
+    fatal "failed to stage loop diagnostic removal"
 
 if git diff --cached --quiet; then
     echo "work produced no integration changes"

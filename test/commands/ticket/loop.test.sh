@@ -217,11 +217,11 @@ commit_all() {
     git -C "$work_dir" commit -q -m "$message"
 }
 
-write_loop_ignore() {
+write_outer_loop_ignore() {
     work_dir=$1
 
-    mkdir -p "$work_dir/.coderail/loop"
-    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
+    mkdir -p "$work_dir/.coderail"
+    printf 'loop\n' > "$work_dir/.coderail/.gitignore"
 }
 
 write_discovery() {
@@ -1767,7 +1767,8 @@ assert_loop_writes_mapped_transcript() {
     stderr="fake agent stderr"
 
     write_fake_agent "$fake_dir"
-    write_loop_ignore "$work_dir"
+    write_outer_loop_ignore "$work_dir"
+    mkdir -p "$work_dir/.coderail/loop"
     printf 'existing diagnostic\n' > "$work_dir/.coderail/loop/existing.txt"
     write_ticket "$work_dir/.coderail/tickets/open/0001-mapped-transcript.md" 0001 mapped-transcript "Mapped Transcript" open "" ""
     commit_all "$work_dir" "Add ticket"
@@ -1783,6 +1784,7 @@ assert_loop_writes_mapped_transcript() {
     assert_file_content \
         "$work_dir/.coderail/loop/existing.txt" \
         "existing diagnostic"
+    assert_file_content "$work_dir/.coderail/.gitignore" "loop"
     assert_not_contains "$run_stdout" "$stdout"
     assert_not_contains "$run_stderr" "$stderr"
     assert_ignored "$work_dir" .coderail/loop/0001-mapped-transcript.txt
@@ -2055,55 +2057,57 @@ assert_loop_stages_new_ignore_before_failed_handoff() {
 
     assert_failure
     assert_line_count "$run_fake_agent_log" 1
-    assert_file_content "$work_dir/.coderail/loop/.gitignore" "*
-!.gitignore"
-    assert_only_staged_path "$work_dir" .coderail/loop/.gitignore
+    assert_file_content "$work_dir/.coderail/.gitignore" "loop"
+    assert_only_staged_path "$work_dir" .coderail/.gitignore
+    assert_no_path "$work_dir/.coderail/loop/.gitignore"
     assert_file "$transcript"
     assert_ignored "$work_dir" .coderail/loop/0001-first-use-agent-failure.txt
     assert_file "$work_dir/work-1.txt"
 }
 
-assert_loop_force_stages_new_ignore_in_ignored_directory() {
-    work_dir=$(create_project ignored-loop-directory)
-    fake_dir=$tmp_dir/fake-ignored-loop-directory
-    transcript=$work_dir/.coderail/loop/0001-ignored-loop-directory.txt
+assert_loop_stages_amended_outer_ignore_before_failed_handoff() {
+    work_dir=$(create_project amended-outer-ignore)
+    fake_dir=$tmp_dir/fake-amended-outer-ignore
+    transcript=$work_dir/.coderail/loop/0001-amended-outer-ignore.txt
 
     write_fake_agent "$fake_dir"
-    printf '%s\n' '.coderail/loop/' > "$work_dir/.gitignore"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-ignored-loop-directory.md" 0001 ignored-loop-directory "Ignored Loop Directory" open "" ""
-    commit_all "$work_dir" "Add ticket and ignored loop directory"
+    printf '%s\n' 'tickets' > "$work_dir/.coderail/.gitignore"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-amended-outer-ignore.md" 0001 amended-outer-ignore "Amended Outer Ignore" open "" ""
+    commit_all "$work_dir" "Add ticket and outer ignore"
 
     FAKE_AGENT_FAIL_ON=1 run_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
     assert_failure
     assert_line_count "$run_fake_agent_log" 1
-    assert_file_content "$work_dir/.coderail/loop/.gitignore" "*
-!.gitignore"
-    assert_only_staged_path "$work_dir" .coderail/loop/.gitignore
+    assert_file_content "$work_dir/.coderail/.gitignore" "tickets
+loop"
+    assert_only_staged_path "$work_dir" .coderail/.gitignore
+    assert_no_path "$work_dir/.coderail/loop/.gitignore"
     assert_file "$transcript"
-    assert_ignored "$work_dir" .coderail/loop/0001-ignored-loop-directory.txt
+    assert_ignored "$work_dir" .coderail/loop/0001-amended-outer-ignore.txt
     assert_file "$work_dir/work-1.txt"
 }
 
-assert_loop_rejects_invalid_ignore_policy() {
-    work_dir=$(create_project invalid-ignore-policy)
-    fake_dir=$tmp_dir/fake-invalid-ignore-policy
-    transcript=.coderail/loop/0001-invalid-ignore-policy.txt
+assert_loop_ignores_legacy_nested_ignore_policy() {
+    work_dir=$(create_project legacy-nested-ignore)
+    fake_dir=$tmp_dir/fake-legacy-nested-ignore
+    transcript=.coderail/loop/0001-legacy-nested-ignore.txt
 
     write_fake_agent "$fake_dir"
     mkdir -p "$work_dir/.coderail/loop"
     printf '*\n!.gitignore\n!exposed.txt\n' > "$work_dir/.coderail/loop/.gitignore"
-    write_ticket "$work_dir/.coderail/tickets/open/0001-invalid-ignore-policy.md" 0001 invalid-ignore-policy "Invalid Ignore Policy" open "" ""
-    commit_all "$work_dir" "Add ticket and custom ignore"
+    write_outer_loop_ignore "$work_dir"
+    write_ticket "$work_dir/.coderail/tickets/open/0001-legacy-nested-ignore.md" 0001 legacy-nested-ignore "Legacy Nested Ignore" open "" ""
+    commit_all "$work_dir" "Add ticket and legacy nested ignore"
 
     run_loop_with_fake "$work_dir" "$fake_dir" --all codex
 
-    assert_failure
-    assert_contains \
-        "$run_stderr" \
-        "ticket loop ignore policy is invalid: .coderail/loop/.gitignore"
-    assert_no_path "$run_fake_agent_count"
-    assert_no_path "$work_dir/$transcript"
+    assert_success
+    assert_file "$work_dir/$transcript"
+    assert_ignored "$work_dir" "$transcript"
+    assert_file_content "$work_dir/.coderail/loop/.gitignore" "*
+!.gitignore
+!exposed.txt"
 }
 
 assert_loop_stages_post_agent_changes() {
@@ -2212,7 +2216,7 @@ assert_loop_stops_on_auto_review_failure_without_staging() {
     fake_dir=$tmp_dir/fake-auto-review-agent-failure
 
     write_fake_agent "$fake_dir"
-    write_loop_ignore "$work_dir"
+    write_outer_loop_ignore "$work_dir"
     write_ticket "$work_dir/.coderail/tickets/open/0001-auto-review-agent-failure.md" 0001 auto-review-agent-failure "Auto Review Agent Failure" open "" ""
     commit_all "$work_dir" "Add ticket"
 
@@ -2232,7 +2236,7 @@ assert_loop_rejects_active_auto_review_ticket_without_staging() {
     fake_dir=$tmp_dir/fake-active-auto-review-ticket
 
     write_fake_agent "$fake_dir"
-    write_loop_ignore "$work_dir"
+    write_outer_loop_ignore "$work_dir"
     write_ticket "$work_dir/.coderail/tickets/open/0001-active-auto-review.md" 0001 active-auto-review "Active Auto Review" open "" ""
     commit_all "$work_dir" "Add ticket"
 
@@ -2250,7 +2254,7 @@ assert_loop_rejects_invalid_auto_review_ticket_without_staging() {
     fake_dir=$tmp_dir/fake-invalid-auto-review-ticket
 
     write_fake_agent "$fake_dir"
-    write_loop_ignore "$work_dir"
+    write_outer_loop_ignore "$work_dir"
     write_ticket "$work_dir/.coderail/tickets/open/0001-invalid-auto-review.md" 0001 invalid-auto-review "Invalid Auto Review" open "" ""
     commit_all "$work_dir" "Add ticket"
 
@@ -2346,7 +2350,7 @@ assert_loop_leaves_rejected_changes_unstaged() {
     fake_dir=$tmp_dir/fake-rejected-unstaged
 
     write_fake_agent "$fake_dir"
-    write_loop_ignore "$work_dir"
+    write_outer_loop_ignore "$work_dir"
     write_ticket "$work_dir/.coderail/tickets/open/0001-first-ticket.md" 0001 first-ticket "First Ticket" open "" ""
     commit_all "$work_dir" "Add tickets"
 
@@ -2521,8 +2525,8 @@ test "Loop verbose reports operational notices" assert_loop_verbose_reports_oper
 test "Loop uses ready snapshot headings" assert_loop_uses_ready_snapshot_headings
 test "Loop updates headings for reopened and follow-up tickets" assert_loop_updates_headings_for_reopened_and_follow_up_tickets
 test "Loop stages new ignore before failed handoff" assert_loop_stages_new_ignore_before_failed_handoff
-test "Loop force stages new ignore in ignored directory" assert_loop_force_stages_new_ignore_in_ignored_directory
-test "Loop rejects invalid ignore policy" assert_loop_rejects_invalid_ignore_policy
+test "Loop stages amended outer ignore before failed handoff" assert_loop_stages_amended_outer_ignore_before_failed_handoff
+test "Loop ignores legacy nested ignore policy" assert_loop_ignores_legacy_nested_ignore_policy
 test "Loop stages post-agent changes" assert_loop_stages_post_agent_changes
 test "Loop stages clean auto review" assert_loop_stages_clean_auto_review
 test "Loop reimplements reopened ticket with max" assert_loop_reimplements_reopened_ticket_with_max

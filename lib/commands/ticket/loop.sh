@@ -254,22 +254,21 @@ invoke_agent() {
 
 prepare_transcript() {
     prepare_transcript_ticket=$1
-    prepare_transcript_stage_ignore=${2:-true}
+    prepare_transcript_stage_ignore=$2
     prepare_transcript_base=${prepare_transcript_ticket##*/}
     transcript_file=.coderail/loop/${prepare_transcript_base%.md}.txt
 
-    transcript_ignore_created=$(loop_setup "$project_dir") ||
-        fatal "failed to set up ticket loop transcript directory"
+    transcript_outer_ignore_changed=$(loop_ensure_outer_ignore "$project_dir") ||
+        fatal "failed to ensure ticket loop ignore policy"
 
-    loop_verify_ignore_policy "$project_dir" ||
-        fatal "ticket loop ignore policy is invalid: .coderail/loop/.gitignore"
-
-    if [ "$transcript_ignore_created" = true ] &&
-        [ "$prepare_transcript_stage_ignore" = true ]
-    then
-        git add -f -- .coderail/loop/.gitignore ||
-            fatal "failed to stage ticket loop transcript ignore file"
+    if [ "$prepare_transcript_stage_ignore" = true ] &&
+        [ "$transcript_outer_ignore_changed" = true ]; then
+        git add -- .coderail/.gitignore ||
+            fatal "failed to stage ticket loop ignore file"
     fi
+
+    loop_create_directory "$project_dir" ||
+        fatal "failed to create ticket loop transcript directory"
 
     git check-ignore -q -- "$transcript_file" ||
         fatal "ticket loop transcript is not ignored: $transcript_file"
@@ -278,7 +277,9 @@ prepare_transcript() {
 run_drift_check() {
     discovery_file=.coderail/DISCOVERY.md
 
+    log_notice "ticket loop checking for discovery drift"
     if [ ! -e "$discovery_file" ] && [ ! -L "$discovery_file" ]; then
+        log_info "         no discovery document found, skipping drift check"
         return 0
     fi
 
@@ -564,7 +565,7 @@ while :; do
     fi
 
     log_notice "ticket loop selected ticket: $next_ticket"
-    prepare_transcript "$next_ticket"
+    prepare_transcript "$next_ticket" true
     append_phase_delimiter implementation
     print_ticket_block "$ticket_heading" "$next_ticket_title" "$next_ticket"
 

@@ -423,6 +423,7 @@ cr clean
 ```txt
 .coderail/config.ini
 .coderail/conf.ini (legacy fallback)
+.coderail/.gitignore
 .coderail/test.map
 ```
 
@@ -465,11 +466,11 @@ unstaged files, and all tickets resolved. It switches to the recorded base branc
 stages a squash integration, and removes branch-local Coderail workflow files
 from that integration while preserving the base branch configuration.
 
-Loop diagnostics remain available after failed or interrupted finish attempts.
-Every successful finish removes the complete `.coderail/loop/` directory,
-including success paths that leave integration changes staged for manual
-commit. The temporary work branch remains available as the intentional durable
-history of the work.
+Failed or conflicted squash preparation preserves loop diagnostics. After a
+squash integration is prepared, `cr work finish` removes the complete
+`.coderail/loop/` directory before handling staged results or committing, so
+later failures do not preserve it. The temporary work branch remains available
+as the intentional durable history of the work.
 
 This is more automated than the manual lifecycle, but it does not push and
 does not create a commit without confirmation. You can inspect and commit the
@@ -650,14 +651,16 @@ It creates the following files and directories when they do not already exist:
 ```txt
 .coderail/
 .coderail/tickets/
-.coderail/loop/
-.coderail/loop/.gitignore
+.coderail/.gitignore
 .coderail/config.ini
 .coderail/test.map
 ```
 
-The loop ignore file keeps local agent transcripts out of Git. Existing files
-are left untouched.
+`.coderail/.gitignore` contains a `loop` rule that keeps local agent
+transcripts out of Git. `cr ticket loop` creates `.coderail/loop/` lazily when
+it needs to record a transcript. Existing initialization files are left
+untouched, except `.coderail/.gitignore` is updated as needed to add the
+`loop` rule.
 
 Examples:
 
@@ -860,6 +863,7 @@ It preserves:
 ```txt
 .coderail/config.ini
 .coderail/conf.ini (legacy fallback)
+.coderail/.gitignore
 .coderail/test.map
 .coderail/work.ini
 ```
@@ -1064,13 +1068,13 @@ Inspect the current handoff with:
 tail -f .coderail/loop/0001-demo.txt
 ```
 
-`cr init` creates `.coderail/loop/.gitignore` with `*` and `!.gitignore`, so
-the ignore file is the only loop-output file eligible for Git. Repeated
-implementation and review handoffs append to the same ticket transcript.
-Diagnostics remain available after successful and failed ticket-loop
-invocations, then every successful `cr work finish` removes the complete loop
-directory without a separate prompt. Failed or interrupted finish attempts
-preserve it.
+`cr ticket loop` creates `.coderail/loop/` lazily for its ignored transcripts;
+`.coderail/.gitignore` contains the `loop` rule that keeps them out of Git.
+Repeated implementation and review handoffs append to the same ticket
+transcript. Diagnostics remain available after successful and failed
+ticket-loop invocations, then every successful `cr work finish` removes the
+complete loop directory without a separate prompt. A failed or conflicted
+squash preserves it; failures after squash preparation do not.
 
 Ignored diagnostics are local and temporary, but may still contain secrets
 from agent output. Inspect and handle them accordingly. The temporary work

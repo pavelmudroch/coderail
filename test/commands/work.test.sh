@@ -309,6 +309,13 @@ if [ -e "$commit_exchange_file" ] || [ -L "$commit_exchange_file" ]; then
     exit 10
 fi
 
+if [ "${FAKE_COMMIT_REQUIRE_LOOP_ABSENT:-false}" = true ] &&
+    [ -e "${FAKE_LOOP_DIR:?}" ]
+then
+    echo 'fake commit agent observed loop diagnostics' >&2
+    exit 12
+fi
+
 case "${FAKE_COMMIT_ARTIFACT:-write}" in
     write)
         printf '%s' "${FAKE_COMMIT_MESSAGE:?}" > "$commit_exchange_file"
@@ -403,6 +410,8 @@ run_finish_with_fake_agent() {
         FAKE_COMMIT_MESSAGE=${FAKE_COMMIT_MESSAGE-} \
         FAKE_COMMIT_OUTPUT=${FAKE_COMMIT_OUTPUT-} \
         FAKE_COMMIT_STDERR=${FAKE_COMMIT_STDERR-} \
+        FAKE_COMMIT_REQUIRE_LOOP_ABSENT=${FAKE_COMMIT_REQUIRE_LOOP_ABSENT-false} \
+        FAKE_LOOP_DIR=$work_dir/.coderail/loop \
         TMPDIR=$TEMP_DIR \
         HOME="$tmp_dir/empty-home" \
         PATH="$fake_dir:$PATH" \
@@ -422,10 +431,10 @@ write_loop_diagnostics() {
     work_dir=$1
 
     mkdir -p "$work_dir/.coderail/loop"
-    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
+    printf 'loop\n' > "$work_dir/.coderail/.gitignore"
     printf 'sensitive diagnostic\n' \
         > "$work_dir/.coderail/loop/diagnostic.txt"
-    git -C "$work_dir" add -f .coderail/loop/.gitignore
+    git -C "$work_dir" add .coderail/.gitignore
     git -C "$work_dir" commit -q -m 'Keep loop diagnostics local'
 }
 
@@ -780,95 +789,6 @@ assert_finish_returns_to_work_branch_when_base_is_dirty() {
     assert_file_content "$work_dir/base-dirty.txt" 'base dirty'
 }
 
-assert_finish_recovers_from_invalid_base_loop_policy() {
-    work_dir=$(create_git_project finish-invalid-base-loop-policy)
-
-    mkdir -p "$work_dir/.coderail/loop"
-    printf '*\n!.gitignore\n!diagnostic.txt\n' \
-        > "$work_dir/.coderail/loop/.gitignore"
-    commit_all "$work_dir" 'Add invalid base loop ignore policy'
-    base_branch=$(git -C "$work_dir" branch --show-current)
-    start_recorded_work "$work_dir"
-    write_loop_diagnostics "$work_dir"
-
-    git_dir=$(git -C "$work_dir" rev-parse --absolute-git-dir)
-    git_exclude=$git_dir/info/exclude
-    expected_git_exclude=$tmp_dir/invalid-base-git-exclude
-    base_ignore=$tmp_dir/invalid-base-loop-ignore
-    cp "$git_exclude" "$expected_git_exclude"
-
-    run_cr "$work_dir" work finish
-
-    assert_failure
-    assert_contains \
-        "$run_stderr" \
-        'loop ignore policy is invalid on base branch'
-    assert_branch "$work_dir" coderail/finish-feature
-    assert_file_content \
-        "$work_dir/.coderail/loop/diagnostic.txt" \
-        'sensitive diagnostic'
-    assert_ignored "$work_dir" .coderail/loop/diagnostic.txt
-    assert_no_loop_paths_staged "$work_dir"
-    git -C "$work_dir" show \
-        "$base_branch:.coderail/loop/.gitignore" > "$base_ignore"
-    assert_file_content "$base_ignore" '*
-!.gitignore
-!diagnostic.txt'
-    cmp "$expected_git_exclude" "$git_exclude" >/dev/null ||
-        fail 'failure cleanup changed the Git exclude policy'
-}
-
-assert_finish_preserves_diagnostics_when_invalid_base_recovery_is_interrupted() {
-    work_dir=$(create_git_project finish-invalid-base-loop-policy-signal)
-    fake_dir=$tmp_dir/fake-invalid-base-loop-policy-signal
-    real_git=$(command -v git)
-
-    mkdir -p "$work_dir/.coderail/loop"
-    printf '*\n!.gitignore\n!diagnostic.txt\n' \
-        > "$work_dir/.coderail/loop/.gitignore"
-    commit_all "$work_dir" 'Add invalid base loop ignore policy'
-    base_branch=$(git -C "$work_dir" branch --show-current)
-    start_recorded_work "$work_dir"
-    write_loop_diagnostics "$work_dir"
-
-    mkdir "$fake_dir"
-    printf '%s\n' \
-        '#!/usr/bin/env sh' \
-        '"$FAKE_REAL_GIT" "$@"' \
-        'git_status=$?' \
-        'if [ "$git_status" -eq 0 ] &&' \
-        '    [ "$1" = switch ] &&' \
-        '    [ "${3:-}" = "$FAKE_FINISH_SIGNAL_BRANCH" ]; then' \
-        '    kill -TERM "$PPID"' \
-        'fi' \
-        'exit "$git_status"' > "$fake_dir/git"
-    chmod 755 "$fake_dir/git"
-
-    run_stdout=$tmp_dir/run.stdout
-    run_stderr=$tmp_dir/run.stderr
-    set +e
-    FAKE_REAL_GIT=$real_git \
-    FAKE_FINISH_SIGNAL_BRANCH=$base_branch \
-    PATH="$fake_dir:$PATH" \
-        "$CR" --cwd "$work_dir" work finish > "$run_stdout" 2> "$run_stderr" < /dev/null
-    run_status=$?
-    set -e
-
-    [ "$run_status" -eq 143 ] ||
-        fail "expected signal status 143, got $run_status"
-    assert_branch "$work_dir" coderail/finish-feature
-    assert_file_content \
-        "$work_dir/.coderail/loop/diagnostic.txt" \
-        'sensitive diagnostic'
-    assert_ignored "$work_dir" .coderail/loop/diagnostic.txt
-    assert_no_loop_paths_staged "$work_dir"
-    git -C "$work_dir" show \
-        "$base_branch:.coderail/loop/.gitignore" > "$tmp_dir/invalid-base-signal-loop-ignore"
-    assert_file_content "$tmp_dir/invalid-base-signal-loop-ignore" '*
-!.gitignore
-!diagnostic.txt'
-}
-
 assert_finish_requires_ticket_readiness_before_checkpoint() {
     work_dir=$(create_recorded_work finish-ticket-readiness)
     ticket_file=$work_dir/.coderail/tickets/active/0001-pending-ticket.md
@@ -1029,6 +949,7 @@ assert_finish_recovers_failed_squash_to_work_branch() {
     git -C "$work_dir" add -A
     git -C "$work_dir" commit -q -m 'Create unrelated base'
     git -C "$work_dir" switch -q coderail/finish-feature
+    write_loop_diagnostics "$work_dir"
 
     run_cr "$work_dir" work finish
 
@@ -1036,13 +957,92 @@ assert_finish_recovers_failed_squash_to_work_branch() {
     assert_contains "$run_stderr" 'error: failed to prepare squash integration'
     assert_branch "$work_dir" coderail/finish-feature
     assert_clean_worktree "$work_dir"
+    assert_file_content \
+        "$work_dir/.coderail/loop/diagnostic.txt" \
+        'sensitive diagnostic'
+    assert_ignored "$work_dir" .coderail/loop/diagnostic.txt
+}
+
+assert_finish_stops_when_loop_removal_fails() {
+    work_dir=$(create_recorded_work finish-loop-removal-failure)
+    fake_dir=$tmp_dir/fake-loop-removal-failure
+    real_rm=$(command -v rm)
+    base_branch=$(git -C "$work_dir" show coderail/finish-feature:.coderail/work.ini |
+        sed -n 's/^base_branch=//p')
+    base_head=$(git -C "$work_dir" rev-parse "$base_branch")
+
+    write_loop_diagnostics "$work_dir"
+    printf 'feature\n' > "$work_dir/feature.txt"
+    git -C "$work_dir" add feature.txt
+    mkdir "$fake_dir"
+    printf '%s\n' \
+        '#!/usr/bin/env sh' \
+        'if [ "$1" = -rf ] && [ "$2" = -- ] && [ "${3:-}" = ./.coderail/loop ]; then' \
+        '    exit 1' \
+        'fi' \
+        'exec "$FAKE_REAL_RM" "$@"' > "$fake_dir/rm"
+    chmod 755 "$fake_dir/rm"
+
+    run_stdout=$tmp_dir/run.stdout
+    run_stderr=$tmp_dir/run.stderr
+    set +e
+    FAKE_REAL_RM=$real_rm PATH="$fake_dir:$PATH" \
+        "$CR" --cwd "$work_dir" work finish > "$run_stdout" 2> "$run_stderr" < /dev/null
+    run_status=$?
+    set -e
+
+    assert_failure
+    assert_contains "$run_stderr" 'error: failed to remove loop diagnostic directory'
+    assert_not_contains "$run_stdout" 'integration changes are staged'
+    assert_branch "$work_dir" "$base_branch"
+    [ "$(git -C "$work_dir" rev-parse HEAD)" = "$base_head" ] ||
+        fail 'loop removal failure created an integration commit'
+    assert_staged_file_content "$work_dir" feature.txt 'feature'
+    assert_file_content \
+        "$work_dir/.coderail/loop/diagnostic.txt" \
+        'sensitive diagnostic'
+}
+
+assert_finish_removes_tracked_legacy_loop_ignore() {
+    work_dir=$(create_git_project finish-legacy-loop-ignore)
+
+    printf 'user ignore\nloop\n' > "$work_dir/.coderail/.gitignore"
+    mkdir "$work_dir/.coderail/loop"
+    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
+    git -C "$work_dir" add .coderail/.gitignore
+    git -C "$work_dir" add -f .coderail/loop/.gitignore
+    git -C "$work_dir" commit -q -m 'Add legacy loop ignore'
+    start_recorded_work "$work_dir"
+    printf 'feature\n' > "$work_dir/feature.txt"
+    git -C "$work_dir" add feature.txt
+
+    run_cr_with_input "$work_dir" 'n
+' work finish
+
+    assert_success
+    assert_path_missing "$work_dir/.coderail/loop"
+    assert_staged_file_content \
+        "$work_dir" \
+        .coderail/.gitignore \
+        'user ignore
+loop'
+    staged_change=$(git -C "$work_dir" diff --cached --name-status -- \
+        .coderail/loop/.gitignore)
+    expected_staged_change=$(printf 'D\t.coderail/loop/.gitignore')
+    [ "$staged_change" = "$expected_staged_change" ] ||
+        fail "legacy loop ignore was not removed: $staged_change"
 }
 
 assert_finish_reports_noop_after_workflow_cleanup() {
-    work_dir=$(create_recorded_work finish-noop)
+    work_dir=$(create_git_project finish-noop)
+    printf 'loop\n' > "$work_dir/.coderail/.gitignore"
+    commit_all "$work_dir" 'Ignore loop diagnostics'
+    start_recorded_work "$work_dir"
     base_branch=$(git -C "$work_dir" show coderail/finish-feature:.coderail/work.ini |
         sed -n 's/^base_branch=//p')
-    write_loop_diagnostics "$work_dir"
+    mkdir -p "$work_dir/.coderail/loop"
+    printf 'sensitive diagnostic\n' \
+        > "$work_dir/.coderail/loop/diagnostic.txt"
 
     run_cr "$work_dir" work finish
 
@@ -1533,16 +1533,14 @@ n
     FAKE_COMMIT_FAIL=true \
     FAKE_COMMIT_MESSAGE='feat(work): agent failure' \
     FAKE_COMMIT_OUTPUT='agent prose must remain diagnostic only' \
+    FAKE_COMMIT_REQUIRE_LOOP_ABSENT=true \
         run_finish_with_fake_agent "$agent_failure_dir" "$agent_failure_fake_dir" 'y
 '
 
     assert_failure
     assert_contains "$run_stderr" 'automatic commit failed'
     assert_staged_file_content "$agent_failure_dir" agent-failure.txt 'agent failure'
-    assert_file_content \
-        "$agent_failure_dir/.coderail/loop/diagnostic.txt" \
-        'sensitive diagnostic'
-    assert_ignored "$agent_failure_dir" .coderail/loop/diagnostic.txt
+    assert_path_missing "$agent_failure_dir/.coderail/loop"
     assert_no_loop_paths_staged "$agent_failure_dir"
     assert_exchange_artifact_removed
 
@@ -1568,10 +1566,7 @@ y
     assert_failure
     assert_contains "$run_stderr" 'automatic commit failed'
     assert_staged_file_content "$git_failure_dir" git-failure.txt 'git failure'
-    assert_file_content \
-        "$git_failure_dir/.coderail/loop/diagnostic.txt" \
-        'sensitive diagnostic'
-    assert_ignored "$git_failure_dir" .coderail/loop/diagnostic.txt
+    assert_path_missing "$git_failure_dir/.coderail/loop"
     assert_no_loop_paths_staged "$git_failure_dir"
     assert_exchange_artifact_removed
 }
@@ -1579,12 +1574,7 @@ y
 assert_finish_preserves_loop_diagnostics_after_signal() {
     work_dir=$(create_recorded_work finish-signal)
     fake_dir=$tmp_dir/fake-signal
-    git_dir=$(git -C "$work_dir" rev-parse --absolute-git-dir)
-    git_exclude=$git_dir/info/exclude
-    expected_git_exclude=$tmp_dir/signal-git-exclude
-
     write_loop_diagnostics "$work_dir"
-    cp "$git_exclude" "$expected_git_exclude"
     printf 'default_tool = codex\n' > "$work_dir/.coderail/config.ini"
     printf 'signal\n' > "$work_dir/signal.txt"
     git -C "$work_dir" add .coderail/config.ini signal.txt
@@ -1598,25 +1588,15 @@ assert_finish_preserves_loop_diagnostics_after_signal() {
 
     [ "$run_status" -eq 143 ] ||
         fail "expected signal status 143, got $run_status"
-    assert_file_content \
-        "$work_dir/.coderail/loop/diagnostic.txt" \
-        'sensitive diagnostic'
-    assert_ignored "$work_dir" .coderail/loop/diagnostic.txt
+    assert_path_missing "$work_dir/.coderail/loop"
     assert_no_loop_paths_staged "$work_dir"
     assert_exchange_artifact_removed
-    cmp "$expected_git_exclude" "$git_exclude" >/dev/null ||
-        fail 'signal cleanup changed the Git exclude policy'
 }
 
 assert_finish_loop_cleanup_preserves_unrelated_placeholders() {
     work_dir=$(create_recorded_work finish-loop-cleanup-boundary)
-    git_dir=$(git -C "$work_dir" rev-parse --absolute-git-dir)
-    git_exclude=$git_dir/info/exclude
-    expected_git_exclude=$tmp_dir/success-git-exclude
-
     write_loop_diagnostics "$work_dir"
-    cp "$git_exclude" "$expected_git_exclude"
-    printf 'protected ignore\n' > "$work_dir/.coderail/.gitignore"
+    printf 'protected ignore\nloop\n' > "$work_dir/.coderail/.gitignore"
     printf 'protected keep\n' > "$work_dir/.coderail/.gitkeep"
     printf 'boundary\n' > "$work_dir/boundary.txt"
     git -C "$work_dir" add \
@@ -1631,81 +1611,12 @@ assert_finish_loop_cleanup_preserves_unrelated_placeholders() {
     assert_path_missing "$work_dir/.coderail/loop"
     assert_file_content \
         "$work_dir/.coderail/.gitignore" \
-        'protected ignore'
+        'protected ignore
+loop'
     assert_file_content \
         "$work_dir/.coderail/.gitkeep" \
         'protected keep'
     assert_no_loop_paths_staged "$work_dir"
-    cmp "$expected_git_exclude" "$git_exclude" >/dev/null ||
-        fail 'successful cleanup changed the Git exclude policy'
-}
-
-assert_finish_stages_removal_of_base_loop_ignore() {
-    work_dir=$(create_git_project finish-base-loop-ignore)
-
-    mkdir -p "$work_dir/.coderail/loop"
-    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
-    commit_all "$work_dir" 'Add loop ignore policy'
-    start_recorded_work "$work_dir"
-    printf 'sensitive diagnostic\n' \
-        > "$work_dir/.coderail/loop/diagnostic.txt"
-
-    run_cr_with_input "$work_dir" 'n
-' work finish
-
-    assert_success
-    assert_path_missing "$work_dir/.coderail/loop"
-    assert_no_unstaged_changes "$work_dir"
-    staged_change=$(git -C "$work_dir" diff --cached --name-status)
-    [ "$staged_change" = "D	.coderail/loop/.gitignore" ] ||
-        fail "unexpected staged change: $staged_change"
-}
-
-assert_finish_removes_base_loop_ignore_after_staged_work_deletion() {
-    work_dir=$(create_git_project finish-staged-loop-deletion)
-
-    mkdir -p "$work_dir/.coderail/loop"
-    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
-    commit_all "$work_dir" 'Add loop ignore policy'
-    start_recorded_work "$work_dir"
-    rm -rf "$work_dir/.coderail/loop"
-    git -C "$work_dir" add -u .coderail/loop
-
-    run_cr_with_input "$work_dir" 'n
-' work finish
-
-    assert_success
-    assert_path_missing "$work_dir/.coderail/loop"
-    assert_no_unstaged_changes "$work_dir"
-    staged_change=$(git -C "$work_dir" diff --cached --name-status)
-    [ "$staged_change" = "D	.coderail/loop/.gitignore" ] ||
-        fail "unexpected staged change: $staged_change"
-}
-
-assert_finish_skips_loop_ignore_bridge_for_valid_base_policy() {
-    work_dir=$(create_git_project finish-valid-base-loop-policy)
-
-    mkdir -p "$work_dir/.coderail/loop"
-    printf '*\n!.gitignore\n' > "$work_dir/.coderail/loop/.gitignore"
-    commit_all "$work_dir" 'Add loop ignore policy'
-    start_recorded_work "$work_dir"
-    printf 'sensitive diagnostic\n' \
-        > "$work_dir/.coderail/loop/diagnostic.txt"
-
-    git_dir=$(git -C "$work_dir" rev-parse --absolute-git-dir)
-    git_exclude=$git_dir/info/exclude
-    git_exclude_target=$tmp_dir/valid-base-git-exclude
-    rm "$git_exclude"
-    printf 'user exclude\n' > "$git_exclude_target"
-    ln -s "$git_exclude_target" "$git_exclude"
-
-    run_cr_with_input "$work_dir" 'n
-' work finish
-
-    assert_success
-    assert_path_missing "$work_dir/.coderail/loop"
-    [ -L "$git_exclude" ] || fail 'Git exclude symlink was removed'
-    assert_file_content "$git_exclude_target" 'user exclude'
 }
 
 print_tests_header 'Work Command Tests'
@@ -1723,8 +1634,6 @@ test 'Work record validation is strict' assert_work_record_validation
 test 'Work finish rejects invalid or mismatched records' assert_finish_rejects_invalid_or_mismatched_records
 test 'Work finish rejects untracked or unstaged changes' assert_finish_rejects_untracked_or_unstaged_changes
 test 'Work finish returns from a dirty base branch' assert_finish_returns_to_work_branch_when_base_is_dirty
-test 'Work finish recovers from an invalid base loop policy' assert_finish_recovers_from_invalid_base_loop_policy
-test 'Work finish preserves diagnostics after interrupted invalid-base recovery' assert_finish_preserves_diagnostics_when_invalid_base_recovery_is_interrupted
 test 'Work finish requires tickets before checkpointing' assert_finish_requires_ticket_readiness_before_checkpoint
 test 'Work finish checkpoints and stages code integration' assert_finish_checkpoints_and_stages_code_integration
 test 'Work finish restores managed files and permanent config' assert_finish_restores_managed_files_and_permanent_config
@@ -1732,6 +1641,8 @@ test 'Work finish restores parent workflow for nested work' assert_finish_restor
 test 'Work finish resolves managed conflicts to base' assert_finish_resolves_managed_conflicts_to_base
 test 'Work finish recovers code conflicts to work branch' assert_finish_recovers_code_conflicts_to_work_branch
 test 'Work finish recovers failed squash merges to work branch' assert_finish_recovers_failed_squash_to_work_branch
+test 'Work finish stops when loop removal fails' assert_finish_stops_when_loop_removal_fails
+test 'Work finish removes tracked legacy loop ignore' assert_finish_removes_tracked_legacy_loop_ignore
 test 'Work finish reports a cleaned no-op' assert_finish_reports_noop_after_workflow_cleanup
 test 'Work finish cancels automatic commits' assert_finish_cancels_automatic_commit_on_negative_or_eof
 test 'Work finish retries and defaults automatic confirmation' assert_finish_retries_and_defaults_automatic_commit_confirmation
@@ -1745,9 +1656,6 @@ test 'Work finish commits only private agent messages' assert_finish_commits_onl
 test 'Work finish preserves staged results after commit failures' assert_finish_preserves_staged_result_after_agent_or_commit_failures
 test 'Work finish preserves loop diagnostics after signals' assert_finish_preserves_loop_diagnostics_after_signal
 test 'Work finish loop cleanup preserves unrelated placeholders' assert_finish_loop_cleanup_preserves_unrelated_placeholders
-test 'Work finish stages removal of a base loop ignore' assert_finish_stages_removal_of_base_loop_ignore
-test 'Work finish removes base loop ignore after staged work deletion' assert_finish_removes_base_loop_ignore_after_staged_work_deletion
-test 'Work finish skips loop bridge for a valid base policy' assert_finish_skips_loop_ignore_bridge_for_valid_base_policy
 print_tests_summary
 
 if some_tests_failed; then

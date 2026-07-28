@@ -214,6 +214,83 @@ work_branch=coderail/add-feature
 work_name=Add feature"
 }
 
+assert_clean_removes_populated_loop_directory() {
+    work_dir=$(create_project populated-loop)
+    loop_dir=$work_dir/.coderail/loop
+    outer_ignore=$work_dir/.coderail/.gitignore
+
+    mkdir -p "$loop_dir/transcripts"
+    printf 'loop\n' > "$outer_ignore"
+    printf 'transcript\n' > "$loop_dir/transcripts/0001.log"
+
+    run_cr "$work_dir" clean
+
+    assert_success
+    assert_stdout_content "remove .coderail/loop"
+    assert_file_empty "$run_stderr"
+    assert_path_missing "$loop_dir"
+    assert_file_content "$outer_ignore" "loop"
+}
+
+assert_clean_removes_empty_loop_directory() {
+    work_dir=$(create_project empty-loop)
+    loop_dir=$work_dir/.coderail/loop
+    outer_ignore=$work_dir/.coderail/.gitignore
+
+    mkdir "$loop_dir"
+    printf 'loop\n' > "$outer_ignore"
+
+    run_cr "$work_dir" clean
+
+    assert_success
+    assert_stdout_content "remove .coderail/loop"
+    assert_file_empty "$run_stderr"
+    assert_path_missing "$loop_dir"
+    assert_file_content "$outer_ignore" "loop"
+}
+
+assert_clean_dry_run_preserves_loop_directory() {
+    work_dir=$(create_project dry-run-loop)
+    loop_dir=$work_dir/.coderail/loop
+    outer_ignore=$work_dir/.coderail/.gitignore
+    transcript_file=$loop_dir/0001.log
+    dry_run_stdout=$tmp_dir/dry-run-loop.stdout
+
+    mkdir "$loop_dir"
+    printf 'loop\n' > "$outer_ignore"
+    printf 'transcript\n' > "$transcript_file"
+
+    run_cr "$work_dir" clean --dry-run
+
+    assert_success
+    assert_stdout_content "remove .coderail/loop"
+    assert_file_empty "$run_stderr"
+    assert_file "$transcript_file"
+    assert_file_content "$outer_ignore" "loop"
+
+    cp "$run_stdout" "$dry_run_stdout"
+    run_cr "$work_dir" clean
+
+    assert_success
+    cmp "$dry_run_stdout" "$run_stdout" >/dev/null ||
+        fail "actual clean output differs from dry-run"
+    assert_path_missing "$loop_dir"
+}
+
+assert_clean_noop_preserves_outer_ignore_without_loop_directory() {
+    work_dir=$(create_project absent-loop)
+    outer_ignore=$work_dir/.coderail/.gitignore
+
+    printf 'loop\n' > "$outer_ignore"
+
+    run_cr "$work_dir" clean
+
+    assert_success
+    assert_stdout_content "nothing to clean"
+    assert_file_empty "$run_stderr"
+    assert_file_content "$outer_ignore" "loop"
+}
+
 assert_clean_preserves_work_record() {
     work_dir=$(create_git_project work-record)
     stale_file=$work_dir/.coderail/SCOPE.md
@@ -733,6 +810,10 @@ test "Top-level help lists clean" assert_help_lists_clean
 test "Clean help documents dry-run" assert_clean_help_documents_dry_run
 test "Clean requires coderail directory" assert_missing_coderail_fails
 test "Clean no-op preserves config files" assert_noop_preserves_config_files
+test "Clean removes populated loop directory" assert_clean_removes_populated_loop_directory
+test "Clean removes empty loop directory" assert_clean_removes_empty_loop_directory
+test "Clean dry run preserves loop directory" assert_clean_dry_run_preserves_loop_directory
+test "Clean no-op preserves outer ignore without loop directory" assert_clean_noop_preserves_outer_ignore_without_loop_directory
 test "Clean preserves work record" assert_clean_preserves_work_record
 test "Clean ignores empty directories" assert_empty_directories_are_ignored
 test "Clean rejects legacy ticket-clean options" assert_clean_rejects_legacy_options

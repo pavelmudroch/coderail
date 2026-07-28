@@ -15,6 +15,7 @@ ROOT_DIR=$(
 )
 
 . "$ROOT_DIR/lib/utils/ticket.sh"
+. "$ROOT_DIR/lib/utils/loop.sh"
 
 usage() {
     cat <<'EOF'
@@ -50,6 +51,12 @@ print_clean_plan() {
     done < "$stale_files"
 }
 
+print_loop_clean_plan() {
+    [ "$loop_present" = true ] || return 0
+
+    printf 'remove .coderail/loop\n'
+}
+
 apply_clean_plan() {
     while IFS= read -r apply_path || [ -n "$apply_path" ]; do
         [ -n "$apply_path" ] || continue
@@ -58,6 +65,14 @@ apply_clean_plan() {
             fatal "failed to remove stale file: $apply_path"
         printf 'remove %s\n' "$apply_path"
     done < "$stale_files"
+}
+
+apply_loop_clean_plan() {
+    [ "$loop_present" = true ] || return 0
+
+    loop_remove "$project_dir" ||
+        fatal "failed to remove loop directory"
+    printf 'remove .coderail/loop\n'
 }
 
 collect_unsafe_stale_files() {
@@ -160,31 +175,42 @@ trap cleanup EXIT HUP INT TERM
 stale_files=$tmp_dir/stale-files
 ticket_files=$tmp_dir/ticket-files
 unsafe_stale_files=$tmp_dir/unsafe-stale-files
+loop_present=false
+
+if [ -e .coderail/loop ] || [ -L .coderail/loop ]; then
+    loop_present=true
+fi
 
 find .coderail -type f \
     ! -path .coderail/config.ini \
     ! -path .coderail/conf.ini \
+    ! -path .coderail/.gitignore \
     ! -path .coderail/test.map \
     ! -path .coderail/work.ini \
+    ! -path '.coderail/loop/*' \
     -print | sort > "$stale_files"
 
-if [ ! -s "$stale_files" ]; then
+if [ ! -s "$stale_files" ] && [ "$loop_present" != true ]; then
     echo "nothing to clean"
     exit 0
 fi
 
-ticket_collect_files "$project_dir" "$ticket_files" "$tmp_dir"
+if [ -s "$stale_files" ]; then
+    ticket_collect_files "$project_dir" "$ticket_files" "$tmp_dir"
 
-if [ -s "$ticket_files" ]; then
-    ticket_validate_all_resolved "$project_dir" "$ticket_files" "$tmp_dir" || exit 1
-elif [ "$dry_run" != true ]; then
-    collect_unsafe_stale_files
-    confirm_unsafe_stale_files
+    if [ -s "$ticket_files" ]; then
+        ticket_validate_all_resolved "$project_dir" "$ticket_files" "$tmp_dir" || exit 1
+    elif [ "$dry_run" != true ]; then
+        collect_unsafe_stale_files
+        confirm_unsafe_stale_files
+    fi
 fi
 
 if [ "$dry_run" = true ]; then
+    print_loop_clean_plan
     print_clean_plan
     exit 0
 fi
 
+apply_loop_clean_plan
 apply_clean_plan

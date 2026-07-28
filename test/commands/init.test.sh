@@ -94,8 +94,8 @@ assert_clean_init() {
 
     assert_dir "$work_dir/.coderail"
     assert_empty_dir "$work_dir/.coderail/tickets"
-    assert_file_content "$work_dir/.coderail/loop/.gitignore" "*
-!.gitignore"
+    assert_file_content "$work_dir/.coderail/.gitignore" "loop"
+    assert_path_missing "$work_dir/.coderail/loop"
     assert_file_content "$work_dir/.coderail/config.ini" "# characters after '#' are comments
 # default_tool = codex # set the default tool for cr"
     assert_file_content "$work_dir/.coderail/test.map" "# first '#' starts a Coderail comment, even inside quoted shell text
@@ -108,8 +108,20 @@ assert_clean_init() {
 # shellcheck {path}"
 }
 
-assert_init_preserves_existing_loop_ignore() {
-    work_dir=$tmp_dir/existing-loop-ignore
+assert_init_preserves_existing_outer_ignore() {
+    work_dir=$tmp_dir/existing-outer-ignore
+
+    mkdir -p "$work_dir/.coderail"
+    printf 'user ignore\n' > "$work_dir/.coderail/.gitignore"
+
+    assert_init_succeeds "$work_dir"
+
+    assert_file_content "$work_dir/.coderail/.gitignore" "user ignore
+loop"
+}
+
+assert_init_preserves_legacy_loop_ignore() {
+    work_dir=$tmp_dir/legacy-loop-ignore
 
     mkdir -p "$work_dir/.coderail/loop"
     printf 'user ignore\n' > "$work_dir/.coderail/loop/.gitignore"
@@ -117,6 +129,7 @@ assert_init_preserves_existing_loop_ignore() {
     assert_init_succeeds "$work_dir"
 
     assert_file_content "$work_dir/.coderail/loop/.gitignore" "user ignore"
+    assert_file_content "$work_dir/.coderail/.gitignore" "loop"
 }
 
 assert_init_preserves_existing_files() {
@@ -194,7 +207,8 @@ print_tests_header "Init Tests"
 test "Clean init creates coderail files" assert_clean_init
 test "Init preserves existing files" assert_init_preserves_existing_files
 test "Init preserves legacy config" assert_init_preserves_legacy_config
-test "Init preserves existing loop ignore" assert_init_preserves_existing_loop_ignore
+test "Init preserves existing outer ignore" assert_init_preserves_existing_outer_ignore
+test "Init preserves legacy loop ignore" assert_init_preserves_legacy_loop_ignore
 test "Init without write permission fails" assert_init_without_write_permission_fails
 test "Init target file fails" assert_init_target_file_fails
 test "README documents repository config migration" assert_readme_documents_repository_config_migration

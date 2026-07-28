@@ -78,56 +78,141 @@ assert_discovery_state_rejected() {
     assert_equals "$output" ""
 }
 
-assert_loop_setup_creates_ignore() {
+assert_loop_ensure_outer_ignore_creates_ignore() {
     project_dir=$tmp_dir/create
 
     mkdir "$project_dir"
 
-    assert_equals "$(loop_setup "$project_dir")" true
-    assert_file_content "$project_dir/.coderail/loop/.gitignore" "*
-!.gitignore"
-    assert_equals "$(loop_setup "$project_dir")" false
+    assert_equals "$(loop_ensure_outer_ignore "$project_dir")" true
+    assert_file_content "$project_dir/.coderail/.gitignore" "loop"
+    assert_no_path "$project_dir/.coderail/loop"
+    assert_equals "$(loop_ensure_outer_ignore "$project_dir")" false
 }
 
-assert_loop_setup_preserves_existing_ignore() {
+assert_loop_ensure_outer_ignore_preserves_existing_content() {
     project_dir=$tmp_dir/existing
 
     mkdir -p "$project_dir/.coderail/loop"
-    printf '*\n!.gitignore\n' > "$project_dir/.coderail/loop/.gitignore"
-    printf 'existing diagnostic\n' > "$project_dir/.coderail/loop/existing.txt"
+    printf 'existing ignore\n' > "$project_dir/.coderail/.gitignore"
+    printf 'legacy ignore\n' > "$project_dir/.coderail/loop/.gitignore"
 
-    assert_equals "$(loop_setup "$project_dir")" false
-    assert_file_content "$project_dir/.coderail/loop/.gitignore" "*
-!.gitignore"
+    assert_equals "$(loop_ensure_outer_ignore "$project_dir")" true
     assert_file_content \
-        "$project_dir/.coderail/loop/existing.txt" \
-        "existing diagnostic"
+        "$project_dir/.coderail/.gitignore" \
+        "existing ignore
+loop"
+    assert_file_content \
+        "$project_dir/.coderail/loop/.gitignore" \
+        "legacy ignore"
 }
 
-assert_loop_verify_ignore_policy_is_exact() {
+assert_loop_ensure_outer_ignore_accepts_exact_rules() {
     project_dir=$tmp_dir/verify-ignore
 
-    mkdir -p "$project_dir/.coderail/loop"
-    printf '*\n!.gitignore\n' > "$project_dir/.coderail/loop/.gitignore"
+    mkdir -p "$project_dir/.coderail"
+    printf 'loop\n' > "$project_dir/.coderail/.gitignore"
 
     loop_verify_ignore_policy "$project_dir" ||
-        fail "valid loop ignore policy was rejected"
+        fail "exact loop rule was rejected"
+    assert_equals "$(loop_ensure_outer_ignore "$project_dir")" false
 
-    printf '*\n!.gitignore\n!exposed.txt\n' \
-        > "$project_dir/.coderail/loop/.gitignore"
+    printf 'loop/\n' > "$project_dir/.coderail/.gitignore"
 
-    if loop_verify_ignore_policy "$project_dir"; then
-        fail "invalid loop ignore policy was accepted"
-    fi
+    loop_verify_ignore_policy "$project_dir" ||
+        fail "exact loop/ rule was rejected"
+    assert_equals "$(loop_ensure_outer_ignore "$project_dir")" false
+}
 
-    rm "$project_dir/.coderail/loop/.gitignore"
-    ln -s "$project_dir/outside-ignore" \
-        "$project_dir/.coderail/loop/.gitignore"
-    printf '*\n!.gitignore\n' > "$project_dir/outside-ignore"
+assert_loop_ensure_outer_ignore_appends_after_inactive_rules() {
+    project_dir=$tmp_dir/inactive-rules
 
-    if loop_verify_ignore_policy "$project_dir"; then
-        fail "symlink loop ignore policy was accepted"
-    fi
+    mkdir -p "$project_dir/.coderail"
+
+    for inactive_rule in '# loop' '!loop' '*/loop' 'loop/*'; do
+        printf '%s\n' "$inactive_rule" > "$project_dir/.coderail/.gitignore"
+
+        assert_equals "$(loop_ensure_outer_ignore "$project_dir")" true
+        assert_file_content \
+            "$project_dir/.coderail/.gitignore" \
+            "$inactive_rule
+loop"
+    done
+}
+
+assert_loop_ensure_outer_ignore_appends_after_later_negation() {
+    project_dir=$tmp_dir/later-negation
+
+    mkdir -p "$project_dir/.coderail"
+    git -C "$project_dir" init -q
+    printf 'loop\n!loop\n' > "$project_dir/.coderail/.gitignore"
+
+    assert_equals "$(loop_ensure_outer_ignore "$project_dir")" true
+    assert_file_content \
+        "$project_dir/.coderail/.gitignore" \
+        "loop
+!loop
+loop"
+    git -C "$project_dir" check-ignore -q -- .coderail/loop/transcript.txt ||
+        fail "loop transcript is not ignored"
+}
+
+assert_loop_ensure_outer_ignore_appends_after_later_negation_without_git() {
+    project_dir=$tmp_dir/later-negation-without-git
+
+    mkdir -p "$project_dir/.coderail"
+
+    for ignored_rule in loop 'loop/'; do
+        printf '%s\n!%s\n' "$ignored_rule" "$ignored_rule" \
+            > "$project_dir/.coderail/.gitignore"
+
+        assert_equals "$(loop_ensure_outer_ignore "$project_dir")" true
+        assert_file_content \
+            "$project_dir/.coderail/.gitignore" \
+            "$ignored_rule
+!$ignored_rule
+loop"
+    done
+}
+
+assert_loop_ensure_outer_ignore_appends_after_trailing_whitespace_negation_without_git() {
+    project_dir=$tmp_dir/trailing-whitespace-negation-without-git
+
+    mkdir -p "$project_dir/.coderail"
+    printf 'loop\n!loop \n' > "$project_dir/.coderail/.gitignore"
+
+    assert_equals "$(loop_ensure_outer_ignore "$project_dir")" true
+    assert_file_content \
+        "$project_dir/.coderail/.gitignore" \
+        "$(printf 'loop\n!loop \nloop')"
+}
+
+assert_loop_ensure_outer_ignore_accepts_escaped_trailing_whitespace_negation_without_git() {
+    project_dir=$tmp_dir/escaped-trailing-whitespace-negation-without-git
+
+    mkdir -p "$project_dir/.coderail"
+    printf 'loop\n!loop\\ \n' > "$project_dir/.coderail/.gitignore"
+
+    assert_equals "$(loop_ensure_outer_ignore "$project_dir")" false
+    assert_file_content \
+        "$project_dir/.coderail/.gitignore" \
+        "loop
+!loop\\ "
+}
+
+assert_loop_create_directory_is_lazy() {
+    project_dir=$tmp_dir/create-directory
+
+    mkdir "$project_dir"
+
+    loop_ensure_outer_ignore "$project_dir" >/dev/null ||
+        fail "failed to create outer ignore"
+    assert_no_path "$project_dir/.coderail/loop"
+
+    loop_create_directory "$project_dir" ||
+        fail "failed to create loop directory"
+
+    [ -d "$project_dir/.coderail/loop" ] ||
+        fail "loop directory was not created"
 }
 
 assert_loop_remove_stays_within_loop_directory() {
@@ -135,7 +220,6 @@ assert_loop_remove_stays_within_loop_directory() {
     outside_dir=$tmp_dir/remove-outside
 
     mkdir -p "$project_dir/.coderail/loop" "$outside_dir"
-    printf '*\n!.gitignore\n' > "$project_dir/.coderail/loop/.gitignore"
     printf 'diagnostic\n' > "$project_dir/.coderail/loop/diagnostic.txt"
     printf 'protected ignore\n' > "$project_dir/.coderail/.gitignore"
     printf 'protected keep\n' > "$project_dir/.coderail/.gitkeep"
@@ -153,16 +237,19 @@ assert_loop_remove_stays_within_loop_directory() {
         "$project_dir/.coderail/.gitkeep" \
         "protected keep"
     assert_file_content "$outside_dir/diagnostic.txt" "outside"
+
+    loop_remove "$project_dir" ||
+        fail "removal was not a no-op for an absent loop directory"
 }
 
-assert_loop_setup_fails_for_regular_loop_file() {
+assert_loop_create_directory_fails_for_regular_loop_file() {
     project_dir=$tmp_dir/regular-loop-file
 
     mkdir -p "$project_dir/.coderail"
     : > "$project_dir/.coderail/loop"
 
     set +e
-    output=$(loop_setup "$project_dir")
+    output=$(loop_create_directory "$project_dir")
     status=$?
     set -e
 
@@ -217,10 +304,16 @@ resolved: true"
 }
 
 print_tests_header "Loop Utils Tests"
-test "Loop setup creates and reports new ignore" assert_loop_setup_creates_ignore
-test "Loop setup preserves existing ignore" assert_loop_setup_preserves_existing_ignore
-test "Loop setup fails for regular loop file" assert_loop_setup_fails_for_regular_loop_file
-test "Loop verifies the exact ignore policy" assert_loop_verify_ignore_policy_is_exact
+test "Loop ensures a new outer ignore without creating loop" assert_loop_ensure_outer_ignore_creates_ignore
+test "Loop ensure preserves existing outer and legacy ignore content" assert_loop_ensure_outer_ignore_preserves_existing_content
+test "Loop ensure accepts exact outer ignore rules" assert_loop_ensure_outer_ignore_accepts_exact_rules
+test "Loop ensure appends after inactive outer rules" assert_loop_ensure_outer_ignore_appends_after_inactive_rules
+test "Loop ensure appends after a later outer-rule negation" assert_loop_ensure_outer_ignore_appends_after_later_negation
+test "Loop ensure appends after a later outer-rule negation without Git" assert_loop_ensure_outer_ignore_appends_after_later_negation_without_git
+test "Loop ensure appends after a trailing-whitespace outer-rule negation without Git" assert_loop_ensure_outer_ignore_appends_after_trailing_whitespace_negation_without_git
+test "Loop ensure accepts an escaped trailing-whitespace outer-rule negation without Git" assert_loop_ensure_outer_ignore_accepts_escaped_trailing_whitespace_negation_without_git
+test "Loop directory creation is lazy" assert_loop_create_directory_is_lazy
+test "Loop directory creation fails for a regular loop file" assert_loop_create_directory_fails_for_regular_loop_file
 test "Loop removal stays within the loop directory" assert_loop_remove_stays_within_loop_directory
 test "Loop discovery state recognizes strict markers" assert_loop_discovery_state_recognizes_strict_markers
 test "Loop discovery state accepts other frontmatter" assert_loop_discovery_state_accepts_other_frontmatter
