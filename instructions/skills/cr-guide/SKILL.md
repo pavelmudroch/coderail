@@ -78,7 +78,7 @@ complete.
 
 | Path | Role | Lifetime |
 | --- | --- | --- |
-| `~/.coderail/config.ini` | User default, currently `default_tool` | User-local |
+| `~/.coderail/config.ini` | User defaults: `default_tool`, `auto_review` | User-local |
 | `.coderail/config.ini` | Repository defaults; overrides user config | Permanent |
 | `.coderail/test.map` | Maps selected paths to validation commands | Permanent |
 | `.coderail/work.ini` | Managed-work base branch, work branch, and name | One managed branch lifecycle |
@@ -125,8 +125,10 @@ cr init
 cr install codex
 ```
 
-`cr init` creates missing `.coderail` configuration, ticket, and ignored loop
-transcript files. It preserves existing files.
+`cr init` creates missing `.coderail` configuration, ticket, and `.gitignore`
+files. It adds the ignored `loop` rule to `.coderail/.gitignore`; ticket-loop
+transcripts are created lazily. Existing files are preserved, apart from that
+needed `.gitignore` update.
 
 `cr install` installs shared root instructions and skills into one or more
 supported tool homes:
@@ -172,7 +174,7 @@ Use one lifecycle for a piece of work.
 Use when the repository already has a branch or integration process:
 
 ```sh
-git switch -c feat/<name>
+git checkout -b feat/<name>
 ```
 
 Follow the shared workflow below. Finish with:
@@ -194,8 +196,8 @@ integration:
 cr work start "Add request timeout handling"
 ```
 
-`work start` requires a Git repository, `cr init`, a named current branch, and a
-clean worktree. It creates and switches to `coderail/<slug>`, removes inherited
+`work start` requires a Git repository, `cr init`, and a clean worktree. It
+creates and switches to `coderail/<slug>`, removes inherited
 temporary workflow files in the child branch, and writes `.coderail/work.ini`.
 It never pushes.
 
@@ -378,7 +380,8 @@ cr ticket reopen [-d <ticket> ...] <ticket>
 cr ticket validate [<ticket> ...]
 ```
 
-References accept ID, name, slug, or path. Use a path when ambiguous.
+References accept ID, name, slug, or relative/absolute path. Use a path when
+ambiguous.
 Dependencies are resolved and stored as IDs.
 
 A dependency is satisfied only when closed as `done`, or closed as `duplicate`
