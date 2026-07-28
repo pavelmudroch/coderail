@@ -3,10 +3,15 @@ name: cr-review
 description: Review completed work and identify issues.
 disable-model-invocation: true
 ---
+## What to review
 
-# Code Review
+1. Requested changes.
 
-Review the requested changes and report only concrete, actionable findings. Store it in `.coderail/REVIEW.md` unless specified otherwise.
+2. Actual git staged changes. Use `git diff --cached` to see what is staged for commit.
+
+3. Last commit changes. Use `git log --name-status HEAD^..HEAD` to list changed files, and `git show HEAD -- path/to/file` to see changes for that file.
+
+Report only concrete, actionable findings. Store it in `.coderail/REVIEW.md` unless specified otherwise.
 
 The review is read-only. Do not modify files, create commits, or implement fixes.
 Assume all tests already pass, no need to run again.
