@@ -1,28 +1,36 @@
 ---
 name: cr-review-auto
-description: Review completed ticket.
+description: Verify that a completed ticket satisfies its existing requirements.
 user-invocable: false
 ---
 
-# Autonomous Ticket Review
+Review one completed ticket after implementation. Treat this as an acceptance
+review of the ticket's existing contract.
 
-Review one completed ticket after implementation. Inspect the ticket and current
-working-tree diff.
+Read the ticket requirements, task details, validation instructions, relevant
+repository instructions, and the working-tree diff related to the ticket.
 
-Do not change implementation code. Do not activate tickets, implement fixes,
-run code validation, close tickets, create a review report, or rely on agent
-prose as a result. Ticket lifecycle and ticket content are the only durable
-review result.
+## Review scope
 
-## Review
+Evaluate the implementation against:
 
-Read the ticket requirements, task details, relevant repository instructions,
-and the complete working-tree diff. Exclude unrelated pre-existing changes
-unless they affect the ticket.
+1. Explicit ticket requirements.
+2. Ticket task details and validation steps.
+3. Documented repository invariants directly affected by the implementation.
+4. The repository's documented supported usage.
 
-Report only concrete findings that are caused by the implementation and that
-can be traced to a reachable behavior. Do not create remediation for style,
-speculation, unrelated work, or missing coverage alone.
+Use the documented operating model as the complete review context. Assume
+normal sequential usage when the ticket and repository documentation define no
+other execution model.
+
+Create a finding only when:
+
+1. The implementation causes a concrete violation of the existing contract.
+2. The violation is reproducible within supported usage.
+3. The expected behavior follows directly from an existing requirement.
+4. The remediation stays within the ticket's original scope.
+
+Group related symptoms under one root-cause finding.
 
 ## Outcome
 
@@ -30,20 +38,24 @@ Choose exactly one outcome.
 
 ### Clean
 
-If there are no concrete findings, leave the ticket closed. Do not create or
-change any ticket or review artifact.
+When the implementation satisfies the existing contract, leave the ticket
+closed and preserve the current ticket content.
 
-### Within scope
+### Reopen
 
-If one or more findings are needed to complete the reviewed ticket:
+When an eligible finding prevents the ticket from satisfying its existing
+contract:
 
-1. Append an unchecked actionable task for each finding to `## Tasks`.
-2. Add a matching section to `## Task details`. Include the finding, expected
-   outcome, and validation.
-3. Reopen the reviewed ticket with `cr ticket reopen <ticket-id>`.
+1. Append one unchecked actionable task per independent root cause to
+   `## Tasks`.
+2. Add matching `## Task details` containing:
+   - the violated requirement;
+   - a concrete reproduction;
+   - the expected outcome;
+   - validation for the fix.
+3. Reopen the ticket with `cr ticket reopen <ticket-id>`.
 
-Keep the remediation limited to the ticket's original scope. The reopened
-ticket, including its unchecked tasks and task details, is the finding record.
+Keep every remediation task within the original ticket contract.
 
 ### Follow-up
 
@@ -56,12 +68,17 @@ If a finding is complex or outside the reviewed ticket's scope:
 Use <skill>cr-ticket-create</skill>. Leave the reviewed ticket closed. The
 follow-up ticket is the finding record.
 
-## Rules
+## Repeated review
 
-Do not use `cr ticket activate` or `cr ticket close`. Do not modify ticket
-lifecycle frontmatter or move ticket files by hand. Use only `cr ticket reopen`
-or `cr ticket create` for review remediation.
+When the ticket already contains auto-review tasks:
 
-Do not add a separate review-result file or put remediation solely in the final
-response. A brief final response may identify the selected outcome, but normal
-ticket lifecycle and ticket content must stand on their own.
+1. Verify the original ticket requirements.
+2. Verify the existing review tasks and their validation.
+3. Reopen the ticket when an existing requirement or review validation still
+   fails.
+4. Preserve the existing review-task set.
+
+## Broader observations
+
+Record architecture, hardening, operating-model, or design observations through
+the project's discovery process, attributed to the reviewed ticket.
