@@ -436,9 +436,9 @@ It removes temporary branch-scoped workflow files such as:
 .coderail/tickets/closed/0001-example.md
 ```
 
-If only the preserved configuration files and empty directories remain, cleanup is a no-op. When ticket files exist, every ticket must be valid and satisfied before cleanup succeeds. A ticket is satisfied when it is closed as `done`, or is a `duplicate` whose chain ends at a ticket closed as `done`.
+If only the preserved configuration files and empty directories other than `.coderail/loop/` remain, cleanup is a no-op. The temporary `.coderail/loop/` directory is removed as a unit, including when it is the only cleanup target. When ticket files exist, every ticket must be valid and satisfied before cleanup succeeds. A ticket is satisfied when it is closed as `done`, or is a `duplicate` whose chain ends at a ticket closed as `done`.
 
-When no ticket files exist, `cr clean` uses Git's index to identify helper-file candidates that cannot be restored exactly. It lists those files and requires a `y` confirmation before permanently deleting them; `--force` skips the warning and confirmation. Cleanup removes files, including ticket files, but leaves empty directories.
+When no ticket files exist, `cr clean` uses Git's index to identify helper-file candidates that cannot be restored exactly. It lists those files and requires a `y` confirmation before permanently deleting them; `--force` skips the warning and confirmation. Cleanup removes files, including ticket files, but leaves empty directories other than `.coderail/loop/`.
 
 After cleanup, integrate the branch using the repository's normal process, such as:
 
@@ -868,7 +868,7 @@ It preserves:
 .coderail/work.ini
 ```
 
-If those are the only files and the remaining directories are empty, cleanup succeeds as a no-op. When ticket files exist, cleanup validates every ticket and removes workflow files only when every ticket is satisfied: closed as `done`, or closed as `duplicate` with a chain ending at `done`. It removes files, including ticket files, but leaves empty directories.
+If those are the only files and the remaining directories other than `.coderail/loop/` are empty, cleanup succeeds as a no-op. The temporary `.coderail/loop/` directory is removed as a unit, including when it is the only cleanup target. When ticket files exist, cleanup validates every ticket and removes workflow files only when every ticket is satisfied: closed as `done`, or closed as `duplicate` with a chain ending at `done`. It removes files, including ticket files, but leaves empty directories other than `.coderail/loop/`.
 
 Without ticket files, cleanup checks its helper-file candidates against Git's index. Files not recoverable exactly from the index are listed with a permanent-deletion warning and require a `y` confirmation; `--force` skips the warning and confirmation. `--dry-run` never removes or prompts, and validates ticket readiness before printing the removal plan when ticket files exist.
 

@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `cr clean` preserves `.coderail/work.ini` work records.
 - `cr-ticket-implement` records specification drift in `.coderail/DISCOVERY.md` for later reconciliation.
-- Ticket-loop diagnostics remain local through loop and failed finish attempts, then a successful `cr work finish` removes them.
+- Ticket-loop diagnostics use `.coderail/.gitignore`, are created lazily, and are removed by `cr clean`.
+- `cr work finish` preserves ticket-loop diagnostics when squash preparation fails or conflicts, then removes them once the integration is prepared.
 - Automatic `cr work finish` commit generation accepts a finish-owned,
   validated, single-use private message file instead of parsing agent prose.
 
