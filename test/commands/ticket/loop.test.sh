@@ -849,7 +849,7 @@ assert_loop_accepts_auto_review() {
     run_loop "$work_dir" --auto-review codex
 
     assert_success
-    assert_file_empty "$run_stdout"
+    assert_contains "$run_stdout" "no discovery document found, skipping drift check"
     assert_file_empty "$run_stderr"
 }
 
@@ -860,13 +860,21 @@ assert_loop_accepts_drift_check_values() {
         run_loop "$work_dir" --drift-check "$drift_check" codex
 
         assert_success
-        assert_file_empty "$run_stdout"
+        if [ "$drift_check" = never ]; then
+            assert_file_empty "$run_stdout"
+        else
+            assert_contains "$run_stdout" "no discovery document found, skipping drift check"
+        fi
         assert_file_empty "$run_stderr"
 
         run_loop "$work_dir" --drift-check="$drift_check" codex
 
         assert_success
-        assert_file_empty "$run_stdout"
+        if [ "$drift_check" = never ]; then
+            assert_file_empty "$run_stdout"
+        else
+            assert_contains "$run_stdout" "no discovery document found, skipping drift check"
+        fi
         assert_file_empty "$run_stderr"
     done
 }
@@ -1616,7 +1624,7 @@ assert_loop_allows_clean_startup() {
     run_loop "$work_dir" codex
 
     assert_success
-    assert_file_empty "$run_stdout"
+    assert_contains "$run_stdout" "no discovery document found, skipping drift check"
     assert_file_empty "$run_stderr"
 }
 
