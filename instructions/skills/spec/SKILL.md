@@ -140,6 +140,6 @@ When material uncertainty remains, use `<skill>question</skill>` to collect the 
 
 ## Ticket Plan
 
-Once the specification is ready, delegate ticket creation to a worker agent with `<skill>ticket-plan</skill> @path-to-plan/SPEC.md` prompt.
+Once the specification is ready, read the `prompt.md` from this skill directory, delegate its complete content together with path to `SPEC.md` to worker agent, to create tickets for the implementation.
 
 After ticket creation, ensure the `Ticket Plan` section of `SPEC.md` records the resulting tickets.
