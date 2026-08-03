@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.3.0] - 2026-08-03
+
 ### Added
 
 - New skill `cr-forge` for shaping the idea before specification, ment to replace `cr-scope` skill.
@@ -71,7 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `default_tool` config support for `cr install` and `cr uninstall` when no tool argument is provided.
 - Directory selectors for `cr test`, expanded recursively to regular files.
 
-[Unreleased]: https://github.com/pavelmudroch/coderail/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/pavelmudroch/coderail/compare/v1.3.0...HEAD
+[v1.3.0]: https://github.com/pavelmudroch/coderail/compare/v1.2.0...v1.3.0
 [v1.2.0]: https://github.com/pavelmudroch/coderail/compare/v1.1.0...v1.2.0
 [v1.1.0]: https://github.com/pavelmudroch/coderail/compare/v1.0.0...v1.1.0
 [v1.0.0]: https://github.com/pavelmudroch/coderail/releases/tag/v1.0.0
