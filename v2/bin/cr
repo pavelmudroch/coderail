@@ -1,0 +1,52 @@
+#!/usr/bin/env sh
+
+set -eu
+
+script_path=$0
+
+while [ -L "$script_path" ]; do
+    script_dir=$(
+        CDPATH= cd -- "$(dirname "$script_path")"
+        pwd
+    )
+    link_target=$(readlink "$script_path")
+
+    case "$link_target" in
+        /*) script_path=$link_target ;;
+        *) script_path=$script_dir/$link_target ;;
+    esac
+done
+
+SCRIPT_DIR=$(
+    CDPATH= cd -- "$(dirname "$script_path")"
+    pwd
+)
+
+ROOT_DIR=$(
+    CDPATH= cd -- "$SCRIPT_DIR/.."
+    pwd
+)
+
+usage() {
+    cat <<'EOF'
+Usage:
+  cr [options] <command>
+
+  CodeRail CLI tool for agent-based development
+
+Options:
+  -h, --help           Show this help message and exit
+      --version        Show version information and exit
+  -v, --verbose        Enable verbose logging
+  -q, --quiet          Suppress notices and log output
+      --cwd <dir>      Specify the current working directory
+
+Commands:
+  idea                 Manage ideas
+EOF
+}
+
+version() {
+    . "$ROOT_DIR/lib/version.sh"
+    log_info "cr version $coderail_version"
+}
