@@ -35,11 +35,13 @@ Usage:
   CodeRail CLI tool for agent-based development
 
 Options:
-  -h, --help           Show this help message and exit
-      --version        Show version information and exit
-  -v, --verbose        Enable verbose logging
-  -q, --quiet          Suppress notices and log output
-      --cwd <dir>      Specify the current working directory
+  -h, --help             Show this help message and exit
+      --version          Show version information and exit
+  -v, --verbose          Enable verbose logging
+  -q, --quiet            Suppress notices and log output
+      --cwd <dir>        Specify the current working directory
+      --no-color         Disable colored output
+      --non-interactive  Disable prompts and interactive output
 
 Commands:
   idea                 Manage ideas
@@ -48,5 +50,5 @@ EOF
 
 version() {
     . "$ROOT_DIR/lib/version.sh"
-    log_info "cr version $coderail_version"
+    echo "cr version $coderail_version"
 }
