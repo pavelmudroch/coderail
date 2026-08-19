@@ -19,7 +19,6 @@ _terminal_width()
 
 _log_cleanup()
 {
-    echo "Cleaning up log spinner... $log_spinner_pid" >&2
     [ "$log_spinner_pid" -ne -1 ] || return 0
     kill "$log_spinner_pid" 2>/dev/null || true
     wait "$log_spinner_pid" 2>/dev/null || true
@@ -227,7 +226,6 @@ esac
 
 if [ "$log_color" -eq 1 ] &&
    [ "$log_level" -ge 1 ] &&
-   [ -z "${NO_COLOR:-}" ] &&
    tty -s <&2
 then
     log_color=1
