@@ -5,7 +5,7 @@ _CL=$(printf '\033[0K')
 
 _terminal_width()
 {
-    width=$(tput cols 2>/dev/null) || width=80
+    width=$(tput cols) || width=80
 
     case $width in
         ''|*[!0-9]*)
@@ -17,12 +17,83 @@ _terminal_width()
     printf '%s\n' "$width"
 }
 
+color_red()
+{
+    printf '%s%s%s' "$log_color_red" "$1" "$log_color_reset"
+}
+
+color_yellow()
+{
+    printf '%s%s%s' "$log_color_yellow" "$1" "$log_color_reset"
+}
+
+color_green()
+{
+    printf '%s%s%s' "$log_color_green" "$1" "$log_color_reset"
+}
+
+color_gray()
+{
+    printf '%s%s%s' "$log_color_gray" "$1" "$log_color_reset"
+}
+
+color_blue()
+{
+    printf '%s%s%s' "$log_color_blue" "$1" "$log_color_reset"
+}
+
+color_cyan()
+{
+    printf '%s%s%s' "$log_color_cyan" "$1" "$log_color_reset"
+}
+
+color_magenta()
+{
+    printf '%s%s%s' "$log_color_magenta" "$1" "$log_color_reset"
+}
+
+style_bold()
+{
+    printf '%s%s%s' "$log_style_bold" "$1" "$log_color_reset"
+}
+
+style_cursive()
+{
+    printf '%s%s%s' "$log_style_cursive" "$1" "$log_color_reset"
+}
+
+color_inverse()
+{
+    printf '%s%s%s' "$log_color_inverse" "$1" "$log_color_reset"
+}
+
+output()
+{
+    if [ "$log_in_spinner" -eq 1 ] || [ "$log_in_progress" -eq 1 ]; then
+        printf "%s" "$_CL" >&2
+    fi
+
+    printf '%s\n' "$*" >&1
+
+    if [ "$log_in_progress" -eq 1 ]; then
+        progress_bar "$log_bar_percentage"
+    fi
+
+    if [ "$log_in_spinner" -eq 1 ]; then
+        printf "%s" "$log_spinner_current" >&2
+    fi
+}
+
 log_error()
 {
     printf '%serror:%s %s%s\n' "$log_color_red" "$log_color_reset" "$*" "$_CL" >&2
 
     if [ "$log_in_progress" -eq 1 ]; then
         progress_bar "$log_bar_percentage"
+    fi
+
+    if [ "$log_in_spinner" -eq 1 ]; then
+        printf "%s" "$log_spinner_current" >&2
     fi
 }
 
@@ -34,6 +105,10 @@ log_warn()
     if [ "$log_in_progress" -eq 1 ]; then
         progress_bar "$log_bar_percentage"
     fi
+
+    if [ "$log_in_spinner" -eq 1 ]; then
+        printf "%s" "$log_spinner_current" >&2
+    fi
 }
 
 log_info()
@@ -43,6 +118,10 @@ log_info()
 
     if [ "$log_in_progress" -eq 1 ]; then
         progress_bar "$log_bar_percentage"
+    fi
+
+    if [ "$log_in_spinner" -eq 1 ]; then
+        printf "%s" "$log_spinner_current" >&2
     fi
 }
 
@@ -54,10 +133,15 @@ log_verbose()
     if [ "$log_in_progress" -eq 1 ]; then
         progress_bar "$log_bar_percentage"
     fi
+
+    if [ "$log_in_spinner" -eq 1 ]; then
+        printf "%s" "$log_spinner_current" >&2
+    fi
 }
 
 progress_bar()
 {
+    [ "$log_in_spinner" -eq 1 ] && spinner_close
     [ "$log_interactive" -eq 1 ] || return 0
     log_in_progress=1
     log_bar_percentage=$1
@@ -78,12 +162,51 @@ progress_bar_close()
     printf "%s" "$_CL" >&2
 }
 
+spinner()
+{
+    [ "$log_in_spinner" -eq 1 ] && spinner_close
+    [ "$log_in_progress" -eq 1 ] && progress_bar_close
+    [ "$log_interactive" -eq 1 ] || return 0
+    log_in_spinner=1
+    message="$1"
+    [ -n "$message" ] || message="Working"
+
+    (
+        while :
+        do
+            for dots in '.' '..' '...'
+            do
+                printf '\r\033[K %s%s\r' "$message" "$dots" >&2
+                log_spinner_current=" $message$dots\r"
+                sleep 1
+            done
+        done
+    ) &
+
+    log_spinner_pid=$!
+}
+
+spinner_close()
+{
+    [ "$log_interactive" -eq 1 ] || return 0
+    [ "$log_in_spinner" -eq 1 ] || return 0
+    [ "$log_spinner_pid" -ne -1 ] || return 0
+    kill "$log_spinner_pid" 2>/dev/null || true
+    wait "$log_spinner_pid" 2>/dev/null || true
+    log_spinner_pid=-1
+    log_in_spinner=0
+    printf '\r\033[K' >&2
+}
+
 
 : "${log_level:=1}"
 : "${log_color:=1}"
 : "${log_interactive:=1}"
 : "${log_in_progress:=0}"
 : "${log_bar_percentage:=0}"
+: "${log_in_spinner:=0}"
+: "${log_spinner_current:=}"
+: "${log_spinner_pid:=-1}"
 
 case $log_level in
     0|1|2)
@@ -119,14 +242,27 @@ if [ "$log_color" -eq 1 ]; then
     log_color_green=$(printf '\033[32m')
     log_color_reset=$(printf '\033[0m')
     log_color_gray=$(printf '\033[90m')
+    log_color_blue=$(printf '\033[34m')
+    log_color_cyan=$(printf '\033[36m')
+    log_color_magenta=$(printf '\033[35m')
+    log_style_bold=$(printf '\033[1m')
+    log_style_cursive=$(printf '\033[3m')
+    log_color_inverse=$(printf '\033[7m')
 else
     log_color_red=''
     log_color_yellow=''
     log_color_green=''
     log_color_reset=''
     log_color_gray=''
+    log_color_blue=''
+    log_color_cyan=''
+    log_color_magenta=''
+    log_style_bold=''
+    log_style_cursive=''
+    log_color_inverse=''
 fi
 
+output "Log level: $log_level" " some $(color_red 'additional') text" "xxx"
 log_error "Some fatal error occurred"
 log_warn "This is a warning message"
 log_info "This is an informational message"
@@ -137,6 +273,7 @@ sleep 1
 progress_bar 13
 sleep 1
 progress_bar 27
+output "This is an output message during progress"
 sleep 1
 progress_bar 36
 sleep 1
@@ -161,3 +298,15 @@ sleep 1
 progress_bar_close
 sleep 1
 log_info "Done"
+
+spinner "Doing some stuff"
+sleep 5
+spinner "Still doing some stuff"
+sleep 5
+log_info "This is an informational message during spinner"
+sleep 2
+output "This is an output message during $(color_red 'spinner')"
+sleep 5
+spinner_close
+sleep 1
+log_info "Finished"
