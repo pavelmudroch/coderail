@@ -27,6 +27,8 @@ ROOT_DIR=$(
     pwd
 )
 
+. "$ROOT_DIR/lib/utils/log.sh"
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -50,5 +52,75 @@ EOF
 
 version() {
     . "$ROOT_DIR/lib/version.sh"
-    echo "cr version $coderail_version"
+    output "cr version $coderail_version"
 }
+
+_cleanup_on_exit()
+{
+    _status=$?
+    echo "Cleaning up on exit... $_status" >&2
+
+    trap - 0 HUP INT TERM
+
+    _log_cleanup
+    [ -n "$tmp_dir" ] && rm -rf "$tmp_dir"
+
+    exit "$_status"
+}
+
+trap '_cleanup_on_exit' 0
+
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+tmp_dir=$(mktemp -d)
+
+output "Log level: $log_level" " some $(color_red 'additional') text" "xxx"
+log_error "Some fatal error occurred"
+log_warn "This is a warning message"
+log_info "This is an informational message"
+log_verbose "This is a verbose message"
+log_info "Processing"
+progress_bar 0
+sleep 1
+progress_bar 13
+sleep 1
+progress_bar 27
+output "This is an output message during progress"
+sleep 1
+progress_bar 36
+sleep 1
+progress_bar 42
+sleep 1
+log_info "Post-Processing"
+progress_bar 56
+sleep 1
+progress_bar 61
+sleep 1
+progress_bar 73
+sleep 1
+progress_bar 87
+sleep 1
+log_verbose "This is an informational message during progress"
+progress_bar 92
+sleep 1
+progress_bar 98
+sleep 1
+progress_bar 100
+sleep 1
+progress_bar_close
+sleep 1
+log_info "Done"
+
+spinner "Doing some stuff"
+sleep 5
+spinner "Still doing some stuff"
+sleep 5
+log_info "This is an informational message during spinner"
+sleep 2
+output "This is an output message during $(color_red 'spinner')"
+sleep 5
+spinner_close
+sleep 1
+log_info "Finished"

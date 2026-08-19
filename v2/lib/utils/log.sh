@@ -17,6 +17,14 @@ _terminal_width()
     printf '%s\n' "$width"
 }
 
+_log_cleanup()
+{
+    echo "Cleaning up log spinner... $log_spinner_pid" >&2
+    [ "$log_spinner_pid" -ne -1 ] || return 0
+    kill "$log_spinner_pid" 2>/dev/null || true
+    wait "$log_spinner_pid" 2>/dev/null || true
+}
+
 color_red()
 {
     printf '%s%s%s' "$log_color_red" "$1" "$log_color_reset"
@@ -261,52 +269,3 @@ else
     log_style_cursive=''
     log_color_inverse=''
 fi
-
-output "Log level: $log_level" " some $(color_red 'additional') text" "xxx"
-log_error "Some fatal error occurred"
-log_warn "This is a warning message"
-log_info "This is an informational message"
-log_verbose "This is a verbose message"
-log_info "Processing"
-progress_bar 0
-sleep 1
-progress_bar 13
-sleep 1
-progress_bar 27
-output "This is an output message during progress"
-sleep 1
-progress_bar 36
-sleep 1
-progress_bar 42
-sleep 1
-log_info "Post-Processing"
-progress_bar 56
-sleep 1
-progress_bar 61
-sleep 1
-progress_bar 73
-sleep 1
-progress_bar 87
-sleep 1
-log_verbose "This is an informational message during progress"
-progress_bar 92
-sleep 1
-progress_bar 98
-sleep 1
-progress_bar 100
-sleep 1
-progress_bar_close
-sleep 1
-log_info "Done"
-
-spinner "Doing some stuff"
-sleep 5
-spinner "Still doing some stuff"
-sleep 5
-log_info "This is an informational message during spinner"
-sleep 2
-output "This is an output message during $(color_red 'spinner')"
-sleep 5
-spinner_close
-sleep 1
-log_info "Finished"
