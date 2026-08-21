@@ -3,6 +3,9 @@
 set -eu
 
 script_path=$0
+USAGE_EXIT_CODE=2
+ERROR_EXIT_CODE=1
+SUCCESS_EXIT_CODE=0
 
 while [ -L "$script_path" ]; do
     script_dir=$(
@@ -26,12 +29,9 @@ ROOT_DIR=$(
     CDPATH= cd -- "$SCRIPT_DIR/.."
     pwd
 )
-CODERAIL_BIN_PATH=$SCRIPT_DIR/cr
-export CODERAIL_BIN_PATH
 
 . "$ROOT_DIR/lib/utils/log.sh"
-. "$ROOT_DIR/lib/utils/args.sh"
-. "$ROOT_DIR/lib/utils/config.sh"
+. "$ROOT_DIR/lib/utils/conf.sh"
 
 usage() {
     cat <<'EOF'
@@ -41,134 +41,90 @@ Usage:
   CodeRail CLI tool for agent-based development
 
 Options:
-  -h, --help            Show this help message and exit
-  --version             Show version information and exit
-  -v, --verbose         Enable verbose logging
-  -q, --quiet           Suppress notices and log output
-  --cwd <dir>           Specify the current working directory
+  -h, --help             Show this help message and exit
+      --version          Show version information and exit
+  -v, --verbose          Enable verbose logging
+  -q, --quiet            Suppress notices and log output
+      --cwd <dir>        Specify the current working directory
+      --no-color         Disable colored output
+      --non-interactive  Disable prompts and interactive output
 
 Commands:
-  upgrade       Upgrade this cli tool to a different version
-  install       Install instructions for specific agent-based tool
-  uninstall     Uninstall instructions for specific agent-based tool
-  init          Initialize a new project in the working directory
-  clean         Clean stale Coderail workflow files
-  work          Manage branch-local work
-  ticket        Ticket management for the project in the working directory
-  test          Run defined checks for the project in the working directory
+  idea                 Manage ideas
 EOF
-}
-
-error() {
-    log_usage_error "$@"
 }
 
 version() {
     . "$ROOT_DIR/lib/version.sh"
-    log_info "cr version $coderail_version"
+    output "cr version $coderail_version"
 }
 
-set_work_dir() {
-    [ "$work_dir_set" -eq 0 ] || error "--cwd provided multiple times"
-    [ -n "$1" ] || error "--cwd requires a non-empty value"
+_cleanup_on_exit()
+{
+    _status=$?
 
-    work_dir=$1
-    work_dir_set=1
+    trap - 0 HUP INT TERM
+
+    _log_cleanup
+    [ -n "$tmp_dir" ] && rm -rf "$tmp_dir"
+
+    exit "$_status"
 }
 
-run_command() {
-    command=$1
-    shift
-    script="$ROOT_DIR/lib/commands/$command.sh"
+trap '_cleanup_on_exit' 0
 
-    [ -f "$script" ] || error "$command is not implemented"
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-    [ -d "$work_dir" ] || error "--cwd is not a directory: $work_dir"
+tmp_dir=$(mktemp -d)
 
-    cd "$work_dir"
-    sh "$script" "$@"
-}
+load_config "$@"
 
-run_global_command() {
-    command=$1
-    shift
-    script="$ROOT_DIR/lib/commands/$command.sh"
+argi=0
 
-    [ -f "$script" ] || error "$command is not implemented"
-
-    sh "$script" "$@"
-}
-
-load_config_from_base() {
-    load_effective_config "$1"
-    export default_tool auto_review
-}
-
-work_dir=.
-work_dir_set=0
-export log_verbose=0
-export log_quiet=0
-
-[ "$#" -gt 0 ] || error "missing command"
-
-while [ "$#" -gt 0 ]; do
-    case "$1" in
+while [ $argi -lt $argc ]; do
+    eval "arg=\$argv_$argi"
+    case "$arg" in
+        --)
+            argi=$((argi + 1))
+            break
+            ;;
         -h|--help)
-            shift
-            require_no_args "$@"
-            load_config_from_base .
             usage
             exit 0
             ;;
+        --help=*)
+            log_error "--help does not take an argument"
+            usage >&2
+            exit "$USAGE_EXIT_CODE"
+            ;;
         --version)
-            shift
-            require_no_args "$@"
-            load_config_from_base .
             version
             exit 0
             ;;
-        -v|--verbose)
-            log_verbose=1
-            shift
-            [ "$log_quiet" -eq 0 ] || error "--verbose and --quiet cannot be used together"
+        --version=*)
+            log_error "--version does not take an argument"
+            usage >&2
+            exit "$USAGE_EXIT_CODE"
             ;;
-        -q|--quiet)
-            log_quiet=1
-            shift
-            [ "$log_verbose" -eq 0 ] || error "--verbose and --quiet cannot be used together"
-            ;;
-        --cwd=*)
-            set_work_dir "${1#--cwd=}"
-            shift
-            ;;
-        --cwd)
-            shift
-            [ "$#" -gt 0 ] || error "--cwd requires a value"
-            set_work_dir "$1"
-            shift
-            ;;
-        upgrade|install|uninstall)
-            command=$1
-            shift
-            load_config_from_base .
-            run_global_command "$command" "$@"
-            exit 0
-            ;;
-        init|clean|work|ticket|test)
-            command=$1
-            shift
-            [ -d "$work_dir" ] || error "--cwd is not a directory: $work_dir"
-            load_config_from_base "$work_dir"
-            run_command "$command" "$@"
-            exit 0
-            ;;
-        --*)
-            error "unknown option: $1"
+        -*)
+            log_error "Unknown option: $arg"
+            usage >&2
+            exit "$USAGE_EXIT_CODE"
             ;;
         *)
-            error "unknown command: $1"
+            break
             ;;
     esac
+    argi=$((argi + 1))
 done
 
-error "missing command"
+set --
+while [ $argi -lt $argc ]; do
+    eval "set -- \"\$@\" \"\$argv_$argi\""
+    argi=$((argi + 1))
+done
+
+echo "argc: $argc" >&2
+echo "argv: $@" >&2
