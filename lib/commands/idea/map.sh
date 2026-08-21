@@ -12,3 +12,8 @@ Options:
       --json           Output the idea map in JSON format
 EOF
 }
+
+execute_command()
+{
+    usage
+}

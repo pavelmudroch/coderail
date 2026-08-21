@@ -11,3 +11,8 @@ Options:
   -h, --help           Show this help message and exit
 EOF
 }
+
+execute_command()
+{
+    usage
+}

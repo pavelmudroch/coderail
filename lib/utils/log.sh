@@ -135,7 +135,7 @@ log_info()
 log_verbose()
 {
     [ "$log_level" -ge 2 ] || return 0
-    printf '%sverbose: %s%s%s\n' "$log_color_gray" "$*" "$log_color_reset" "$_CL" >&2
+    printf '%snotice: %s%s%s\n' "$log_color_gray" "$*" "$log_color_reset" "$_CL" >&2
 
     if [ "$log_in_progress" -eq 1 ]; then
         progress_bar "$log_bar_percentage"

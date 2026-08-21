@@ -16,3 +16,8 @@ Arguments:
   <idea-title>         The title of the idea to create
 EOF
 }
+
+execute_command()
+{
+    usage
+}

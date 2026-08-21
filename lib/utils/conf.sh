@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 
 argc=0
+: ${cwd:=$(pwd)}
 
 load_config()
 {
@@ -27,10 +28,10 @@ load_config()
                         exit "$USAGE_EXIT_CODE"
                         ;;
                 esac
-                cd "$1"
+                cwd="$1"
                 ;;
             --cwd=*)
-                cd "${1#*=}"
+                cwd="${1#*=}"
                 ;;
             --no-color)
                 log_color=0

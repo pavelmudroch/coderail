@@ -50,7 +50,21 @@ Options:
       --non-interactive  Disable prompts and interactive output
 
 Commands:
+  init                 Initialize current directory for CodeRail
+  install              Install CodeRail for specific agent harnesses
+  uninstall            Uninstall CodeRail for specific agent harnesses
+  doctor               Inspect or repair broken CodeRail state
   idea                 Manage ideas
+  status               Show status of current working directory
+  ticket               Manage tickets
+  loop                 Implement tickets in a loop
+  test                 Run defined tests for files and directories
+
+Environment Variables:
+  NO_COLOR=1           Disable colored output
+  NON_INTERACTIVE=1    Disable prompts and interactive output
+  LOG_LEVEL=verbose|quiet
+                       Set log level to verbose or quiet
 EOF
 }
 
@@ -92,7 +106,7 @@ while [ $argi -lt $argc ]; do
             ;;
         -h|--help)
             usage
-            exit 0
+            exit "$SUCCESS_EXIT_CODE"
             ;;
         --help=*)
             log_error "--help does not take an argument"
@@ -101,7 +115,7 @@ while [ $argi -lt $argc ]; do
             ;;
         --version)
             version
-            exit 0
+            exit "$SUCCESS_EXIT_CODE"
             ;;
         --version=*)
             log_error "--version does not take an argument"
@@ -120,11 +134,30 @@ while [ $argi -lt $argc ]; do
     argi=$((argi + 1))
 done
 
+eval "command=\$argv_$argi"
+argi=$((argi + 1))
+
 set --
 while [ $argi -lt $argc ]; do
     eval "set -- \"\$@\" \"\$argv_$argi\""
     argi=$((argi + 1))
 done
 
-echo "argc: $argc" >&2
-echo "argv: $@" >&2
+script="$ROOT_DIR/lib/commands/$command.sh"
+
+if [ ! -f "$script" ]; then
+    log_error "Unknown command: \"$command\""
+    usage >&2
+    exit "$USAGE_EXIT_CODE"
+fi
+
+if [ ! -d "$cwd" ]; then
+    log_error "Working directory does not exist: \"$cwd\""
+    exit "$ERROR_EXIT_CODE"
+fi
+
+cd "$cwd"
+(
+    . "$script"
+    execute_command "$@"
+)
