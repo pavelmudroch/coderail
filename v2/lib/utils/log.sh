@@ -205,65 +205,72 @@ spinner_close()
     printf '\r\033[K' >&2
 }
 
+_init_log()
+{
+    : "${log_level:=1}"
+    : "${log_color:=1}"
+    : "${log_interactive:=1}"
+    : "${log_in_progress:=0}"
+    : "${log_bar_percentage:=0}"
+    : "${log_in_spinner:=0}"
+    : "${log_spinner_current:=}"
+    : "${log_spinner_pid:=-1}"
 
-: "${log_level:=1}"
-: "${log_color:=1}"
-: "${log_interactive:=1}"
-: "${log_in_progress:=0}"
-: "${log_bar_percentage:=0}"
-: "${log_in_spinner:=0}"
-: "${log_spinner_current:=}"
-: "${log_spinner_pid:=-1}"
+    case $log_level in
+        0|1|2)
+            ;;
+        *)
+            log_warning "invalid log level: $log_level, using default log level 1"
+            log_level=1
+            ;;
+    esac
 
-case $log_level in
-    0|1|2)
-        ;;
-    *)
-        log_error "invalid log level: $log_level"
-        log_level=1
-        ;;
-esac
+    if [ "$log_color" -eq 1 ] &&
+    [ "$log_level" -ge 1 ] &&
+    tty -s <&2
+    then
+        log_color=1
+    else
+        log_color=0
+    fi
 
-if [ "$log_color" -eq 1 ] &&
-   [ "$log_level" -ge 1 ] &&
-   tty -s <&2
-then
-    log_color=1
-else
-    log_color=0
-fi
+    if [ "$log_interactive" -eq 1 ] &&
+    [ "$log_level" -ge 1 ] &&
+    tty -s <&2
+    then
+        log_interactive=1
+    else
+        log_interactive=0
+    fi
 
-if [ "$log_interactive" -eq 1 ] &&
-   [ "$log_level" -ge 1 ] &&
-   tty -s <&2
-then
-    log_interactive=1
-else
-    log_interactive=0
-fi
+    if [ "$log_color" -eq 1 ]; then
+        log_color_red=$(printf '\033[31m')
+        log_color_yellow=$(printf '\033[33m')
+        log_color_green=$(printf '\033[32m')
+        log_color_reset=$(printf '\033[0m')
+        log_color_gray=$(printf '\033[90m')
+        log_color_blue=$(printf '\033[34m')
+        log_color_cyan=$(printf '\033[36m')
+        log_color_magenta=$(printf '\033[35m')
+        log_style_bold=$(printf '\033[1m')
+        log_style_cursive=$(printf '\033[3m')
+        log_color_inverse=$(printf '\033[7m')
+    else
+        log_color_red=''
+        log_color_yellow=''
+        log_color_green=''
+        log_color_reset=''
+        log_color_gray=''
+        log_color_blue=''
+        log_color_cyan=''
+        log_color_magenta=''
+        log_style_bold=''
+        log_style_cursive=''
+        log_color_inverse=''
+    fi
+}
 
-if [ "$log_color" -eq 1 ]; then
-    log_color_red=$(printf '\033[31m')
-    log_color_yellow=$(printf '\033[33m')
-    log_color_green=$(printf '\033[32m')
-    log_color_reset=$(printf '\033[0m')
-    log_color_gray=$(printf '\033[90m')
-    log_color_blue=$(printf '\033[34m')
-    log_color_cyan=$(printf '\033[36m')
-    log_color_magenta=$(printf '\033[35m')
-    log_style_bold=$(printf '\033[1m')
-    log_style_cursive=$(printf '\033[3m')
-    log_color_inverse=$(printf '\033[7m')
-else
-    log_color_red=''
-    log_color_yellow=''
-    log_color_green=''
-    log_color_reset=''
-    log_color_gray=''
-    log_color_blue=''
-    log_color_cyan=''
-    log_color_magenta=''
-    log_style_bold=''
-    log_style_cursive=''
-    log_color_inverse=''
-fi
+reinit_log()
+{
+    _init_log
+}
