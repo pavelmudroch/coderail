@@ -3,9 +3,12 @@
 set -eu
 
 script_path=$0
+CR_DIR_NAME=".coderail"
 USAGE_EXIT_CODE=2
 ERROR_EXIT_CODE=1
 SUCCESS_EXIT_CODE=0
+NL='
+'
 
 while [ -L "$script_path" ]; do
     script_dir=$(
@@ -32,6 +35,8 @@ ROOT_DIR=$(
 
 . "$ROOT_DIR/lib/utils/log.sh"
 . "$ROOT_DIR/lib/utils/conf.sh"
+. "$ROOT_DIR/lib/utils/fs.sh"
+. "$ROOT_DIR/lib/utils/yaml.sh"
 
 usage() {
     cat <<'EOF'
