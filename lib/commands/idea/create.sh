@@ -19,5 +19,71 @@ EOF
 
 execute_command()
 {
-    usage
+    parent_idea=""
+    idea_title=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                usage
+                exit "$SUCCESS_EXIT_CODE"
+                ;;
+            -p|--parent)
+                shift
+                parent_idea="$1"
+                ;;
+            --parent=*)
+                parent_idea="${1#*=}"
+                ;;
+            *)
+                if [ -n "$idea_title" ]; then
+                    log_error "Multiple idea titles provided: '$idea_title' and '$1'"
+                    usage >&2
+                    exit "$USAGE_EXIT_CODE"
+                fi
+                idea_title="$1"
+                ;;
+        esac
+        shift
+    done
+
+    if [ -z "$idea_title" ]; then
+        log_error "Idea title is required"
+        usage >&2
+        exit "$USAGE_EXIT_CODE"
+    fi
+
+    # slugify the idea title to create a valid file name
+    idea_path="$idea_title"
+
+    if [ -n "$parent_idea" ]; then
+        parent_status="$(_get_idea_status "$parent_idea")"
+        if [ $? -ne 0 ]; then
+            log_error "Failed to get status of parent idea: $parent_status"
+            exit "$ERROR_EXIT_CODE"
+        fi
+
+        if [ "$parent_status" != "$IDEA_STATUS_SPLIT" ]; then
+            log_error "Parent idea must be in 'split' status to create a child idea"
+            exit "$ERROR_EXIT_CODE"
+        fi
+
+        idea_path="$parent_idea/$idea_path"
+    fi
+
+    idea_file=$(_get_idea_file "$idea_path")
+    if [ -f "$idea_file" ]; then
+        log_error "Idea already exists at path: $idea_file"
+        exit "$ERROR_EXIT_CODE"
+    fi
+
+    # create the idea file
+    fs_safely_init_file "$idea_file" "---\ntitle: \"$idea_title\"\nstatus: \"$IDEA_STATUS_FORGING\"\n---"
+
+    if [ $? -ne 0 ]; then
+        log_error "Failed to create idea file at path: $idea_file"
+        exit "$ERROR_EXIT_CODE"
+    fi
+
+    output "$idea_file"
 }

@@ -1,5 +1,9 @@
 #!/usr/bin/env sh
 
+IDEA_STATUS_READY="ready"
+IDEA_STATUS_FORGING="forging"
+IDEA_STATUS_SPLIT="split"
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -44,4 +48,39 @@ execute_command()
         . "$script"
         execute_command "$@"
     )
+}
+
+_get_idea_file()
+{
+    idea_file=".coderail/plans/$1/IDEA.md"
+    echo "$idea_file"
+}
+
+_get_idea_status()
+{
+    idea_file="$(_get_idea_file "$1")"
+    if [ ! -f "$idea_file" ]; then
+        echo "Idea file not found"
+        return 1
+    fi
+
+    if content=$(cat "$idea_file" 2>/dev/null); then
+        :
+    else
+        echo "Failed to read idea file"
+        return 1
+    fi
+
+    front_matter=$(yaml_get_front_matter "$content")
+    if [ $? -ne 0 ]; then
+        echo "Failed to parse front matter: $front_matter"
+        return 1
+    fi
+
+    status=$(yaml_get_front_matter_key "$front_matter" "status")
+    if [ $? -ne 0 ]; then
+        echo "Failed to get status from front matter: $status"
+        return 1
+    fi
+    echo "$status"
 }
