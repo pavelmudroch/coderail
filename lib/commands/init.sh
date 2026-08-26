@@ -35,52 +35,28 @@ execute_command()
 
     spinner "Initializing coderail"
 
-    _safely_init_dir ""
-    _safely_init_dir "plans/"
-    _safely_init_file "coderail.conf" _generate_config_content
-    _safely_init_file "test_map" _generate_test_map_content
+    if ! fs_safely_init_dir "$CR_DIR_NAME"; then
+        spinner_close
+        exit "$ERROR_EXIT_CODE"
+    fi
+
+    if ! fs_safely_init_dir "$CR_DIR_NAME/plans/"; then
+        spinner_close
+        exit "$ERROR_EXIT_CODE"
+    fi
+
+    if ! fs_safely_init_file "$CR_DIR_NAME/coderail.conf" "$(_generate_config_content)"; then
+        spinner_close
+        exit "$ERROR_EXIT_CODE"
+    fi
+
+    if ! fs_safely_init_file "$CR_DIR_NAME/test_map" "$(_generate_test_map_content)"; then
+        spinner_close
+        exit "$ERROR_EXIT_CODE"
+    fi
 
     spinner_close
     output "Coderail initialized in the current directory."
-}
-
-_safely_init_dir()
-{
-    dirname="$1"
-
-    if [ -d ".coderail/$dirname" ]; then
-        log_verbose "The .coderail/$dirname directory already exists."
-    else
-        if error=$(mkdir -p ".coderail/$dirname" 2>&1); then
-            log_verbose "Created .coderail/$dirname directory."
-        else
-            spinner_close
-            log_error "Failed to create .coderail/$dirname directory.\n> $error"
-            exit "$ERROR_EXIT_CODE"
-        fi
-    fi
-}
-
-_safely_init_file()
-{
-    filename="$1"
-    content_generator="$2"
-
-    if [ -e ".coderail/$filename" ]; then
-        log_verbose "The .coderail/$filename file already exists."
-    else
-        tmp="$tmp_dir/$filename"
-        if error=$(
-            $content_generator > "$tmp" 2>&1 && \
-            mv "$tmp" ".coderail/$filename" 2>&1
-        ); then
-            log_verbose "Created .coderail/$filename file."
-        else
-            spinner_close
-            log_error "Failed to create .coderail/$filename file.\n> $error"
-            exit "$ERROR_EXIT_CODE"
-        fi
-    fi
 }
 
 _generate_config_content()
