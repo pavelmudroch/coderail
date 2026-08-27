@@ -25,7 +25,7 @@ suite_summary_style=$(printf '\033[1;38;5;232;48;5;250m')
 suite_summary_filename_style=$(printf '\033[38;5;240;48;5;250m')
 suite_reset=$(printf '\033[0m')
 
-suite_spaces() {
+_suite_spaces() {
     count=$1
 
     while [ "$count" -gt 0 ]; do
@@ -34,7 +34,7 @@ suite_spaces() {
     done
 }
 
-suite_status_line() {
+_suite_status_line() {
     message=$1
     status_text=$2
     status_color=$3
@@ -49,12 +49,12 @@ suite_status_line() {
     status_padding=$((suite_status_width - ${#status_text}))
 
     printf '%s' "$line"
-    suite_spaces "$line_padding"
-    suite_spaces "$status_padding"
+    _suite_spaces "$line_padding"
+    _suite_spaces "$status_padding"
     printf '%s%s%s\n' "$status_color" "$status_text" "$suite_reset"
 }
 
-suite_print_stderr() {
+_suite_print_stderr() {
     stderr_output=$1
 
     if [ -z "$stderr_output" ]; then
@@ -75,23 +75,23 @@ test() {
     suite_test_counter=$((suite_test_counter + 1))
 
     if ! command -v "$test_function" >/dev/null 2>&1; then
-        suite_status_line "$message" '[ FAIL ]' "$suite_red"
-        suite_print_stderr "test function not found: $test_function"
+        _suite_status_line "$message" '[ FAIL ]' "$suite_red"
+        _suite_print_stderr "test function not found: $test_function"
         suite_failed_test_counter=$((suite_failed_test_counter + 1))
         suite_some_tests_failed=true
         return
     fi
 
     if stderr_output=$("$test_function" "$@" 2>&1 >/dev/null); then
-        suite_status_line "$message" '[ OK ]' "$suite_green"
+        _suite_status_line "$message" '[ OK ]' "$suite_green"
         suite_passed_test_counter=$((suite_passed_test_counter + 1))
         return
     else
         status=$?
     fi
 
-    suite_status_line "$message" '[ FAIL ]' "$suite_red"
-    suite_print_stderr "$stderr_output"
+    _suite_status_line "$message" '[ FAIL ]' "$suite_red"
+    _suite_print_stderr "$stderr_output"
     suite_failed_test_counter=$((suite_failed_test_counter + 1))
     suite_some_tests_failed=true
 }
@@ -118,7 +118,7 @@ print_tests_header() {
     line_padding=$((suite_line_width - ${#title} - ${#test_filename}))
 
     printf '%s%s%s%s' "$suite_summary_style" "$title" "$suite_summary_filename_style" "$test_filename"
-    suite_spaces "$line_padding"
+    _suite_spaces "$line_padding"
     printf '\033[K%s\n' "$suite_reset"
 }
 
@@ -132,7 +132,7 @@ print_tests_summary() {
     line_padding=$((suite_line_width - ${#line}))
 
     printf '%s%s' "$suite_summary_style" "$line"
-    suite_spaces "$line_padding"
+    _suite_spaces "$line_padding"
     printf '\033[K%s\n' "$suite_reset"
     suite_test_counter=0
     suite_passed_test_counter=0
