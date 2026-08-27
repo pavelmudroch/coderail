@@ -37,6 +37,7 @@ ROOT_DIR=$(
 . "$ROOT_DIR/lib/utils/conf.sh"
 . "$ROOT_DIR/lib/utils/fs.sh"
 . "$ROOT_DIR/lib/utils/yaml.sh"
+. "$ROOT_DIR/lib/utils/text.sh"
 
 usage() {
     cat <<'EOF'

@@ -53,9 +53,7 @@ execute_command()
         exit "$USAGE_EXIT_CODE"
     fi
 
-    # slugify the idea title to create a valid file name
-    idea_path="$idea_title"
-
+    idea_path="$(slugify "$idea_title")"
     if [ -n "$parent_idea" ]; then
         parent_status="$(_get_idea_status "$parent_idea")"
         if [ $? -ne 0 ]; then
@@ -77,7 +75,6 @@ execute_command()
         exit "$ERROR_EXIT_CODE"
     fi
 
-    # create the idea file
     fs_safely_init_file "$idea_file" "---\ntitle: \"$idea_title\"\nstatus: \"$IDEA_STATUS_FORGING\"\n---"
 
     if [ $? -ne 0 ]; then
