@@ -9,7 +9,6 @@ ERROR_EXIT_CODE=1
 SUCCESS_EXIT_CODE=0
 NL='
 '
-TAB='    '
 
 while [ -L "$script_path" ]; do
     script_dir=$(

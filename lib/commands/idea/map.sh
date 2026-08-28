@@ -34,27 +34,131 @@ execute_command()
         shift
     done
 
-    tree_scan=$(_scan_tree)
-    if [ -z "$tree_scan" ]; then
+    paths=$(_scan_tree)
+
+    if [ -z "$paths" ]; then
         output "No ideas found"
         exit "$SUCCESS_EXIT_CODE"
     fi
 
+    result="/"
+
     if [ "$output_json" = true ]; then
-        result="{$NL$TAB\"ideas\": ["
-    else
-        result="Idea map tree:"
+        result="["
     fi
 
-    while IFS= read -r line; do
-        result="$result$NL$line"
+    first=true
+    while IFS= read -r path; do
+        log_verbose "Checking idea path: $path"
+        if validation_result=$(_validate_idea_path "$path"); then
+            :
+        else
+            log_error "Invalid idea at $path: $validation_result"
+            exit "$ERROR_EXIT_CODE"
+        fi
+        _parse_idea_path "$path"
+        if [ "$output_json" = true ]; then
+            if [ "$first" = true ]; then
+                first=false
+            else
+                result="$result,"
+            fi
+            formatted_idea="$(_json_formatter "$path" "$file" "$title" "$status" "$parent")"
+        else
+            formatted_idea="$(_plain_text_formatter "$path" "$file" "$title" "$status" "$parent")"
+        fi
+        result="$result$NL$formatted_idea"
     done <<EOF
-$tree_scan
+$paths
 EOF
 
     if [ "$output_json" = true ]; then
-        result="$result$NL$TAB]$NL}"
+        result="$result$NL]"
     fi
-
     output "$result"
+}
+
+_json_formatter()
+{
+    path="$1"
+    file="$2"
+    title="$3"
+    status="$4"
+    parent="$5"
+
+    echo "  {"
+    echo "    \"path\": \"$path\","
+    echo "    \"file\": \"$file\","
+    echo "    \"title\": \"$title\","
+    echo "    \"status\": \"$status\","
+    if [ -z "$parent" ]; then
+        echo "    \"parent\": null"
+    else
+        echo "    \"parent\": \"$parent\""
+    fi
+    echo "  }"
+}
+
+_plain_text_formatter()
+{
+    path="$1"
+    file="$2"
+    title="$3"
+    status="$4"
+    remaining_path="$path"
+    ancestor_path=""
+    tree_prefix=""
+
+    while [ "$remaining_path" != "${remaining_path#*/}" ]; do
+        path_segment=${remaining_path%%/*}
+        if [ -n "$ancestor_path" ]; then
+            ancestor_path="$ancestor_path/$path_segment"
+        else
+            ancestor_path="$path_segment"
+        fi
+        _has_later_sibling "$ancestor_path"
+        if [ "$has_later_sibling" = true ]; then
+            tree_prefix="${tree_prefix}│   "
+        else
+            tree_prefix="${tree_prefix}    "
+        fi
+        remaining_path=${remaining_path#*/}
+    done
+
+    _has_later_sibling "$path"
+    if [ "$has_later_sibling" = true ]; then
+        branch="├──"
+    else
+        branch="└──"
+    fi
+    printf '%s%s %s %s: %s\n' "$tree_prefix" "$branch" "$(color_yellow "$title")" "$(color_gray "($status)")" "$(color_green "\"$file\"")"
+}
+
+_has_later_sibling()
+{
+    target_path="$1"
+    target_parent=${target_path%/*}
+    if [ "$target_parent" = "$target_path" ]; then
+        target_parent=""
+    fi
+    has_later_sibling=false
+    found_target=false
+
+    while IFS= read -r candidate_directory; do
+        candidate_path=${candidate_directory#"$PLANS_DIR"/}
+        if [ "$found_target" = true ]; then
+            candidate_parent=${candidate_path%/*}
+            if [ "$candidate_parent" = "$candidate_path" ]; then
+                candidate_parent=""
+            fi
+            if [ "$candidate_parent" = "$target_parent" ]; then
+                has_later_sibling=true
+                return
+            fi
+        elif [ "$candidate_path" = "$target_path" ]; then
+            found_target=true
+        fi
+    done <<EOF
+$paths
+EOF
 }
