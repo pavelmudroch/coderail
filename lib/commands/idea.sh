@@ -84,3 +84,30 @@ _get_idea_status()
     fi
     echo "$status"
 }
+
+_scan_tree()
+{
+    plans_dir=".coderail/plans"
+
+    [ -d "$plans_dir" ] || return 0
+
+    find "$plans_dir" -type f -name IDEA.md | LC_ALL=C sort | while IFS= read -r idea_file; do
+        [ "$idea_file" = "$plans_dir/IDEA.md" ] && continue
+
+        path=${idea_file#"$plans_dir"/}
+        path=${path%/IDEA.md}
+        parent=${path%/*}
+        [ "$parent" = "$path" ] && parent=""
+
+        title=""
+        status=""
+        if content=$(cat "$idea_file" 2>/dev/null) && \
+            front_matter=$(yaml_get_front_matter "$content" 2>/dev/null); then
+            title=$(yaml_get_front_matter_key "$front_matter" "title")
+            status=$(yaml_get_front_matter_key "$front_matter" "status")
+        fi
+
+        printf '%s\t%s\t%s\t%s\t%s\n' \
+            "$path" "$idea_file" "$title" "$status" "$parent"
+    done
+}
