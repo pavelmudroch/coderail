@@ -86,5 +86,5 @@ yaml_get_front_matter_key()
 $front_matter
 EOF
 
-    return 1
+    printf ''
 }
