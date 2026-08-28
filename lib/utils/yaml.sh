@@ -2,7 +2,7 @@
 
 yaml_get_front_matter()
 {
-    message=$(echo "$1" | awk '
+    if message=$(echo "$1" | awk '
         NR == 1 {
             if ($0 != "---")
                 exit 10
@@ -16,20 +16,30 @@ yaml_get_front_matter()
             exit
         }
 
+        $0 !~ /^[^[:space:]:][^:]*:[[:space:]]+[^[:space:]]/ {
+            malformed = 1
+            exit
+        }
+
         {
             print
         }
 
         END {
+            if (malformed)
+                exit 12
+
             if (!started)
                 exit 10
 
             if (!closed)
                 exit 11
         }
-    ' 2>&1)
-
-    status=$?
+    ' 2>&1); then
+        status=0
+    else
+        status=$?
+    fi
     case $status in
         0)
             echo "$message"
@@ -40,6 +50,9 @@ yaml_get_front_matter()
             ;;
         11)
             echo "Missing front matter end delimiter '---'"
+            ;;
+        12)
+            echo "Malformed front matter line"
             ;;
         *)
             echo "$message"
