@@ -82,7 +82,7 @@ test() {
         return
     fi
 
-    if stderr_output=$("$test_function" "$@" 2>&1 >/dev/null); then
+    if stderr_output=$("$test_function" "$@" 2>&1); then
         _suite_status_line "$message" '[ OK ]' "$suite_green"
         suite_passed_test_counter=$((suite_passed_test_counter + 1))
         return
