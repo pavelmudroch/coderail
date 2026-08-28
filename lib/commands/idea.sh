@@ -87,6 +87,7 @@ _get_idea_status()
 
 _scan_tree()
 {
+    log_verbose "Scanning idea tree..."
     plans_dir=".coderail/plans"
 
     [ -d "$plans_dir" ] || return 0
@@ -94,6 +95,7 @@ _scan_tree()
     find "$plans_dir" -type f -name IDEA.md | LC_ALL=C sort | while IFS= read -r idea_file; do
         [ "$idea_file" = "$plans_dir/IDEA.md" ] && continue
 
+        log_verbose "Located idea file: $idea_file"
         path=${idea_file#"$plans_dir"/}
         path=${path%/IDEA.md}
         parent=${path%/*}
