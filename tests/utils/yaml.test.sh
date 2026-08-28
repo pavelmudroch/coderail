@@ -164,6 +164,29 @@ items: item1, item2, item3"
     fi
 }
 
+_assert_front_matter_key()
+{
+    front_matter="---
+key: value
+description: This is a description.
+items: item1, item2, item3
+---
+# title
+"
+    key="$1"
+    expected_value="$2"
+
+    if actual_value=$(yaml_get_front_matter_key "$front_matter" "$key"); then
+        if [ "$actual_value" != "$expected_value" ]; then
+            printf 'Expected "%s" but got "%s"\n' "$expected_value" "$actual_value"
+            return 1
+        fi
+    else
+        printf 'Failed to get value for key "%s"\n' "$key"
+        return 1
+    fi
+}
+
 print_tests_header "YAML Utils Tests"
 
 test "parse simple front matter" _test_parse_simple_front_matter
@@ -173,6 +196,11 @@ test "parse missing front matter" _test_parse_missing_front_matter
 test "parse malformed front matter" _test_parse_malformed1_front_matter
 test "parse malformed front matter 2" _test_parse_malformed2_front_matter
 test "parse malformed front matter 3" _test_parse_malformed3_front_matter
+
+test "get front matter key (key)" _assert_front_matter_key "key" "value"
+test "get front matter key (description)" _assert_front_matter_key "description" "This is a description."
+test "get front matter key (items)" _assert_front_matter_key "items" "item1, item2, item3"
+test "get front matter key (nonexistent)" _assert_front_matter_key "nonexistent" ""
 
 print_tests_summary
 
