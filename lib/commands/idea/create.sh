@@ -82,10 +82,11 @@ execute_command()
         exit "$ERROR_EXIT_CODE"
     fi
 
-    fs_safely_init_file "$idea_file" "---\ntitle: \"$idea_title\"\nstatus: \"$IDEA_STATUS_FORGING\"\n---"
-
-    if [ $? -ne 0 ]; then
-        log_error "Failed to create idea file at path: $idea_file"
+    idea_file_content="---\ntitle: \"$idea_title\"\nstatus: \"$IDEA_STATUS_FORGING\"\n---"
+    if message=$(fs_safely_init_file "$idea_file" "$idea_file_content"); then
+        :
+    else
+        log_error "Failed to create idea: $message"
         exit "$ERROR_EXIT_CODE"
     fi
 

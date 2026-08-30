@@ -64,7 +64,8 @@ _normalize_idea_path() {
 
 _get_idea_file()
 {
-    idea_file="$PLANS_DIR/$1/IDEA.md"
+    idea_path="$(_normalize_idea_path "$1")"
+    idea_file="$PLANS_DIR/$idea_path/IDEA.md"
     echo "$idea_file"
 }
 
@@ -108,23 +109,29 @@ _scan_tree()
 
 _validate_idea_path()
 {
-    idea_path="$1"
-    if [ ! -d "$idea_path" ]; then
+    idea_path="$(_normalize_idea_path "$1")"
+    idea_dir="$PLANS_DIR/$idea_path"
+    accumulate_errors=${2:-false}
+    if [ "$accumulate_errors" != true ] && [ "$accumulate_errors" != false ]; then
+        accumulate_errors=false
+    fi
+
+    if [ ! -d "$idea_dir" ]; then
         echo "Not a directory"
         return 1
     fi
 
-    if [ ! -f "$idea_path/IDEA.md" ]; then
+    if [ ! -f "$idea_dir/IDEA.md" ]; then
         echo "Missing IDEA.md file"
         return 1
     fi
 
-    if [ ! -r "$idea_path/IDEA.md" ]; then
+    if [ ! -r "$idea_dir/IDEA.md" ]; then
         echo "IDEA.md file is not readable"
         return 1
     fi
 
-    idea_content=$(cat "$idea_path/IDEA.md" 2>/dev/null)
+    idea_content=$(cat "$idea_dir/IDEA.md" 2>/dev/null)
     if [ $? -ne 0 ]; then
         echo "Failed to read IDEA.md file"
         return 1
@@ -140,16 +147,16 @@ _validate_idea_path()
     status=$(yaml_get_front_matter_key "$front_matter" "status")
     if [ -z "$status" ]; then
         echo "Missing status in front matter"
-        return 1
+        [ "$accumulate_errors" = true ] || return 1
     fi
 
     title=$(yaml_get_front_matter_key "$front_matter" "title")
     if [ -z "$title" ]; then
         echo "Missing title in front matter"
-        return 1
+        [ "$accumulate_errors" = true ] || return 1
     fi
 
-    child_idea_count=$(find "$idea_path" -type d ! -path "$idea_path" -prune -print | awk 'END { print NR }')
+    child_idea_count=$(find "$idea_dir" -type d ! -path "$idea_dir" -prune -print | awk 'END { print NR }')
     if [ "$status" == "$IDEA_STATUS_SPLIT" ] && [ "$child_idea_count" -lt 2 ]; then
         echo "Split idea must have at least two child ideas"
         return 1
@@ -160,7 +167,7 @@ _validate_idea_path()
         return 1
     fi
 
-    if [ "$status" != "$IDEA_STATUS_READY" ] && [ -f "$idea_path/SPEC.md" ]; then
+    if [ "$status" != "$IDEA_STATUS_READY" ] && [ -f "$idea_dir/SPEC.md" ]; then
         echo "SPEC.md file should not exist when idea is not ready"
         return 3
     fi
@@ -168,16 +175,15 @@ _validate_idea_path()
 
 _parse_idea_path()
 {
-    idea_path="$1"
-    path="${idea_path#$PLANS_DIR/}"
-    file="$(_get_idea_file "$path")"
+    idea_path="$(_normalize_idea_path "$1")"
+    file="$(_get_idea_file "$idea_path")"
     if front_matter="$(yaml_get_front_matter "$(cat "$file")")"; then
         :
     fi
     status=$(yaml_get_front_matter_key "$front_matter" "status")
     title=$(yaml_get_front_matter_key "$front_matter" "title")
-    parent="${path%/*}"
-    if [ "$parent" = "$path" ]; then
+    parent="${idea_path%/*}"
+    if [ "$parent" = "$idea_path" ]; then
         parent=""
     fi
 }
