@@ -53,6 +53,13 @@ execute_command()
         exit "$USAGE_EXIT_CODE"
     fi
 
+    if parent_idea="$( _normalize_idea_path "$parent_idea" )"; then
+        :
+    else
+        log_error "Invalid parent idea path: $parent_idea"
+        exit "$USAGE_EXIT_CODE"
+    fi
+
     idea_path="$(slugify "$idea_title")"
     if [ -n "$parent_idea" ]; then
         parent_status="$(_get_idea_status "$parent_idea")"

@@ -52,6 +52,17 @@ execute_command()
     )
 }
 
+_normalize_idea_path() {
+    idea_path="$1"
+    normalized_path="${idea_path#$PLANS_DIR/}"
+    normalized_path="${normalized_path%/IDEA.md}"
+    normalized_path="${normalized_path%/SPEC.md}"
+    if [ ! -d "$PLANS_DIR/$normalized_path" ]; then
+        return 1
+    fi
+    echo "$normalized_path"
+}
+
 _get_idea_file()
 {
     idea_file="$PLANS_DIR/$1/IDEA.md"
