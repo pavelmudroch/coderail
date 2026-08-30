@@ -50,7 +50,7 @@ execute_command()
     first=true
     while IFS= read -r path; do
         log_verbose "Checking idea path: $path"
-        if validation_result=$(_validate_idea_path "$path"); then
+        if validation_result=$(_validate_idea_path "$path") || [ $? -eq 3 ]; then
             :
         else
             log_error "Invalid idea at $path: $validation_result"

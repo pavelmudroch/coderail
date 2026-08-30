@@ -56,7 +56,6 @@ _normalize_idea_path() {
     idea_path="$1"
     normalized_path="${idea_path#$PLANS_DIR/}"
     normalized_path="${normalized_path%/IDEA.md}"
-    normalized_path="${normalized_path%/SPEC.md}"
     if [ ! -d "$PLANS_DIR/$normalized_path" ]; then
         return 1
     fi
@@ -163,7 +162,7 @@ _validate_idea_path()
 
     if [ "$status" != "$IDEA_STATUS_READY" ] && [ -f "$idea_path/SPEC.md" ]; then
         echo "SPEC.md file should not exist when idea is not ready"
-        return 0
+        return 3
     fi
 }
 
