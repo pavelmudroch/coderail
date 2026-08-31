@@ -28,6 +28,11 @@ execute_command()
                 usage
                 exit "$SUCCESS_EXIT_CODE"
                 ;;
+            --help=*)
+                log_error "--help does not take an argument"
+                usage >&2
+                exit "$USAGE_EXIT_CODE"
+                ;;
             -p|--parent)
                 shift
                 parent_idea="$1"
@@ -35,24 +40,24 @@ execute_command()
             --parent=*)
                 parent_idea="${1#*=}"
                 ;;
+            --)
+                break
+                shift
+                ;;
             *)
-                if [ -n "$idea_title" ]; then
-                    log_error "Multiple idea titles provided: '$idea_title' and '$1'"
-                    usage >&2
-                    exit "$USAGE_EXIT_CODE"
-                fi
-                idea_title="$1"
+                break
                 ;;
         esac
         shift
     done
 
-    if [ -z "$idea_title" ]; then
-        log_error "Idea title is required"
+    if [ $# -ne 1 ]; then
+        log_error "Exactly one idea title must be provided"
         usage >&2
         exit "$USAGE_EXIT_CODE"
     fi
 
+    idea_title="$1"
     if parent_idea="$( _normalize_idea_path "$parent_idea" )"; then
         :
     else

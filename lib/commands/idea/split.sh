@@ -34,6 +34,15 @@ execute_command()
                 usage
                 exit "$SUCCESS_EXIT_CODE"
                 ;;
+            --help=*)
+                log_error "--help does not take an argument"
+                usage >&2
+                exit "$USAGE_EXIT_CODE"
+                ;;
+            --)
+                break
+                shift
+                ;;
             *)
                 if [ $arg_pos -eq 0 ]; then
                     idea_path="$1"
@@ -48,6 +57,21 @@ execute_command()
                 arg_pos=$((arg_pos + 1))
                 ;;
         esac
+        shift
+    done
+
+    while [ $# -gt 0 ]; do
+        if [ $arg_pos -eq 0 ]; then
+            idea_path="$1"
+        else
+            if [ $first -eq 1 ]; then
+                child_titles="$1"
+                first=0
+            else
+                child_titles="$child_titles$NL$1"
+            fi
+        fi
+        arg_pos=$((arg_pos + 1))
         shift
     done
 

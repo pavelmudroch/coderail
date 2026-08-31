@@ -31,6 +31,11 @@ execute_command()
                 usage
                 exit "$SUCCESS_EXIT_CODE"
                 ;;
+            --help=*)
+                log_error "--help does not take an argument"
+                usage >&2
+                exit "$USAGE_EXIT_CODE"
+                ;;
             map|create|split)
                 command="$1"
                 shift
