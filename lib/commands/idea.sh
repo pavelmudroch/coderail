@@ -19,7 +19,7 @@ Options:
 Commands:
   map                  Generate map of ideas and their relationships
   create               Create a new idea
-  validate             Validate an idea(s) for completeness and consistency
+  split                Split an idea into multiple child ideas
 EOF
 }
 
@@ -31,7 +31,7 @@ execute_command()
                 usage
                 exit "$SUCCESS_EXIT_CODE"
                 ;;
-            map|create|validate)
+            map|create|split)
                 command="$1"
                 shift
                 break
