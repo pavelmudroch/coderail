@@ -20,6 +20,8 @@ Commands:
   map                  Generate map of ideas and their relationships
   create               Create a new idea
   split                Split an idea into multiple child ideas
+  ready                Mark an idea as ready
+  reforge              Reforge an idea which has been previously marked as ready
 EOF
 }
 
@@ -36,7 +38,7 @@ execute_command()
                 usage >&2
                 exit "$USAGE_EXIT_CODE"
                 ;;
-            map|create|split)
+            map|create|split|ready|reforge)
                 command="$1"
                 shift
                 break

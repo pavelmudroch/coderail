@@ -53,4 +53,5 @@ execute_command()
         exit "$USAGE_EXIT_CODE"
     fi
 
+    output "Reforging idea at path: $idea_path"
 }

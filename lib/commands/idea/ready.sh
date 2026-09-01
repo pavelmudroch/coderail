@@ -53,4 +53,6 @@ execute_command()
         log_error "Invalid idea path: $idea_path"
         exit "$USAGE_EXIT_CODE"
     fi
+
+    output "Marking idea as ready at path: $idea_path"
 }
