@@ -35,23 +35,27 @@ execute_command()
 
     spinner "Initializing coderail"
 
-    if ! fs_safely_init_dir "$CR_DIR_NAME"; then
+    if ! error=$(fs_safely_init_dir "$CR_DIR_NAME" 2>&1); then
         spinner_close
+        log_error "$error"
         exit "$ERROR_EXIT_CODE"
     fi
 
-    if ! fs_safely_init_dir "$CR_DIR_NAME/plans/"; then
+    if ! error=$(fs_safely_init_dir "$CR_DIR_NAME/plans/" 2>&1); then
         spinner_close
+        log_error "$error"
         exit "$ERROR_EXIT_CODE"
     fi
 
-    if ! fs_safely_init_file "$CR_DIR_NAME/coderail.conf" "$(_generate_config_content)"; then
+    if ! error=$(fs_safely_init_file "$CR_DIR_NAME/coderail.conf" "$(_generate_config_content)" 2>&1); then
         spinner_close
+        log_error "$error"
         exit "$ERROR_EXIT_CODE"
     fi
 
-    if ! fs_safely_init_file "$CR_DIR_NAME/test_map" "$(_generate_test_map_content)"; then
+    if ! error=$(fs_safely_init_file "$CR_DIR_NAME/test_map" "$(_generate_test_map_content)" 2>&1); then
         spinner_close
+        log_error "$error"
         exit "$ERROR_EXIT_CODE"
     fi
 

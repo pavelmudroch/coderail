@@ -47,12 +47,23 @@ execute_command()
     fi
 
     idea_path="$1"
-    if idea_path="$( _normalize_idea_path "$idea_path" )"; then
-        :
-    else
+    if ! idea_path="$( _normalize_idea_path "$idea_path" )"; then
         log_error "Invalid idea path: $idea_path"
-        exit "$USAGE_EXIT_CODE"
+        exit "$ERROR_EXIT_CODE"
+    fi
+    if ! status="$(_get_idea_status "$idea_path")"; then
+        log_error "Cannot read idea status: $status"
+        exit "$ERROR_EXIT_CODE"
+    fi
+    if [ "$status" != "$IDEA_STATUS_FORGING" ]; then
+        log_error "Only forging ideas can be marked as ready. Current status: $status"
+        exit "$ERROR_EXIT_CODE"
     fi
 
-    output "Marking idea as ready at path: $idea_path"
+    idea_file=$(_get_idea_file "$idea_path")
+    if ! idea_content=$(cat "$idea_file"); then
+        log_error "Cannot read idea content: $error"
+        return 1
+    fi
+
 }

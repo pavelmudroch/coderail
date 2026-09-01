@@ -88,3 +88,24 @@ EOF
 
     printf ''
 }
+
+yaml_update_front_matter_key()
+{
+    front_matter="$1"
+    key="$2"
+    new_value="$3"
+
+    updated_front_matter=""
+    while IFS= read -r line; do
+        case "$line" in
+            "$key:"*)
+                line="$key: $new_value"
+                ;;
+        esac
+        updated_front_matter="$updated_front_matter$line\n"
+    done <<EOF
+$front_matter
+EOF
+
+    printf '%b' "$updated_front_matter"
+}
