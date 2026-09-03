@@ -31,12 +31,12 @@ execute_command()
         case "$1" in
             -h|--help)
                 usage
-                exit "$SUCCESS_EXIT_CODE"
+                exit "$_CR_SUCCESS_EXIT_CODE"
                 ;;
             --help=*)
                 log_error "--help does not take an argument"
                 usage >&2
-                exit "$USAGE_EXIT_CODE"
+                exit "$_CR_USAGE_EXIT_CODE"
                 ;;
             map|create|split|ready|reforge)
                 command="$1"
@@ -46,20 +46,21 @@ execute_command()
             *)
                 log_error "Unknown argument: $1"
                 usage >&2
-                exit "$USAGE_EXIT_CODE"
+                exit "$_CR_USAGE_EXIT_CODE"
                 ;;
         esac
         shift
     done
 
-    script="$ROOT_DIR/lib/commands/idea/$command.sh"
+    script="$_CR_INSTALL_DIR/lib/commands/idea/$command.sh"
     (
         . "$script"
         execute_command "$@"
     )
 }
 
-_normalize_idea_path() {
+_normalize_idea_path()
+{
     normalized_path="$1"
     normalized_path="${normalized_path#$PLANS_DIR/}"
     normalized_path="${normalized_path%/IDEA.md}"
@@ -67,10 +68,12 @@ _normalize_idea_path() {
     echo "$normalized_path"
 }
 
-_get_idea_file()
+_ensure_plans_dir()
 {
-    idea_file="$PLANS_DIR/$idea_path/IDEA.md"
-    echo "$idea_file"
+    if ! fs_make_dir "$PLANS_DIR"; then
+        log_error "Failed to create \"$PLANS_DIR\" directory"
+        return 1
+    fi
 }
 
 

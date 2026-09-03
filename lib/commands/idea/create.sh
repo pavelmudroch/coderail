@@ -57,12 +57,12 @@ execute_command()
         exit "$_CR_USAGE_EXIT_CODE"
     fi
 
-    if ! parent_idea="$(_normalize_idea_path "$parent_idea")"; then
-        log_error "Invalid parent idea path: \"$parent_idea\""
-        exit "$_CR_ERROR_EXIT_CODE"
-    fi
-
     if [ -n "$parent_idea" ]; then
+        if ! parent_idea="$(_normalize_idea_path "$parent_idea")"; then
+            log_error "Invalid parent idea path: \"$parent_idea\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+
         parent_idea_file=$(_get_idea_file "$parent_idea")
         if [ ! -f "$parent_idea_file" ]; then
             log_error "Parent idea does not exist: \"$parent_idea\""
@@ -86,22 +86,35 @@ execute_command()
         fi
     fi
 
+    _ensure_plans_dir
     idea_title="$1"
     idea_path="$(slugify "$idea_title")"
-    idea_file=$(_get_idea_file "$idea_path")
+    target_dir="$PLANS_DIR"
+    if [ -n "$parent_idea" ]; then
+        target_dir="$PLANS_DIR/$parent_idea"
+    fi
+    idea_path="$target_dir/$idea_path"
+
+    idea_file="$idea_path/IDEA.md"
     if [ -f "$idea_file" ]; then
-        log_error "Idea already exists at path: $idea_file"
+        log_error "Idea already exists at path: \"$idea_file\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    if ! temp_dir=$(fs_temp_dir_at "$target_dir"); then
+        log_error "Cannot write to \"$target_dir\""
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
     if ! md_frontmatter_empty \
         | md_frontmatter_set "title" "$idea_title" \
         | md_frontmatter_set "status" "$IDEA_STATUS_FORGING" \
-        | fs_write "$idea_file"
+        > "$temp_dir/IDEA.md"
     then
-        log_error "Failed to create idea file: $idea_file"
+        log_error "Failed to create idea file: \"$idea_file\""
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    fs_replace "$temp_dir" "$idea_path"
     output "$idea_file"
 }

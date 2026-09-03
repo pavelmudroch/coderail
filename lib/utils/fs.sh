@@ -1,14 +1,30 @@
 #!/usr/bin/env sh
 
-fs_temp_dir_at()
+_fs_find_first_existing_parent()
 {
     target="$1"
+    if [ -f "$target" ] || [ -L "$target" ]; then
+        target=$(dirname "$target")
+    fi
+
+    while [ ! -d "$target" ]; do
+        parent=$(dirname "$target")
+        [ "$target" = "$parent" ] && break
+        target="$parent"
+    done
+    echo "$target"
+}
+
+fs_temp_dir_at  ()
+{
+    target="$1"
+    name=${2:-.cr-tmp}
 
     i=0
     temp_dir_created=0
     while [ $i -lt 100 ]; do
-        temp_dir="$target/.cr-tmp-$$-$i"
-        if mkdir "$temp_dir" 2>/dev/null; then
+        temp_dir="$target/$name-$$-$i"
+        if mkdir -p "$temp_dir" 2>/dev/null; then
             temp_dir_created=1
             break
         fi
@@ -29,7 +45,7 @@ fs_temp_for()
     parent=$(dirname "$target") || return 1
 
     [ "$parent" = "$target" ] && parent="."
-    temp_dir=$(fs_temp_dir_at "$parent") || return 1
+    temp_dir=$(fs_temp_dir_at "$parent" "$target") || return 1
 
     temp_file="$temp_dir/file"
     if ! : >"$temp_file"; then
@@ -45,7 +61,7 @@ fs_replace()
     source="$1"
     destination="$2"
 
-    if [ ! -f "$source" ]; then
+    if [ ! -e "$source" ] && [ ! -L "$source" ]; then
         return 1
     fi
 
@@ -69,7 +85,6 @@ fs_make_dir()
 fs_write()
 {
     target="$1"
-
     temp=$(fs_temp_for "$target") || return 1
     cat >"$temp" 2>/dev/null || return 1
     fs_replace "$temp" "$target"

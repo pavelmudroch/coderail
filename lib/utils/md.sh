@@ -159,5 +159,5 @@ md_frontmatter_set() {
 
 md_frontmatter_empty()
 {
-    printf '---\n---\n'
+    printf '%s\n%s\n' "---" "---"
 }
