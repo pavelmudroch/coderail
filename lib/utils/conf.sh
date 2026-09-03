@@ -91,7 +91,7 @@ load_config()
         shift
     done
 
-    global_config_file="$ROOT_DIR/.coderail/coderail.conf"
+    global_config_file="$_CR_INSTALL_DIR/.coderail/coderail.conf"
     _parse_config_file "$global_config_file"
     reinit_log
 
@@ -131,7 +131,7 @@ _parse_config_file()
                 # log_error "Invalid config line: $(line)\n"
                 message=$(printf "Invalid configuration file \"%s\" at line %d: \"%s\"\nExpected format: key=value" "$config_file" "$current_line" "$line")
                 log_error "$message"
-                exit "$ERROR_EXIT_CODE"
+                exit "$_CR_ERROR_EXIT_CODE"
                 ;;
         esac
 
@@ -152,7 +152,7 @@ _parse_config_file()
             *)
                 message=$(printf "Unknown configuration key \"%s\" in file \"%s\" at line %d" "$key" "$config_file" "$current_line")
                 log_error "$message"
-                exit "$ERROR_EXIT_CODE"
+                exit "$_CR_ERROR_EXIT_CODE"
                 ;;
         esac
     done < "$config_file"

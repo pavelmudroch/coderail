@@ -2,42 +2,62 @@
 
 set -eu
 
-script_path=$0
-CR_DIR_NAME=".coderail"
-USAGE_EXIT_CODE=2
-ERROR_EXIT_CODE=1
-SUCCESS_EXIT_CODE=0
-NL='
-'
+__CR_INITIALIZED__=0
 
-while [ -L "$script_path" ]; do
-    script_dir=$(
-        CDPATH= cd -- "$(dirname "$script_path")"
+_CR_INSTALL_DIR=""
+_CR_USAGE_EXIT_CODE=2
+_CR_ERROR_EXIT_CODE=1
+_CR_SUCCESS_EXIT_CODE=0
+EOL='
+'
+_CR_DIR_NAME=".coderail"
+
+_coderail_init()
+{
+    if [ ! "$__CR_INITIALIZED__" -eq 0 ]; then
+        return
+    fi
+    __CR_INITIALIZED__=1
+    script_path=$1
+
+    while [ -L "$script_path" ]; do
+        script_dir=$(
+            CDPATH= cd -- "$(dirname "$script_path")"
+            pwd
+        )
+        link_target=$(readlink "$script_path")
+
+        case "$link_target" in
+            /*) script_path=$link_target ;;
+            *) script_path=$script_dir/$link_target ;;
+        esac
+    done
+
+    _CR_INSTALL_DIR=$(
+        cd -- "$(dirname "$script_path")/.."
         pwd
     )
-    link_target=$(readlink "$script_path")
 
-    case "$link_target" in
-        /*) script_path=$link_target ;;
-        *) script_path=$script_dir/$link_target ;;
-    esac
-done
+    _CR_TEMP_RESOURCE_FILE="${TMPDIR:-/tmp}/coderail-$$.resources"
+    if [ ! : > "$_CR_TEMP_RESOURCE_FILE" ]; then
+        log_error "Failed to create temporary resource file"
+        return 1
+    fi
+}
 
-SCRIPT_DIR=$(
-    CDPATH= cd -- "$(dirname "$script_path")"
-    pwd
-)
+_coderail_init "$0"
 
-ROOT_DIR=$(
-    CDPATH= cd -- "$SCRIPT_DIR/.."
-    pwd
-)
+. "$_CR_INSTALL_DIR/lib/utils/log.sh"
+. "$_CR_INSTALL_DIR/lib/utils/conf.sh"
+. "$_CR_INSTALL_DIR/lib/utils/fs.sh"
+. "$_CR_INSTALL_DIR/lib/utils/yaml.sh"
+. "$_CR_INSTALL_DIR/lib/utils/text.sh"
 
-. "$ROOT_DIR/lib/utils/log.sh"
-. "$ROOT_DIR/lib/utils/conf.sh"
-. "$ROOT_DIR/lib/utils/fs.sh"
-. "$ROOT_DIR/lib/utils/yaml.sh"
-. "$ROOT_DIR/lib/utils/text.sh"
+register_temp_resource()
+{
+    resource="$1"
+    printf '%s\n' "$resource" >> "$_CR_TEMP_RESOURCE_FILE"
+}
 
 usage() {
     cat <<'EOF'
@@ -75,32 +95,41 @@ EOF
 }
 
 version() {
-    . "$ROOT_DIR/lib/version.sh"
+    . "$_CR_INSTALL_DIR/lib/version.sh"
     output "cr version $coderail_version"
 }
 
 _cleanup_on_exit()
 {
     _status=$?
-
+    log_verbose "Cleaning up temporary resources"
     trap - 0 HUP INT TERM
 
     _log_cleanup
-    [ -n "$tmp_dir" ] && rm -rf "$tmp_dir"
+    if [ -f "$_CR_TEMP_RESOURCE_FILE" ]; then
+        awk '
+            { resources[NR] = $0 }
+            END {
+                for (i = NR; i >= 1; i--)
+                    print resources[i]
+            }
+        ' "$_CR_TEMP_RESOURCE_FILE" |
+        while IFS= read -r resource; do
+            [ -n "$resource" ] || continue
+            rm -rf "$resource" 2>/dev/null || :
+        done
+        rm -f "$_CR_TEMP_RESOURCE_FILE"
+    fi
 
     exit "$_status"
 }
 
 trap '_cleanup_on_exit' 0
-
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-tmp_dir=$(mktemp -d)
-
 load_config "$@"
-
 argi=0
 
 while [ $argi -lt $argc ]; do
@@ -112,26 +141,26 @@ while [ $argi -lt $argc ]; do
             ;;
         -h|--help)
             usage
-            exit "$SUCCESS_EXIT_CODE"
+            exit "$_CR_SUCCESS_EXIT_CODE"
             ;;
         --help=*)
             log_error "--help does not take an argument"
             usage >&2
-            exit "$USAGE_EXIT_CODE"
+            exit "$_CR_USAGE_EXIT_CODE"
             ;;
         --version)
             version
-            exit "$SUCCESS_EXIT_CODE"
+            exit "$_CR_SUCCESS_EXIT_CODE"
             ;;
         --version=*)
             log_error "--version does not take an argument"
             usage >&2
-            exit "$USAGE_EXIT_CODE"
+            exit "$_CR_USAGE_EXIT_CODE"
             ;;
         -*)
             log_error "Unknown option: $arg"
             usage >&2
-            exit "$USAGE_EXIT_CODE"
+            exit "$_CR_USAGE_EXIT_CODE"
             ;;
         *)
             break
@@ -149,17 +178,18 @@ while [ $argi -lt $argc ]; do
     argi=$((argi + 1))
 done
 
-script="$ROOT_DIR/lib/commands/$command.sh"
+command=$(basename "$command")
+script="$_CR_INSTALL_DIR/lib/commands/$command.sh"
 
 if [ ! -f "$script" ]; then
     log_error "Unknown command: \"$command\""
     usage >&2
-    exit "$USAGE_EXIT_CODE"
+    exit "$_CR_USAGE_EXIT_CODE"
 fi
 
 if [ ! -d "$cwd" ]; then
     log_error "Working directory does not exist: \"$cwd\""
-    exit "$ERROR_EXIT_CODE"
+    exit "$_CR_ERROR_EXIT_CODE"
 fi
 
 cd "$cwd"

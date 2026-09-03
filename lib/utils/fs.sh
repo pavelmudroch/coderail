@@ -1,91 +1,76 @@
 #!/usr/bin/env sh
 
-fs_safely_init_dir()
+fs_temp_dir_at()
 {
-    dirname="$1"
+    target="$1"
 
-    log_verbose "Creating \"$dirname\" directory."
-    if [ -d "$dirname" ]; then
-        log_verbose "Directory \"$dirname\" already exists."
-    else
-        if ! error=$(mkdir -p "$dirname" 2>&1); then
-            echo "Failed to create \"$dirname\" directory.${NL}> $error"
-            return 1
+    i=0
+    temp_dir_created=0
+    while [ $i -lt 100 ]; do
+        temp_dir="$target/.cr-tmp-$$-$i"
+        if mkdir "$temp_dir" 2>/dev/null; then
+            temp_dir_created=1
+            break
         fi
+        i=$((i + 1))
+    done
+
+    if [ $temp_dir_created -eq 0 ]; then
+        return 1
     fi
+    register_temp_resource "$temp_dir"
+
+    printf "%s\n" "$temp_dir"
 }
 
-fs_safely_init_file()
+fs_temp_for()
 {
-    path="$1"
-    content="$2"
+    target="$1"
+    parent=$(dirname "$target") || return 1
 
-    log_verbose "Creating \"$path\" file."
-    if [ -e "$path" ]; then
-        log_verbose "File \"$path\" already exists."
-        return 0
-    fi
+    [ "$parent" = "$target" ] && parent="."
+    temp_dir=$(fs_temp_dir_at "$parent") || return 1
 
-    case $path in
-        */*) dir=${path%/*} ;;
-        *)   dir=. ;;
-    esac
-
-    file=$(basename "$path")
-
-    if ! error=$(
-        {
-            echo "$content" > "$tmp_dir/$file" &&
-                mkdir -p "$dir" &&
-                mv "$tmp_dir/$file" "$path"
-        } 2>&1
-    ); then
-        echo "Failed to create \"$path\" file.${NL}> $error"
+    temp_file="$temp_dir/file"
+    if ! : >"$temp_file"; then
+        rmdir "$temp_dir" 2>/dev/null
         return 1
     fi
+
+    printf "%s\n" "$temp_file"
 }
 
-fs_safely_replace_dir()
+fs_replace()
 {
-    source_dir="$1"
-    destination_dir="$2"
-    log_verbose "Replacing \"$destination_dir\" directory."
+    source="$1"
+    destination="$2"
 
-    if [ ! -d "$source_dir" ]; then
-        echo "Source directory does not exist: \"$source_dir\""
+    if [ ! -f "$source" ]; then
         return 1
     fi
 
-    if [ -d "$destination_dir" ]; then
-        backup_dir="${destination_dir}_backup_$(date +%s)"
-        if ! error=$(mv "$destination_dir" "$backup_dir" 2>&1); then
-            echo "Failed to backup \"$destination_dir\" directory.${NL}> $error"
-            return 1
-        fi
-    fi
-
-    if ! error=$(mv "$source_dir" "$destination_dir" 2>&1); then
-        echo "Failed to replace \"$destination_dir\" directory.${NL}> $error"
-        if [ -d "$backup_dir" ]; then
-            mv "$backup_dir" "$destination_dir"
-        fi
-        return 1
-    fi
+    mv "$source" "$destination" 2>/dev/null
 }
 
-fs_safely_replace_file()
+fs_remove()
 {
-    source_path="$1"
-    destination_path="$2"
-    log_verbose "Replacing \"$destination_path\" file."
+    target="$1"
 
-    if [ ! -e "$source_path" ]; then
-        echo "Source file does not exist: \"$source_path\""
-        return 1
-    fi
+    [ -e "$target" ] || [ -L "$target" ] || return 0
+    rm -rf "$target" 2>/dev/null
+}
 
-    if ! error=$(mv -f "$source_path" "$destination_path" 2>&1); then
-        echo "Failed to replace \"$destination_path\" file.${NL}> $error"
-        return 1
-    fi
+fs_make_dir()
+{
+    target="$1"
+    mkdir -p "$target" 2>/dev/null || return 1
+}
+
+fs_write()
+{
+    target="$1"
+
+    temp=$(fs_temp_for "$target") || return 1
+    cat >"$temp" 2>/dev/null || return 1
+    fs_replace "$temp" "$target"
 }
