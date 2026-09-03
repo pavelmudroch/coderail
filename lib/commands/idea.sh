@@ -60,50 +60,19 @@ execute_command()
 }
 
 _normalize_idea_path() {
-    idea_path="$1"
-    normalized_path="${idea_path#$PLANS_DIR/}"
+    normalized_path="$1"
+    normalized_path="${normalized_path#$PLANS_DIR/}"
     normalized_path="${normalized_path%/IDEA.md}"
-    if [ ! -d "$PLANS_DIR/$normalized_path" ]; then
-        return 1
-    fi
+    normalized_path=$(path_normalize_relative "$normalized_path")
     echo "$normalized_path"
 }
 
 _get_idea_file()
 {
-    idea_path="$(_normalize_idea_path "$1")"
     idea_file="$PLANS_DIR/$idea_path/IDEA.md"
     echo "$idea_file"
 }
 
-_get_idea_status()
-{
-    idea_file="$(_get_idea_file "$1")"
-    if [ ! -f "$idea_file" ]; then
-        echo "Idea file not found"
-        return 1
-    fi
-
-    if content=$(cat "$idea_file" 2>/dev/null); then
-        :
-    else
-        echo "Failed to read idea file"
-        return 1
-    fi
-
-    front_matter=$(yaml_get_front_matter "$content")
-    if [ $? -ne 0 ]; then
-        echo "Failed to parse front matter: $front_matter"
-        return 1
-    fi
-
-    status=$(yaml_get_front_matter_key "$front_matter" "status")
-    if [ $? -ne 0 ]; then
-        echo "Failed to get status from front matter: $status"
-        return 1
-    fi
-    echo "$status"
-}
 
 _scan_tree()
 {

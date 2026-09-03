@@ -1,4 +1,0 @@
----
-title: "pi"
-status: "forging"
----

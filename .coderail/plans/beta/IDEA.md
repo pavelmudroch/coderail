@@ -1,4 +1,0 @@
----
-title: "beta"
-status: "forging"
----

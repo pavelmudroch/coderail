@@ -26,12 +26,12 @@ execute_command()
         case "$1" in
             -h|--help)
                 usage
-                exit "$SUCCESS_EXIT_CODE"
+                exit "$_CR_SUCCESS_EXIT_CODE"
                 ;;
             --help=*)
                 log_error "--help does not take an argument"
                 usage >&2
-                exit "$USAGE_EXIT_CODE"
+                exit "$_CR_USAGE_EXIT_CODE"
                 ;;
             -p|--parent)
                 shift
@@ -54,45 +54,53 @@ execute_command()
     if [ $# -ne 1 ]; then
         log_error "Exactly one idea title must be provided"
         usage >&2
-        exit "$USAGE_EXIT_CODE"
+        exit "$_CR_USAGE_EXIT_CODE"
+    fi
+
+    if ! parent_idea="$(_normalize_idea_path "$parent_idea")"; then
+        log_error "Invalid parent idea path: \"$parent_idea\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    if [ -n "$parent_idea" ]; then
+        parent_idea_file=$(_get_idea_file "$parent_idea")
+        if [ ! -f "$parent_idea_file" ]; then
+            log_error "Parent idea does not exist: \"$parent_idea\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+
+        if ! parent_idea_content="$(cat "$parent_idea_file")"; then
+            log_error "Failed to read parent idea file: $parent_idea_file"
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+
+        if ! message="$(printf '%s' "$parent_idea_content" | md_is_frontmatter_valid)"; then
+            log_error "Parent idea file has invalid frontmatter: $parent_idea_file"
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+
+        status="$(printf '%s' "$parent_idea_content" | md_frontmatter_get "status")"
+        if [ "$status" != "$IDEA_STATUS_SPLIT" ]; then
+            log_error "Parent idea must be in 'split' status to create a child idea"
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
     fi
 
     idea_title="$1"
-    if parent_idea="$( _normalize_idea_path "$parent_idea" )"; then
-        :
-    else
-        log_error "Invalid parent idea path: $parent_idea"
-        exit "$USAGE_EXIT_CODE"
-    fi
-
     idea_path="$(slugify "$idea_title")"
-    if [ -n "$parent_idea" ]; then
-        parent_status="$(_get_idea_status "$parent_idea")"
-        if [ $? -ne 0 ]; then
-            log_error "Failed to get status of parent idea: $parent_status"
-            exit "$ERROR_EXIT_CODE"
-        fi
-
-        if [ "$parent_status" != "$IDEA_STATUS_SPLIT" ]; then
-            log_error "Parent idea must be in 'split' status to create a child idea"
-            exit "$ERROR_EXIT_CODE"
-        fi
-
-        idea_path="$parent_idea/$idea_path"
-    fi
-
     idea_file=$(_get_idea_file "$idea_path")
     if [ -f "$idea_file" ]; then
         log_error "Idea already exists at path: $idea_file"
-        exit "$ERROR_EXIT_CODE"
+        exit "$_CR_ERROR_EXIT_CODE"
     fi
 
-    idea_file_content="---\ntitle: \"$idea_title\"\nstatus: \"$IDEA_STATUS_FORGING\"\n---"
-    if message=$(fs_safely_init_file "$idea_file" "$idea_file_content"); then
-        :
-    else
-        log_error "Failed to create idea: $message"
-        exit "$ERROR_EXIT_CODE"
+    if ! md_frontmatter_empty \
+        | md_frontmatter_set "title" "$idea_title" \
+        | md_frontmatter_set "status" "$IDEA_STATUS_FORGING" \
+        | fs_write "$idea_file"
+    then
+        log_error "Failed to create idea file: $idea_file"
+        exit "$_CR_ERROR_EXIT_CODE"
     fi
 
     output "$idea_file"

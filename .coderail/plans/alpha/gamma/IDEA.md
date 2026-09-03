@@ -1,4 +1,0 @@
----
-title: "gamma"
-status: "ready"
----
