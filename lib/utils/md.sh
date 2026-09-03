@@ -2,7 +2,12 @@
 
 md_is_frontmatter_valid()
 {
-    awk '
+    if [ -z "$1" ]; then
+        echo "Missing starting '---'"
+        exit 1
+    fi
+
+    echo "$1" | awk '
         NR == 1 {
             if ($0 != "---") {
                 print "Missing starting '---'"

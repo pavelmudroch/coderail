@@ -1,4 +1,4 @@
 ---
 title: alpha title
-status: forging
+status: ready
 ---

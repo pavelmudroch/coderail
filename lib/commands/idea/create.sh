@@ -45,16 +45,24 @@ execute_command()
                 shift
                 ;;
             *)
-                break
+                if [ -n "$idea_title" ]; then
+                    log_error "Multiple idea titles provided"
+                    usage >&2
+                    exit "$_CR_USAGE_EXIT_CODE"
+                fi
+                idea_title="$1"
                 ;;
         esac
         shift
     done
 
-    if [ $# -ne 1 ]; then
-        log_error "Exactly one idea title must be provided"
-        usage >&2
-        exit "$_CR_USAGE_EXIT_CODE"
+    if [ -z "$idea_title" ]; then
+        if [ $# -ne 1 ]; then
+            log_error "Exactly one idea title must be provided"
+            usage >&2
+            exit "$_CR_USAGE_EXIT_CODE"
+        fi
+        idea_title="$1"
     fi
 
     if [ -n "$parent_idea" ]; then
@@ -63,19 +71,8 @@ execute_command()
             exit "$_CR_ERROR_EXIT_CODE"
         fi
 
-        parent_idea_file=$(_get_idea_file "$parent_idea")
-        if [ ! -f "$parent_idea_file" ]; then
-            log_error "Parent idea does not exist: \"$parent_idea\""
-            exit "$_CR_ERROR_EXIT_CODE"
-        fi
-
-        if ! parent_idea_content="$(cat "$parent_idea_file")"; then
-            log_error "Failed to read parent idea file: $parent_idea_file"
-            exit "$_CR_ERROR_EXIT_CODE"
-        fi
-
-        if ! message="$(printf '%s' "$parent_idea_content" | md_is_frontmatter_valid)"; then
-            log_error "Parent idea file has invalid frontmatter: $parent_idea_file"
+        if ! parent_idea_content="$(_read_idea_file "$parent_idea")"; then
+            log_error "Failed to read parent idea file: $parent_idea_content"
             exit "$_CR_ERROR_EXIT_CODE"
         fi
 
@@ -87,7 +84,6 @@ execute_command()
     fi
 
     _ensure_plans_dir
-    idea_title="$1"
     idea_path="$(slugify "$idea_title")"
     target_dir="$PLANS_DIR"
     if [ -n "$parent_idea" ]; then

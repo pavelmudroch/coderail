@@ -76,6 +76,29 @@ _ensure_plans_dir()
     fi
 }
 
+_read_idea_file()
+{
+    normalized_path="$1"
+    idea_file="$PLANS_DIR/$normalized_path/IDEA.md"
+
+    if [ ! -f "$idea_file" ]; then
+        echo "File \"$idea_file\" does not exist"
+        return 1
+    fi
+
+    if ! idea_content=$(cat "$idea_file"); then
+        echo "$idea_file"
+        return 1
+    fi
+
+    if ! message="$(md_is_frontmatter_valid "$idea_content")"; then
+        echo "Invalid frontmatter: \"$message\""
+        return 1
+    fi
+
+    echo "$idea_content"
+}
+
 
 _scan_tree()
 {
