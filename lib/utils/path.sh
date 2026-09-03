@@ -27,8 +27,7 @@ path_is_within()
 }
 
 path_normalize_relative() {
-    path=$1
-    result_var="$2"
+    path="$1"
 
     case $path in
         '')  return 1 ;;
@@ -66,7 +65,7 @@ path_normalize_relative() {
             for (i = 2; i <= depth; i++)
                 result = result "/" stack[i]
 
-            eval "$result_var=\$result"
+            print result
         }
     '
 }

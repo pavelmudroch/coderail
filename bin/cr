@@ -50,7 +50,7 @@ _coderail_init "$0"
 . "$_CR_INSTALL_DIR/lib/utils/log.sh"
 . "$_CR_INSTALL_DIR/lib/utils/conf.sh"
 . "$_CR_INSTALL_DIR/lib/utils/fs.sh"
-. "$_CR_INSTALL_DIR/lib/utils/yaml.sh"
+. "$_CR_INSTALL_DIR/lib/utils/md.sh"
 . "$_CR_INSTALL_DIR/lib/utils/text.sh"
 
 register_temp_resource()
