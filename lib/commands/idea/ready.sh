@@ -59,7 +59,7 @@ execute_command()
 
     status="$(printf '%s' "$idea_content" | md_frontmatter_get "status")"
     if [ "$status" != "$IDEA_STATUS_FORGING" ]; then
-        log_error "Only currently forging ideas can be marked as ready"
+        log_error "Only forging ideas can be marked as ready: Status \"$status\""
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
@@ -72,5 +72,5 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
-    output "\"$idea_file\" set to ready"
+    output "\"$idea_file\" ready"
 }
