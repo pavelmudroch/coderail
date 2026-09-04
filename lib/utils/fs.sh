@@ -12,10 +12,10 @@ _fs_find_first_existing_parent()
         [ "$target" = "$parent" ] && break
         target="$parent"
     done
-    echo "$target"
+    echo "${target%/}"
 }
 
-fs_temp_dir_at  ()
+_fs_temp_dir_at  ()
 {
     target="$1"
     name=${2:-.cr-tmp}
@@ -39,23 +39,6 @@ fs_temp_dir_at  ()
     printf "%s\n" "$temp_dir"
 }
 
-fs_temp_for()
-{
-    target="$1"
-    parent=$(dirname "$target") || return 1
-
-    [ "$parent" = "$target" ] && parent="."
-    temp_dir=$(fs_temp_dir_at "$parent" "$target") || return 1
-
-    temp_file="$temp_dir/file"
-    if ! : >"$temp_file"; then
-        rmdir "$temp_dir" 2>/dev/null
-        return 1
-    fi
-
-    printf "%s\n" "$temp_file"
-}
-
 fs_replace()
 {
     source="$1"
@@ -65,7 +48,7 @@ fs_replace()
         return 1
     fi
 
-    mv "$source" "$destination" 2>/dev/null
+    mv -f "$source" "$destination" 2>/dev/null
 }
 
 fs_remove()
@@ -85,7 +68,50 @@ fs_make_dir()
 fs_write()
 {
     target="$1"
-    temp=$(fs_temp_for "$target") || return 1
-    cat >"$temp" 2>/dev/null || return 1
-    fs_replace "$temp" "$target"
+    target="${target%/}"
+    parent=$(dirname "$target") || return 1
+    if [ "$target" = "$parent" ]; then
+        return 1
+    fi
+    temp=$(_fs_temp_dir_at "$parent") || return 1
+    cat >"$temp/file" 2>/dev/null || return 1
+    fs_replace "$temp/file" "$target"
+}
+
+fs_temp_for_dir()
+{
+    target="$1"
+    if [ -e "$target" ]; then
+        [ ! -d "$target" ] && return 1
+        parent=$(dirname "$target") || return 1
+        temp_dir=$(_fs_temp_dir_at "$parent") || return 1
+        cp -r "$target/." "$temp_dir/" 2>/dev/null || return 1
+        echo "$target" >"$temp_dir/.~cr-replace.lock" 2>/dev/null || return 1
+
+        printf "%s\n" "$temp_dir"
+    else
+        [ -L "$target" ] && return 1
+        parent=$(_fs_find_first_existing_parent "$target") || return 1
+        temp_dir=$(_fs_temp_dir_at "$parent") || return 1
+        children="${target#$parent}"
+        children="${children#/}"
+        clone="${children%%/*}"
+        children="${children#"$clone"}"
+        children="${children#/}"
+        mkdir -p "$temp_dir/$children" 2>/dev/null || return 1
+        echo "$parent/$clone" >"$temp_dir/.~cr-replace.lock" 2>/dev/null || return 1
+
+        printf "%s\n" "$temp_dir/$children"
+    fi
+}
+
+fs_stage_temp_dir()
+{
+    temp_dir="$1"
+    while [ ! -e "$temp_dir/.~cr-replace.lock" ]; do
+        temp_dir=$(dirname "$temp_dir") || return 1
+    done
+    target=$(cat "$temp_dir/.~cr-replace.lock") 2>/dev/null || return 1
+    rm -f "$temp_dir/.~cr-replace.lock" 2>/dev/null
+    cp -rf "$temp_dir/." "$target/" 2>/dev/null || return 1
 }
