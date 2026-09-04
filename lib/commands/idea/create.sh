@@ -97,8 +97,8 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
-    if ! temp_dir=$(fs_temp_dir_at "$target_dir"); then
-        log_error "Cannot write to \"$target_dir\""
+    if ! temp_dir=$(fs_temp_for_dir "$idea_path"); then
+        log_error "Cannot write to \"$idea_path\""
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
@@ -111,6 +111,9 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
-    fs_replace "$temp_dir" "$idea_path"
+    if ! fs_stage_temp_dir "$temp_dir"; then
+        log_error "Failed to create idea file: \"$idea_file\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
     output "$idea_file"
 }
