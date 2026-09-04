@@ -1,4 +1,4 @@
 ---
-title: alpha title
+title: yolo
 status: forging
 ---
