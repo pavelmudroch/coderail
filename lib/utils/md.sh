@@ -2,27 +2,26 @@
 
 md_is_frontmatter_valid()
 {
-    echo "$1"
     if [ -z "$1" ]; then
-        echo "Missing starting '---'"
+        echo "Missing starting \"---\""
         exit 1
     fi
 
     echo "$1" | awk '
         NR == 1 {
             if ($0 != "---") {
-                found_start = 1
+                error = 2
                 exit 1
             }
 
             in_frontmatter = 1
+            error = 1
             next
         }
 
         in_frontmatter && $0 == "---" {
-            found_end = 1
             in_frontmatter = 0
-            valid = 1
+            error = 0
             exit 0
         }
 
@@ -33,6 +32,7 @@ md_is_frontmatter_valid()
 
             if ($0 ~ /^[[:space:]]/) {
                 print "Malformed line " NR ": " $0
+                error = -1
                 exit 1
             }
 
@@ -40,6 +40,7 @@ md_is_frontmatter_valid()
 
             if (colon == 0) {
                 print "Malformed key:value at line " NR ": " $0
+                error = -1
                 exit 1
             }
 
@@ -47,11 +48,13 @@ md_is_frontmatter_valid()
 
             if (key !~ /^[a-z][a-z0-9-]*$/) {
                 print "Invalid key \"" key "\" at line " NR
+                error = -1
                 exit 1
             }
 
             if (seen[key] == 1) {
                 print "Duplicate key \"" key "\" at line " NR
+                error = -1
                 exit 1
             }
 
@@ -61,21 +64,17 @@ md_is_frontmatter_valid()
 
         END {
             if (NR == 0) {
-                print "Missing starting '---'"
+                print "Missing starting \"---\""
                 exit 1
             }
 
-            if (!found_start) {
-                print "Missing starting '---'"
-                exit 1
-            }
-
-            if (!found_end) {
-                print "Missing ending '---'"
-                exit 1
-            }
-
-            if (valid != 1) {
+            if (error != 0) {
+                if (error == 1) {
+                    print "Missing ending \"---\""
+                }
+                if (error == 2) {
+                    print "Missing starting \"---\""
+                }
                 exit 1
             }
         }

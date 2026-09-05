@@ -42,14 +42,34 @@ _test_expect()
         fi
         return 0
     else
+        echo "Command failed with output:"
         echo "$output"
         return 1
     fi
 }
 
+_test_expect_fail()
+{
+    expect="$1"
+    shift
+
+    if output=$("$@" 2>&1); then
+        echo "Expected failure, but command succeeded with output:"
+        echo "$output"
+        return 1
+    else
+        if [ "$output" != "$expect" ]; then
+            echo "Got: $output, Expected: $expect"
+            return 1
+        fi
+        return 0
+    fi
+}
+
 _test_validate_ok()
 {
-    md_is_frontmatter_valid $(_read_markdown)
+    markdown="$(_read_markdown)"
+    md_is_frontmatter_valid "$markdown"
 }
 
 _test_validate_missing_start_delimiter()
@@ -65,7 +85,7 @@ description: This is a sample description.
 print_tests_header "Markdown Utils Tests"
 
 test "Validation: front matter is valid" _test_expect "" _test_validate_ok
-test "Validation: missing start delimiter" _test_expect "Missing starting '---'" _test_validate_missing_start_delimiter
+test "Validation: missing start delimiter" _test_expect_fail "Missing starting \"---\"" _test_validate_missing_start_delimiter
 
 print_tests_summary
 
