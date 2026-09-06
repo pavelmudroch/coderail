@@ -1,104 +1,98 @@
 #!/usr/bin/env sh
 
-set -eu
-
-script_path=$0
-
-SCRIPT_DIR=$(
-    CDPATH= cd -- "$(dirname "$script_path")"
-    pwd
-)
-
-ROOT_DIR=$(
-    CDPATH= cd -- "$SCRIPT_DIR/../.."
-    pwd
-)
-
-. "$ROOT_DIR/lib/utils/log.sh"
-. "$ROOT_DIR/lib/utils/loop.sh"
-
 usage() {
     cat <<'EOF'
 Usage:
-  cr init [options]
+  cr init [options] [<template> ...]
 
-  Initialize current working directory for coderail agent-based development.
-
-  Initialization will create a .coderail directory filled with template
-  configuration files for the project. And ticket management directory.
+  Initialize current directory for CodeRail.
 
 Options:
-  -h, --help            Show this help message and exit
+  -h, --help           Show this help message and exit
+
+Arguments:
+  <template>           Optional template(s) to use for initialization. Templates
+                       are stored at coderail install location under templates/.
+                       Each template defines a set of files and directories to
+                       be created during initialization. And optional
+                       initialization script to be run during the setup process.
 EOF
 }
 
-error() {
-    echo "error: $*" >&2
-    echo >&2
-    usage >&2
-    exit 2
+execute_command()
+{
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                usage
+                exit "$_CR_SUCCESS_EXIT_CODE"
+                ;;
+            --help=*)
+                log_error "--help does not take an argument"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
+        esac
+    done
+
+    spinner "Initializing coderail"
+
+    templates="$@"
+    log_verbose "Creating directory: $_CR_DIR_NAME"
+    if ! fs_make_dir "$_CR_DIR_NAME"; then
+        spinner_close
+        log_error "Failed to create directory: \"$_CR_DIR_NAME\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    log_verbose "Creating directory: $_CR_DIR_NAME/plans"
+    if ! fs_make_dir "$_CR_DIR_NAME/plans"; then
+        spinner_close
+        log_error "Failed to create directory: \"$_CR_DIR_NAME/plans\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    if [ -f "$_CR_DIR_NAME/coderail.conf" ]; then
+        log_verbose "Configuration file already exists: \"$_CR_DIR_NAME/coderail.conf\""
+    else
+        log_verbose "Creating default configuration file: \"$_CR_DIR_NAME/coderail.conf\""
+        if ! _generate_config_content | fs_write "$_CR_DIR_NAME/coderail.conf"; then
+            spinner_close
+            log_error "Failed to create default configuration file: \"$_CR_DIR_NAME/coderail.conf\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+    fi
+
+    if [ -f "$_CR_DIR_NAME/test_map" ]; then
+        log_verbose "Test map file already exists: \"$_CR_DIR_NAME/test_map\""
+    else
+        log_verbose "Creating default test map file: \"$_CR_DIR_NAME/test_map\""
+        if ! _generate_test_map_content | fs_write "$_CR_DIR_NAME/test_map"; then
+            spinner_close
+            log_error "Failed to create default test map file: \"$_CR_DIR_NAME/test_map\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+    fi
+
+    spinner_close
+    output "Coderail initialized in the current directory."
 }
 
-while [ "$#" -gt 0 ]; do
-    case "$1" in
-        -h|--help)
-            shift
-            [ "$#" -eq 0 ] || error "unexpected argument: $1"
-            usage
-            exit 0
-            ;;
-        --)
-            shift
-            break
-            ;;
-        --*)
-            error "unknown option: $1"
-            ;;
-        -*)
-            error "unknown option: $1"
-            ;;
-        *)
-            break
-            ;;
-    esac
-done
-
-[ "$#" -eq 0 ] || error "unexpected argument: $1"
-
-create_dir() {
-    target_dir=$1
-
-    [ ! -e "$target_dir" ] || return 0
-
-    log_notice "creating $target_dir"
-    mkdir -p "$target_dir"
+_generate_config_content()
+{
+    printf "# This is CodeRail configuration file\n# Lines starting with '#' are comments\n"
 }
 
-create_file() {
-    target_file=$1
-
-    [ ! -e "$target_file" ] || return 0
-
-    log_notice "creating $target_file"
-    cat > "$target_file"
+_generate_test_map_content()
+{
+    printf "# This is CodeRail test map file\n# Lines starting with '#' are comments\n"
 }
-
-log_info "Initializing current working directory for coderail agent-based development"
-log_notice "current working directory: $PWD"
-create_dir .coderail
-create_dir .coderail/tickets
-loop_ensure_outer_ignore . >/dev/null
-create_file .coderail/config.ini <<'EOF'
-# characters after '#' are comments
-# default_tool = codex # set the default tool for cr
-EOF
-create_file .coderail/test.map <<'EOF'
-# first '#' starts a Coderail comment, even inside quoted shell text
-
-[default]
-# Add path-independent commands that always run
-
-# Use captures in section patterns for commands that need selected path
-# [{path:**}]
-# shellcheck {path}
-EOF

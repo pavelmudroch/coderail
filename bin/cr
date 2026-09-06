@@ -2,36 +2,63 @@
 
 set -eu
 
-script_path=$0
+__CR_INITIALIZED__=0
 
-while [ -L "$script_path" ]; do
-    script_dir=$(
-        CDPATH= cd -- "$(dirname "$script_path")"
+_CR_INSTALL_DIR=""
+_CR_USAGE_EXIT_CODE=2
+_CR_ERROR_EXIT_CODE=1
+_CR_SUCCESS_EXIT_CODE=0
+EOL='
+'
+_CR_DIR_NAME=".coderail"
+
+_coderail_init()
+{
+    if [ ! "$__CR_INITIALIZED__" -eq 0 ]; then
+        return
+    fi
+    __CR_INITIALIZED__=1
+    script_path=$1
+
+    while [ -L "$script_path" ]; do
+        script_dir=$(
+            CDPATH= cd -- "$(dirname "$script_path")"
+            pwd
+        )
+        link_target=$(readlink "$script_path")
+
+        case "$link_target" in
+            /*) script_path=$link_target ;;
+            *) script_path=$script_dir/$link_target ;;
+        esac
+    done
+
+    _CR_INSTALL_DIR=$(
+        cd -- "$(dirname "$script_path")/.."
         pwd
     )
-    link_target=$(readlink "$script_path")
 
-    case "$link_target" in
-        /*) script_path=$link_target ;;
-        *) script_path=$script_dir/$link_target ;;
-    esac
-done
+    _CR_TEMP_RESOURCE_FILE="${TMPDIR:-/tmp}/coderail-$$.resources"
+    if [ ! : > "$_CR_TEMP_RESOURCE_FILE" ]; then
+        log_error "Failed to create temporary resource file"
+        return 1
+    fi
+}
 
-SCRIPT_DIR=$(
-    CDPATH= cd -- "$(dirname "$script_path")"
-    pwd
-)
+_coderail_init "$0"
 
-ROOT_DIR=$(
-    CDPATH= cd -- "$SCRIPT_DIR/.."
-    pwd
-)
-CODERAIL_BIN_PATH=$SCRIPT_DIR/cr
-export CODERAIL_BIN_PATH
+. "$_CR_INSTALL_DIR/lib/utils/log.sh"
+. "$_CR_INSTALL_DIR/lib/utils/conf.sh"
+. "$_CR_INSTALL_DIR/lib/utils/fs.sh"
+. "$_CR_INSTALL_DIR/lib/utils/path.sh"
+. "$_CR_INSTALL_DIR/lib/utils/md.sh"
+. "$_CR_INSTALL_DIR/lib/utils/text.sh"
 
-. "$ROOT_DIR/lib/utils/log.sh"
-. "$ROOT_DIR/lib/utils/args.sh"
-. "$ROOT_DIR/lib/utils/config.sh"
+register_temp_resource()
+{
+    resource="$1"
+    printf '%s\n' "$resource" >> "$_CR_TEMP_RESOURCE_FILE"
+}
 
 usage() {
     cat <<'EOF'
@@ -41,134 +68,133 @@ Usage:
   CodeRail CLI tool for agent-based development
 
 Options:
-  -h, --help            Show this help message and exit
-  --version             Show version information and exit
-  -v, --verbose         Enable verbose logging
-  -q, --quiet           Suppress notices and log output
-  --cwd <dir>           Specify the current working directory
+  -h, --help             Show this help message and exit
+      --version          Show version information and exit
+  -v, --verbose          Enable verbose logging
+  -q, --quiet            Suppress notices and log output
+      --cwd <dir>        Specify the current working directory
+      --no-color         Disable colored output
+      --non-interactive  Disable prompts and interactive output
 
 Commands:
-  upgrade       Upgrade this cli tool to a different version
-  install       Install instructions for specific agent-based tool
-  uninstall     Uninstall instructions for specific agent-based tool
-  init          Initialize a new project in the working directory
-  clean         Clean stale Coderail workflow files
-  work          Manage branch-local work
-  ticket        Ticket management for the project in the working directory
-  test          Run defined checks for the project in the working directory
+  init                 Initialize current directory for CodeRail
+  install              Install CodeRail for specific agent harnesses
+  uninstall            Uninstall CodeRail for specific agent harnesses
+  doctor               Inspect or repair broken CodeRail state
+  idea                 Manage ideas
+  status               Show status of current working directory
+  ticket               Manage tickets
+  loop                 Implement tickets in a loop
+  test                 Run defined tests for files and directories
+
+Environment Variables:
+  NO_COLOR=1           Disable colored output
+  NON_INTERACTIVE=1    Disable prompts and interactive output
+  LOG_LEVEL=verbose|quiet
+                       Set log level to verbose or quiet
 EOF
 }
 
-error() {
-    log_usage_error "$@"
-}
-
 version() {
-    . "$ROOT_DIR/lib/version.sh"
-    log_info "cr version $coderail_version"
+    . "$_CR_INSTALL_DIR/lib/version.sh"
+    output "cr version $coderail_version"
 }
 
-set_work_dir() {
-    [ "$work_dir_set" -eq 0 ] || error "--cwd provided multiple times"
-    [ -n "$1" ] || error "--cwd requires a non-empty value"
+_cleanup_on_exit()
+{
+    _status=$?
+    log_verbose "Cleaning up temporary resources"
+    trap - 0 HUP INT TERM
 
-    work_dir=$1
-    work_dir_set=1
+    _log_cleanup
+    if [ -f "$_CR_TEMP_RESOURCE_FILE" ]; then
+        awk '
+            { resources[NR] = $0 }
+            END {
+                for (i = NR; i >= 1; i--)
+                    print resources[i]
+            }
+        ' "$_CR_TEMP_RESOURCE_FILE" |
+        while IFS= read -r resource; do
+            [ -n "$resource" ] || continue
+            rm -rf "$resource" 2>/dev/null || :
+        done
+        rm -f "$_CR_TEMP_RESOURCE_FILE"
+    fi
+
+    exit "$_status"
 }
 
-run_command() {
-    command=$1
-    shift
-    script="$ROOT_DIR/lib/commands/$command.sh"
+trap '_cleanup_on_exit' 0
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-    [ -f "$script" ] || error "$command is not implemented"
+load_config "$@"
+argi=0
 
-    [ -d "$work_dir" ] || error "--cwd is not a directory: $work_dir"
-
-    cd "$work_dir"
-    sh "$script" "$@"
-}
-
-run_global_command() {
-    command=$1
-    shift
-    script="$ROOT_DIR/lib/commands/$command.sh"
-
-    [ -f "$script" ] || error "$command is not implemented"
-
-    sh "$script" "$@"
-}
-
-load_config_from_base() {
-    load_effective_config "$1"
-    export default_tool auto_review
-}
-
-work_dir=.
-work_dir_set=0
-export log_verbose=0
-export log_quiet=0
-
-[ "$#" -gt 0 ] || error "missing command"
-
-while [ "$#" -gt 0 ]; do
-    case "$1" in
+while [ $argi -lt $argc ]; do
+    eval "arg=\$argv_$argi"
+    case "$arg" in
+        --)
+            argi=$((argi + 1))
+            break
+            ;;
         -h|--help)
-            shift
-            require_no_args "$@"
-            load_config_from_base .
             usage
-            exit 0
+            exit "$_CR_SUCCESS_EXIT_CODE"
+            ;;
+        --help=*)
+            log_error "--help does not take an argument"
+            usage >&2
+            exit "$_CR_USAGE_EXIT_CODE"
             ;;
         --version)
-            shift
-            require_no_args "$@"
-            load_config_from_base .
             version
-            exit 0
+            exit "$_CR_SUCCESS_EXIT_CODE"
             ;;
-        -v|--verbose)
-            log_verbose=1
-            shift
-            [ "$log_quiet" -eq 0 ] || error "--verbose and --quiet cannot be used together"
+        --version=*)
+            log_error "--version does not take an argument"
+            usage >&2
+            exit "$_CR_USAGE_EXIT_CODE"
             ;;
-        -q|--quiet)
-            log_quiet=1
-            shift
-            [ "$log_verbose" -eq 0 ] || error "--verbose and --quiet cannot be used together"
-            ;;
-        --cwd=*)
-            set_work_dir "${1#--cwd=}"
-            shift
-            ;;
-        --cwd)
-            shift
-            [ "$#" -gt 0 ] || error "--cwd requires a value"
-            set_work_dir "$1"
-            shift
-            ;;
-        upgrade|install|uninstall)
-            command=$1
-            shift
-            load_config_from_base .
-            run_global_command "$command" "$@"
-            exit 0
-            ;;
-        init|clean|work|ticket|test)
-            command=$1
-            shift
-            [ -d "$work_dir" ] || error "--cwd is not a directory: $work_dir"
-            load_config_from_base "$work_dir"
-            run_command "$command" "$@"
-            exit 0
-            ;;
-        --*)
-            error "unknown option: $1"
+        -*)
+            log_error "Unknown option: $arg"
+            usage >&2
+            exit "$_CR_USAGE_EXIT_CODE"
             ;;
         *)
-            error "unknown command: $1"
+            break
             ;;
     esac
+    argi=$((argi + 1))
 done
 
-error "missing command"
+eval "command=\$argv_$argi"
+argi=$((argi + 1))
+
+set --
+while [ $argi -lt $argc ]; do
+    eval "set -- \"\$@\" \"\$argv_$argi\""
+    argi=$((argi + 1))
+done
+
+command=$(basename "$command")
+script="$_CR_INSTALL_DIR/lib/commands/$command.sh"
+
+if [ ! -f "$script" ]; then
+    log_error "Unknown command: \"$command\""
+    usage >&2
+    exit "$_CR_USAGE_EXIT_CODE"
+fi
+
+if [ ! -d "$cwd" ]; then
+    log_error "Working directory does not exist: \"$cwd\""
+    exit "$_CR_ERROR_EXIT_CODE"
+fi
+
+cd "$cwd"
+(
+    . "$script"
+    execute_command "$@"
+)
