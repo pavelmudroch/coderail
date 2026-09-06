@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 
 argc=0
+argv_0=""
 : ${cwd:=$(pwd)}
 
 load_config()

@@ -173,6 +173,12 @@ done
 eval "command=\$argv_$argi"
 argi=$((argi + 1))
 
+if [ -z "$command" ]; then
+    log_error "No command specified"
+    usage >&2
+    exit "$_CR_USAGE_EXIT_CODE"
+fi
+
 set --
 while [ $argi -lt $argc ]; do
     eval "set -- \"\$@\" \"\$argv_$argi\""
