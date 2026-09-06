@@ -82,10 +82,60 @@ description: This is a sample description.
     md_is_frontmatter_valid "$markdown"
 }
 
+_test_validate_missing_end_delimiter()
+{
+    markdown="---
+status: forging
+title: Sample Title
+description: This is a sample description.
+"
+    md_is_frontmatter_valid "$markdown"
+}
+
+_test_validate_malformed_key_value()
+{
+    markdown="---
+status: forging
+title= Sample Title
+description: This is a sample description.
+---
+# Heading
+"
+    md_is_frontmatter_valid "$markdown"
+}
+
+_test_validate_malformed_key()
+{
+    markdown="---
+status: forging
+tit@le: Sample Title
+description: This is a sample description.
+---
+# Heading
+"
+    md_is_frontmatter_valid "$markdown"
+}
+
+_test_validate_duplicate_key()
+{
+    markdown="---
+status: forging
+status: another status
+description: This is a sample description.
+---
+# Heading
+"
+    md_is_frontmatter_valid "$markdown"
+}
+
 print_tests_header "Markdown Utils Tests"
 
 test "Validation: front matter is valid" _test_expect "" _test_validate_ok
 test "Validation: missing start delimiter" _test_expect_fail "Missing starting \"---\"" _test_validate_missing_start_delimiter
+test "Validation: missing end delimiter" _test_expect_fail "Missing ending \"---\"" _test_validate_missing_end_delimiter
+test "Validation: malformed key:value" _test_expect_fail "Malformed key:value at line 3: title= Sample Title" _test_validate_malformed_key_value
+test "Validation: malformed key" _test_expect_fail "Invalid key \"tit@le\" at line 3" _test_validate_malformed_key
+test "Validation: duplicate key" _test_expect_fail "Duplicate key \"status\" at line 3" _test_validate_duplicate_key
 
 print_tests_summary
 
