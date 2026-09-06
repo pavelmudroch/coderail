@@ -2,11 +2,10 @@
 name: forge
 description: Forge an idea through discussion until it is ready for one specification or resolved into child ideas.
 disable-model-invocation: true
---------------------
+---
 
-Forge one idea selected by the user. The user provides the project, problem, task, or existing idea to discuss.
-
-The goal is shared understanding before specification or implementation.
+User provides the project, problem, task, or existing idea to discuss.
+Goal is shared understanding before specification or implementation.
 
 ## Plan map
 
@@ -44,7 +43,7 @@ For a child idea:
 cr idea create --parent <parent-idea-path> "<idea-title>"
 ```
 
-Use the printed `IDEA.md` path as the idea file. The command owns directory creation, slug generation, and initial front matter.
+Use the printed `IDEA.md` path as the idea file. The command owns directory creation, slug generation, and front matter.
 
 ## Status
 
@@ -61,43 +60,11 @@ forging → ready
 forging → split
 ```
 
-Reopening completed ideas is outside the current workflow.
-
 ## Idea file
 
 Maintain `IDEA.md` as a consolidated record of current understanding rather than conversation history.
 
-Use relevant sections from:
-
-```md
----
-status: forging
----
-
-# Idea title
-
-## Desired Outcome
-
-## Understanding
-
-## Constraints
-
-## Decisions
-
-## Assumptions
-
-## Risks and Caveats
-
-## Open Questions
-```
-
-A split parent also uses:
-
-```md
-## Decomposition
-```
-
-### Section meaning
+## File sections
 
 **Desired Outcome** describes the observable result or capability.
 
