@@ -25,7 +25,8 @@ suite_summary_style=$(printf '\033[1;38;5;232;48;5;250m')
 suite_summary_filename_style=$(printf '\033[38;5;240;48;5;250m')
 suite_reset=$(printf '\033[0m')
 
-_suite_spaces() {
+_suite_spaces()
+{
     count=$1
 
     while [ "$count" -gt 0 ]; do
@@ -34,7 +35,8 @@ _suite_spaces() {
     done
 }
 
-_suite_status_line() {
+_suite_status_line()
+{
     message=$1
     status_text=$2
     status_color=$3
@@ -54,7 +56,8 @@ _suite_status_line() {
     printf '%s%s%s\n' "$status_color" "$status_text" "$suite_reset"
 }
 
-_suite_print_stderr() {
+_suite_print_stderr()
+{
     stderr_output=$1
 
     if [ -z "$stderr_output" ]; then
@@ -67,7 +70,44 @@ _suite_print_stderr() {
     done
 }
 
-test() {
+_test_expect()
+{
+    expect="$1"
+    shift
+
+    if output=$("$@" 2>&1); then
+        if [ "$output" != "$expect" ]; then
+            echo "Got: $output, Expected: $expect"
+            return 1
+        fi
+        return 0
+    else
+        echo "Command failed with output:"
+        echo "$output"
+        return 1
+    fi
+}
+
+_test_expect_fail()
+{
+    expect="$1"
+    shift
+
+    if output=$("$@" 2>&1); then
+        echo "Expected failure, but command succeeded with output:"
+        echo "$output"
+        return 1
+    else
+        if [ "$output" != "$expect" ]; then
+            echo "Got: $output, Expected: $expect"
+            return 1
+        fi
+        return 0
+    fi
+}
+
+test()
+{
     message=$1
     test_function=$2
     shift 2
@@ -96,7 +136,24 @@ test() {
     suite_some_tests_failed=true
 }
 
-print_tests_header() {
+test_expect()
+{
+    message="$1"
+    expect="$2"
+    shift 2
+    test "$message" _test_expect "$expect" "$@"
+}
+
+test_expect_fail()
+{
+    message="$1"
+    expect="$2"
+    shift 2
+    test "$message" _test_expect_fail "$expect" "$@"
+}
+
+print_tests_header()
+{
     title=" $1 "
     test_filename="(${0##*/})"
     title_width=$((suite_line_width - ${#test_filename}))
@@ -122,7 +179,8 @@ print_tests_header() {
     printf '\033[K%s\n' "$suite_reset"
 }
 
-print_tests_summary() {
+print_tests_summary()
+{
     line=" Total: $suite_test_counter  Passed: $suite_passed_test_counter  Failed: $suite_failed_test_counter"
 
     if [ "${#line}" -gt "$suite_line_width" ]; then
@@ -139,6 +197,7 @@ print_tests_summary() {
     suite_failed_test_counter=0
 }
 
-some_tests_failed() {
+some_tests_failed()
+{
     [ "$suite_some_tests_failed" = true ]
 }

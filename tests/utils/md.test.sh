@@ -30,42 +30,6 @@ Another paragraph of sample content.
 "
 }
 
-_test_expect()
-{
-    expect="$1"
-    shift
-
-    if output=$("$@" 2>&1); then
-        if [ "$output" != "$expect" ]; then
-            echo "Got: $output, Expected: $expect"
-            return 1
-        fi
-        return 0
-    else
-        echo "Command failed with output:"
-        echo "$output"
-        return 1
-    fi
-}
-
-_test_expect_fail()
-{
-    expect="$1"
-    shift
-
-    if output=$("$@" 2>&1); then
-        echo "Expected failure, but command succeeded with output:"
-        echo "$output"
-        return 1
-    else
-        if [ "$output" != "$expect" ]; then
-            echo "Got: $output, Expected: $expect"
-            return 1
-        fi
-        return 0
-    fi
-}
-
 _test_validate_ok()
 {
     markdown="$(_read_markdown)"
@@ -128,14 +92,28 @@ description: This is a sample description.
     md_is_frontmatter_valid "$markdown"
 }
 
+_test_frontmatter_get()
+{
+    markdown="$(_read_markdown)"
+    printf '%s' "$markdown" | md_frontmatter_get "title"
+}
+
+_test_frontmatter_set()
+{
+    markdown="$(_read_markdown)"
+    printf '%s' "$markdown" | md_frontmatter_set "status" "ready" | md_frontmatter_get "status"
+}
+
 print_tests_header "Markdown Utils Tests"
 
-test "Validation: front matter is valid" _test_expect "" _test_validate_ok
-test "Validation: missing start delimiter" _test_expect_fail "Missing starting \"---\"" _test_validate_missing_start_delimiter
-test "Validation: missing end delimiter" _test_expect_fail "Missing ending \"---\"" _test_validate_missing_end_delimiter
-test "Validation: malformed key:value" _test_expect_fail "Malformed key:value at line 3: title= Sample Title" _test_validate_malformed_key_value
-test "Validation: malformed key" _test_expect_fail "Invalid key \"tit@le\" at line 3" _test_validate_malformed_key
-test "Validation: duplicate key" _test_expect_fail "Duplicate key \"status\" at line 3" _test_validate_duplicate_key
+test_expect "Validation: front matter is valid" "" _test_validate_ok
+test_expect_fail "Validation: missing start delimiter" "Missing starting \"---\"" _test_validate_missing_start_delimiter
+test_expect_fail "Validation: missing end delimiter" "Missing ending \"---\"" _test_validate_missing_end_delimiter
+test_expect_fail "Validation: malformed key:value" "Malformed key:value at line 3: title= Sample Title" _test_validate_malformed_key_value
+test_expect_fail "Validation: malformed key" "Invalid key \"tit@le\" at line 3" _test_validate_malformed_key
+test_expect_fail "Validation: duplicate key" "Duplicate key \"status\" at line 3" _test_validate_duplicate_key
+test_expect "Get front matter key value" "Sample Title" _test_frontmatter_get
+test_expect "Set front matter key value" "ready" _test_frontmatter_set
 
 print_tests_summary
 

@@ -14,28 +14,18 @@ PROJECT_ROOT=$(
 
 . "$PROJECT_ROOT/tests/suite.sh"
 . "$PROJECT_ROOT/lib/utils/text.sh"
-
-_assert_slugify() {
-    input=$1
-    expected=$2
-    actual=$(slugify "$input")
-
-    if [ "$actual" != "$expected" ]; then
-        printf 'Expected "%s" but got "%s"\n' "$expected" "$actual"
-        return 1
-    fi
-}
+. "$PROJECT_ROOT/lib/utils/md.sh"
 
 print_tests_header "Text Utils Tests"
 
-test "slugify basic words" _assert_slugify "Hello World" "hello-world"
-test "slugify with special characters" _assert_slugify "Hello, World!" "hello-world"
-test "slugify with multiple spaces" _assert_slugify "Hello   World" "hello-world"
-test "slugify with leading and trailing spaces" _assert_slugify "  Hello World  " "hello-world"
-test "slugify with mixed case" _assert_slugify "Hello WoRLD" "hello-world"
-test "slugify with underscores" _assert_slugify "Hello_World" "hello-world"
-test "slugify with multiple hyphens" _assert_slugify "----Hello---World----" "hello-world"
-test "slugify complex string" _assert_slugify "@#Hello, World!.. This is a complex< string.!?" "hello-world-this-is-a-complex-string"
+test_expect "slugify basic words" "hello-world" slugify "Hello World"
+test_expect "slugify with special characters" "hello-world" slugify "Hello, World!"
+test_expect "slugify with multiple spaces" "hello-world" slugify "Hello   World"
+test_expect "slugify with leading and trailing spaces" "hello-world" slugify "  Hello World  "
+test_expect "slugify with mixed case" "hello-world" slugify "Hello WoRLD"
+test_expect "slugify with underscores" "hello-world" slugify "Hello_World"
+test_expect "slugify with multiple hyphens" "hello-world" slugify "----Hello---World----"
+test_expect "slugify complex string" "hello-world-this-is-a-complex-string" slugify "@#Hello, World!.. This is a complex< string.!?"
 
 print_tests_summary
 
