@@ -159,13 +159,13 @@ _validate_idea_path()
 
 _parse_idea_path()
 {
-    idea_path="$(_normalize_idea_path "$1")"
-    file="$PLANS_DIR/$idea_path/IDEA.md"
-    idea_content="$(_read_idea_file "$idea_path")" || return 1
-    status=$(echo "$idea_content" | md_frontmatter_get "status")
-    title=$(echo "$idea_content" | md_frontmatter_get "title")
-    parent="${idea_path%/*}"
-    if [ "$parent" = "$idea_path" ]; then
-        parent=""
+    parsed_path="$(_normalize_idea_path "$1")"
+    parsed_file="$PLANS_DIR/$parsed_path/IDEA.md"
+    idea_content="$(_read_idea_file "$parsed_path")" || return 1
+    parsed_status=$(echo "$idea_content" | md_frontmatter_get "status")
+    parsed_title=$(echo "$idea_content" | md_frontmatter_get "title")
+    parsed_parent="${parsed_path%/*}"
+    if [ "$parsed_parent" = "$parsed_path" ]; then
+        parsed_parent=""
     fi
 }
