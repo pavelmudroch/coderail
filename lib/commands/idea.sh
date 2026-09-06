@@ -86,7 +86,7 @@ _read_idea_file()
         return 1
     fi
 
-    if ! idea_content=$(cat "$idea_file"); then
+    if ! idea_content=$(cat "$idea_file" 2>&1); then
         echo "$idea_file"
         return 1
     fi
@@ -123,39 +123,21 @@ _validate_idea_path()
         return 1
     fi
 
-    if [ ! -f "$idea_dir/IDEA.md" ]; then
-        echo "Missing IDEA.md file"
+    if ! idea_content=$(_read_idea_file "$idea_path"); then
+        echo "Failed to read idea file: $idea_content"
         return 1
     fi
 
-    if [ ! -r "$idea_dir/IDEA.md" ]; then
-        echo "IDEA.md file is not readable"
-        return 1
-    fi
-
-    idea_content=$(cat "$idea_dir/IDEA.md" 2>/dev/null)
-    if [ $? -ne 0 ]; then
-        echo "Failed to read IDEA.md file"
-        return 1
-    fi
-
-    if front_matter=$(yaml_get_front_matter "$idea_content"); then
-        :
-    else
-        echo "Failed to parse front matter: $front_matter"
-        return 1
-    fi
-
-    status=$(yaml_get_front_matter_key "$front_matter" "status")
+    status=$(echo "$idea_content" | md_frontmatter_get "status")
     if [ -z "$status" ]; then
         echo "Missing status in front matter"
-        [ "$accumulate_errors" = true ] || return 1
+        [ "$accumulate_errors" == true ] || return 1
     fi
 
-    title=$(yaml_get_front_matter_key "$front_matter" "title")
+    title=$(echo "$idea_content" | md_frontmatter_get "title")
     if [ -z "$title" ]; then
         echo "Missing title in front matter"
-        [ "$accumulate_errors" = true ] || return 1
+        [ "$accumulate_errors" == true ] || return 1
     fi
 
     child_idea_count=$(find "$idea_dir" -type d ! -path "$idea_dir" -prune -print | awk 'END { print NR }')
@@ -178,12 +160,10 @@ _validate_idea_path()
 _parse_idea_path()
 {
     idea_path="$(_normalize_idea_path "$1")"
-    file="$(_get_idea_file "$idea_path")"
-    if front_matter="$(yaml_get_front_matter "$(cat "$file")")"; then
-        :
-    fi
-    status=$(yaml_get_front_matter_key "$front_matter" "status")
-    title=$(yaml_get_front_matter_key "$front_matter" "title")
+    file="$PLANS_DIR/$idea_path/IDEA.md"
+    idea_content="$(_read_idea_file "$idea_path")" || return 1
+    status=$(echo "$idea_content" | md_frontmatter_get "status")
+    title=$(echo "$idea_content" | md_frontmatter_get "title")
     parent="${idea_path%/*}"
     if [ "$parent" = "$idea_path" ]; then
         parent=""

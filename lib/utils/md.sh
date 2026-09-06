@@ -30,12 +30,6 @@ md_is_frontmatter_valid()
                 next
             }
 
-            if ($0 ~ /^[[:space:]]/) {
-                print "Malformed line " NR ": " $0
-                error = -1
-                exit 1
-            }
-
             colon = index($0, ":")
 
             if (colon == 0) {

@@ -20,12 +20,12 @@ execute_command()
         case "$1" in
             -h|--help)
                 usage
-                exit "$SUCCESS_EXIT_CODE"
+                exit "$_CR_SUCCESS_EXIT_CODE"
                 ;;
             --help=*)
                 log_error "--help does not take an argument"
                 usage >&2
-                exit "$USAGE_EXIT_CODE"
+                exit "$_CR_USAGE_EXIT_CODE"
                 ;;
             --json)
                 output_json=true
@@ -33,7 +33,7 @@ execute_command()
             *)
                 log_error "Unknown argument: $1"
                 usage >&2
-                exit "$USAGE_EXIT_CODE"
+                exit "$_CR_USAGE_EXIT_CODE"
                 ;;
         esac
         shift
@@ -43,7 +43,7 @@ execute_command()
 
     if [ -z "$paths" ]; then
         output "No ideas found"
-        exit "$SUCCESS_EXIT_CODE"
+        exit "$_CR_SUCCESS_EXIT_CODE"
     fi
 
     result="/"
@@ -55,11 +55,9 @@ execute_command()
     first=true
     while IFS= read -r path; do
         log_verbose "Checking idea at $path"
-        if validation_result=$(_validate_idea_path "$path") || [ $? -eq 3 ]; then
-            :
-        else
+        if ! validation_result=$(_validate_idea_path "$path") && [ $? -ne 3 ]; then
             log_error "Invalid idea at $path: $validation_result"
-            exit "$ERROR_EXIT_CODE"
+            exit "$_CR_ERROR_EXIT_CODE"
         fi
         _parse_idea_path "$path"
         if [ "$output_json" = true ]; then
@@ -72,13 +70,13 @@ execute_command()
         else
             formatted_idea="$(_plain_text_formatter "$path" "$file" "$title" "$status" "$parent")"
         fi
-        result="$result$NL$formatted_idea"
+        result="$result$EOL$formatted_idea"
     done <<EOF
 $paths
 EOF
 
     if [ "$output_json" = true ]; then
-        result="$result$NL]"
+        result="$result$EOL]"
     fi
     output "$result"
 }
