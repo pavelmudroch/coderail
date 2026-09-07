@@ -1,27 +1,27 @@
-Always match existing style (coding, file naming), even if you do it differently.
+Always match existing project conventions (coding style, file naming, etc.) even when you would choose differently.
 
-- Be extremely concise. Sacrifice grammar for concision.
-- Prefer explicitness over convenience.
+* Be extremely concise; omit unnecessary prose.
+* Prefer explicitness over convenience.
+* Preserve dirty worktrees. Treat unknown changes as user-owned.
 
 Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing.
-- Preserve dirty worktrees. Treat unknown changes as user-owned.
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+* State assumptions that materially affect the solution.
+* If material uncertainty remains, ask before proceeding.
+* If multiple materially different interpretations exist, present them; don't choose silently.
+* If a simpler approach exists, say so. Push back when warranted.
+* Don't implement beyond requested scope.
 
-When existing code needs to be changed:
-- Always inform user of the change and why it's necessary.
-- Change only within the approved request scope.
-- If you notice unrelated dead code, mention it - don't delete it.
+Implementation:
 
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-- Every changed line should trace directly to the user's request.
+* Deliver minimum working code.
+* Avoid abstractions for one-off use unless they materially improve clarity.
+* Change only what the request requires.
+
+When changing existing code:
+
+* Explain necessary changes and why.
+* Mention unrelated issues you notice; don't modify them unless asked.
+* Remove imports, variables, functions, or other code made unused by your changes.
+* Don't remove pre-existing dead code unless asked.
+* Every change must be directly requested or necessary to support the requested change.
