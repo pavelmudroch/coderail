@@ -1,185 +1,170 @@
 ---
 name: forge
-description: Forge an idea through discussion until it is ready for one specification or resolved into child ideas.
+description: Forge an idea through discussion until ready for one specification or split into child ideas.
 disable-model-invocation: true
 ---
 
-User provides the project, problem, task, or existing idea to discuss.
-Goal is shared understanding before specification or implementation.
+Forge a project, problem, task, or existing idea by resolving intent, scope, constraints, and significant decisions before specification or implementation.
+Use <skill>question</skill> to relentlessly interrogate user answers whenever unresolved choices could materially affect product, workflow, API, architecture, scope, or decomposition. Continue until shared understanding is reached.
+Defer safe implementation details to specification.
 
-## Plan map
+## Idea model
 
-Run:
+Own `IDEA.md`. Let `cr` manage front matter and status.
 
-```sh
-cr idea map --json
-```
+Statuses:
 
-Use its output as the authoritative source for idea paths, files, hierarchy, titles, and statuses.
+* `forging` — unresolved or discussing
+* `ready` — resolved for one specification
+* `split` — resolved into child ideas
 
-Ideas are stored under:
+Treat `cr idea map --json` as authoritative for paths, hierarchy, files, and status.
 
-```text
-.coderail/plans/<idea-path>/IDEA.md
-```
+"Inspect current idea map" means read it and use it as source of truth.
 
-A ready leaf may later receive a colocated specification:
+## IDEA.md
 
-```text
-.coderail/plans/<idea-path>/SPEC.md
-```
+Maintain `IDEA.md` as consolidated current understanding, not conversation history.
 
-## Create an idea
+Use sections as needed:
 
-For a new root idea, choose a concise descriptive title and run:
+**Desired Outcome** — observable result or capability.
+
+**Understanding** — agreed context, behavior, scope, actors, boundaries, and non-goals.
+
+**Constraints** — rules the solution must obey.
+
+**Decisions** — meaningful choices and useful rationale.
+
+**Assumptions** — accepted but unguaranteed premises.
+
+**Risks and Caveats** — limitations, tradeoffs, or feasibility concerns affecting scope or decomposition. Leave implementation risks for `SPEC.md`.
+
+**Open Questions** — unresolved matters blocking completion. Remove resolved questions and merge answers into relevant sections.
+
+**Decomposition** — child ideas and boundaries.
+
+Update `IDEA.md` after meaningful progress so forging can resume without conversation history.
+
+## Forge new idea
+
+Inspect current idea map when project context may affect placement.
+
+Create idea:
 
 ```sh
 cr idea create "<idea-title>"
 ```
 
-For a child idea:
+Establish Desired Outcome and initial Understanding. Forge the idea.
 
-```sh
-cr idea create --parent <parent-idea-path> "<idea-title>"
-```
+## Continue forging
 
-Use the printed `IDEA.md` path as the idea file. The command owns directory creation, slug generation, and front matter.
+Inspect current idea map.
 
-## Status
+Read the idea's `IDEA.md` and relevant map context.
 
-An idea has one status:
+Resolve desired outcome, scope, behavior, constraints, assumptions, tradeoffs, and significant uncertainties.
 
-* `forging`: unresolved or still being discussed
-* `ready`: resolved and suitable for one specification
-* `split`: resolved at its level and decomposed into child ideas
+Consider an idea resolved when `SPEC.md` can be written without choosing between materially different interpretations or decisions.
 
-Normal transitions:
+Test:
 
-```text
-forging → ready
-forging → split
-```
+> Could `SPEC.md` be written now without choosing between materially different interpretations?
 
-## Idea file
+If not, keep status `forging`, update `IDEA.md`, and preserve unresolved matters under Open Questions.
 
-Maintain `IDEA.md` as a consolidated record of current understanding rather than conversation history.
-
-## File sections
-
-**Desired Outcome** describes the observable result or capability.
-
-**Understanding** captures agreed context, behavior, scope, actors, boundaries, and non-goals.
-
-**Constraints** records rules the solution must obey.
-
-**Decisions** records meaningful choices, with brief rationale when useful later.
-
-**Assumptions** records accepted premises the idea relies on but does not guarantee. Resolve material uncertainty before completion by confirming it or moving it into Decisions, Constraints, or Open Questions.
-
-**Risks and Caveats** records limitations, feasibility concerns, and tradeoffs that affect scope, behavior, or decomposition. Implementation-level risks belong in `SPEC.md` unless they materially shape the idea.
-
-**Open Questions** contains unresolved matters that block completion. Remove resolved questions and merge their answers into the appropriate sections.
-
-**Decomposition** lists child ideas and their boundaries.
-
-Update `IDEA.md` after meaningful progress so another forge session can resume without prior conversation context.
-
-## Forging
-
-Read `IDEA.md` and relevant map context before continuing an existing idea.
-
-Discuss the idea until its desired outcome, scope, important behavior, constraints, assumptions, tradeoffs, and significant uncertainties are resolved.
-
-Use <skill>question</skill> to ask focused questions where different answers would materially change the product, workflow, API, architecture, scope, or decomposition. Leave safe implementation details for the specification.
-
-An idea is resolved when its specification can be written without inventing a materially different interpretation or design decision.
-
-Use this test:
-
-> Could the specification be written now without choosing between materially different interpretations?
-
-When the user stops earlier, keep status `forging` and preserve the current understanding and remaining questions.
-
-## Confirmation
-
-When the idea appears resolved, present a concise synthesis covering:
+When resolved, present a concise synthesis covering:
 
 * desired outcome;
-* agreed scope and behavior;
+* scope and behavior;
 * important constraints and decisions;
-* accepted assumptions;
+* assumptions;
 * relevant risks and caveats;
-* remaining uncertainty, if any.
+* remaining uncertainty.
 
-Apply corrections until the user confirms the shared understanding. Then classify the idea.
+Apply corrections until user confirms shared understanding. Then classify as `ready` or `split`.
 
-## Ready
+## Ready idea
 
-Set status to `ready` when the idea:
+Use `ready` when the idea:
 
-* has one primary cohesive outcome;
-* can be evaluated as one coherent capability;
-* does not require independently forged product or API decisions;
-* fits one specification, even if that specification later produces many tickets.
+* has one cohesive primary outcome;
+* can be evaluated as one capability;
+* requires no independently forged product or API decisions;
+* fits one specification, even if it later produces many tickets.
 
-Consolidate the final `IDEA.md` and remove Open Questions.
+Consolidate `IDEA.md`. Remove Open Questions.
 
-Tell the user the idea is forged and ready for `SPEC.md`, including its idea path. Specification is a later, separate step.
+Mark ready:
 
-## Split
+```sh
+cr idea ready <idea-path>
+```
 
-Use `split` when the idea contains multiple independently forgeable concerns, such as:
+Report that the idea is forged and ready for `SPEC.md`. Include its path.
+
+## Split idea
+
+Use `split` when the idea contains independently forgeable concerns, such as:
 
 * independently valuable outcomes;
 * separate public APIs or workflows;
 * distinct constraints, behavior, or failure modes;
-* parts that could reasonably exist independently;
-* content that would require several related specifications.
+* independently viable parts;
+* scope requiring multiple related specifications.
 
-Before creating children:
+Before splitting:
 
 1. Explain why one specification is unsuitable.
-2. Propose at least two child titles, boundaries, and desired outcomes.
-3. Refine the decomposition with the user until confirmed.
+2. Propose at least two child titles, boundaries, and Desired Outcomes.
+3. Refine decomposition until user confirms it.
 
-Create each child with:
-
-```sh
-cr idea create --parent <parent-idea-path> "<child-title>"
-```
-
-Each child starts as `forging` in its own directory:
-
-```text
-.coderail/plans/<parent-path>/<child-path>/IDEA.md
-```
-
-Preserve shared context, decisions, constraints, assumptions, and risks in the parent. Add relevant inherited context to each child while leaving its unresolved details for its own forge session.
-
-Add a Decomposition section to the parent with child paths and concise boundaries. After all children are created and the parent is updated, set the parent status to `split`.
-
-A split parent represents shared context and decomposition and does not produce its own `SPEC.md`.
-
-Tell the user the parent is forged and list the child paths. Each child can then be forged separately.
-
-## Validation
-
-Run:
+Split:
 
 ```sh
-cr idea validate
+cr idea split <idea-path> "<child-title>" "<child-title>" [<child-title>...]
 ```
 
-after creating a decomposition, when structure or status appears inconsistent, or before reporting malformed idea state.
+Each child starts as `forging`.
 
-Report validation problems clearly and retain valid created artifacts.
+Keep shared context, decisions, constraints, assumptions, and risks in parent.
+
+Initialize each child with Desired Outcome, boundary, and relevant inherited context. Leave child-specific unresolved details for its forge session.
+
+Update parent Decomposition with child paths and boundaries.
+
+Do not create `SPEC.md` for a split parent.
+
+Report that parent is forged. List child paths.
+
+## Reforge ready idea
+
+Inspect current idea map and existing `IDEA.md`.
+
+Reopen:
+
+```sh
+cr idea regorge <idea-path>
+```
+
+Treat existing `IDEA.md` as agreed baseline. Preserve valid context. Change only what new discussion affects.
+
+Resume normal forging.
+
+A reforged idea may become `ready`, `split`, or remain `forging`.
 
 ## Scope
 
-Forge establishes what should be built, why it matters, its boundaries, and the decisions required before specification.
+Establish:
 
-Its output is:
+* what to build;
+* why it matters;
+* boundaries;
+* decisions required before specification.
 
-* a `ready` idea whose directory may later receive `SPEC.md`;
-* a `split` idea with at least two child ideas;
-* an updated `forging` idea when discussion stops before resolution.
+Produce one of:
+
+* updated `forging` idea;
+* `ready` idea eligible for `SPEC.md`;
+* `split` idea with at least two child ideas.
