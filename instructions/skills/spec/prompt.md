@@ -1,25 +1,51 @@
-Understand the context of provided `SPEC.md` file and identify key implementation units that need to be implemented. Break down SPEC into smaller, manageable local tickets.
+Read the provided `SPEC.md`. Identify implementation units and decompose the specification into small local tickets.
 
-## Ticket Creation
+## Ticket model
 
-Ticket is vertical slice through multiple layers of the system, that delivers a specific value or feature.
+Create tickets as vertical slices that deliver a specific feature or value across required system layers.
 
-### Steps
+Within each ticket, create tasks as focused horizontal slices within a specific layer.
 
-1. Create a new ticket by invoking `cr ticket create <title>`.
-This creates new markdown file in `.coderail/tickets/open` directory with proper front-matter and returns the path to the created file.
+Prefer:
 
-If ticket depends on other tickets, use `-requires <ticket_id>` option to specify dependencies. Multiple dependencies can be specified by repeating the option.
+* small, actionable tickets
+* independent tasks with minimal file overlap
+* test tasks before implementation tasks
+* explicit dependencies between tickets
 
-2. Edit the created file and add a brief summary/description.
+## Create tickets
 
-3. Split the ticket into clear, focused, small, actionable tasks with expected outcomes and validation criteria. Prefer independent, not file overlapping tasks.
-Task is horizontal slice within a specific layer of the system of ticket.
-Prefer test tasks before implementation tasks.
+For each implementation unit:
 
-Add tasks as checkbox numbered list under `## Tasks` section. Finished tasks is marked with `[x]` and unfinished tasks with `[ ]`.
+1. Create the ticket:
 
-<ticket-template>
+   `cr ticket create <title>`
+
+   Add `--requires <ticket_id>` for dependencies. Repeat the option for multiple dependencies.
+
+2. Edit the created ticket file returned by `cr`.
+
+3. Add a brief description of the ticket's purpose.
+
+4. Add numbered checkbox tasks under `## Tasks`:
+
+   `1. [ ] Task description`
+
+   Use `[x]` only for completed tasks.
+
+5. Add details for each task under `## Task details`, including:
+
+   * implementation scope
+   * expected outcome
+   * validation criteria
+
+Add relevant files, documentation, specifications, or related tickets under `## References`.
+
+Do not manually create ticket files or front matter. Let `cr ticket create` manage them.
+
+## Ticket shape
+
+```markdown
 ---
 id: 0003
 slug: implement-ticket-dependency-append-logic
@@ -32,11 +58,11 @@ requires: 0001, 0002
 
 # Implement Ticket Dependency Append Logic
 
-This ticket focuses on enhancing the ticket management system by implementing logic to append dependencies without duplication.
+Implement dependency append behavior for ticket transitions without duplicating existing dependencies.
 
 ## Tasks
 
-1. [x] Add shared transition helper
+1. [ ] Add shared transition helper
 2. [ ] Add dependency append logic
 
 ## Task details
@@ -47,37 +73,36 @@ Implement shared logic for moving a ticket back to `open/`.
 
 Expected outcome:
 
-- Ticket can be moved from a validated source state to `open/`.
-- Status is set to `open`.
-- `updated_at` is refreshed.
-- New relative path is printed to stdout.
+- Move tickets from valid source states to `open/`.
+- Set status to `open`.
+- Refresh `updated_at`.
+- Print the new relative path to stdout.
 
 Validation:
 
-- Unit tests cover moving `closed -> open`.
-- Unit tests cover moving `active -> open`.
-- Invalid source status is rejected before mutation.
+- Unit tests cover `closed -> open`.
+- Unit tests cover `active -> open`.
+- Invalid source status fails before mutation.
 
 ### 2. Add dependency append logic
 
-Support repeated `--requires` values and append them without duplicating existing dependencies.
+Support repeated `--requires` values without duplicating existing dependencies.
 
 Expected outcome:
 
-- Dependencies are resolved before mutation.
-- Missing dependencies fail the command.
-- Self-dependency is rejected.
-- Existing dependency entries are preserved.
+- Resolve dependencies before mutation.
+- Reject missing dependencies.
+- Reject self-dependency.
+- Preserve existing dependencies.
 
 Validation:
 
-- `cr ticket deactivate 0007 --requires 0012` adds requirenment for `0012`.
+- `cr ticket deactivate 0007 --requires 0012` adds dependency `0012`.
 - Repeating an existing dependency does not duplicate it.
 
 ## References
 
-- [Link to relevant documentation](https://example.com/docs)
-- Related ticket: 0002-another-ticket
-- [related-file](../SKILL.md)
-
-</ticket-template>
+- [Relevant documentation](https://example.com/docs)
+- Related ticket: `0002-another-ticket`
+- [Related file](../SKILL.md)
+```

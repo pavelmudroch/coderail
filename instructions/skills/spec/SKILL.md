@@ -1,67 +1,58 @@
 ---
+
 name: spec
-description: Convert an approved forged plan into an implementation specification and executable ticket plan.
+description: Convert an approved forged idea into an implementation-ready specification and optional ticket plan.
 disable-model-invocation: true
----
-Produce an implementation-ready specification and its ticket plan from an approved `IDEA.md`.
+------------------------------
+
+Convert an approved `IDEA.md` into an implementation-ready `SPEC.md`.
 
 ## Context
 
-Locate the relevant plan directory and inspect:
+Locate the relevant idea and inspect:
 
 1. `IDEA.md`
-2. `SPEC.md`, when already present
-3. Related parent or child plans referenced by the idea
-4. The repository, when codebase context affects the design
+2. Existing `SPEC.md`
+3. Relevant parent or child ideas
+4. Repository context needed for implementation decisions
 
-The selected idea should represent an implementation-ready scope. When it still contains independent child scopes, identify whether the spec applies to the whole plan or one of its leaves.
+Ensure the selected idea represents one implementation-ready scope. If independent child scopes remain, determine whether the specification covers the parent or one leaf.
 
-Reuse established decisions from `IDEA.md`. Infer reasonable implementation details and record consequential assumptions in the spec. Question the user only when missing information would materially change scope, architecture, public behavior, or ticket boundaries.
+Reuse decisions already established in `IDEA.md`. Infer safe implementation details and record consequential assumptions. Use <skill>question</skill> only when missing information could materially change scope, architecture, public behavior, or ticket boundaries.
 
 Write `SPEC.md` next to `IDEA.md`.
 
 ## Process
 
-### 1. Inspect existing work
+### Inspect existing specification
 
-When `SPEC.md` exists, evaluate it using the [Readiness](#readiness) criteria:
+When `SPEC.md` exists:
 
-* continue and complete an unfinished spec
-* update a stale spec from the approved idea or repository state
-* preserve a ready spec and proceed to ticket planning
+* complete it when unfinished
+* update it when stale relative to the idea or repository
+* preserve it when already ready
 
-### 2. Research the codebase
+### Research the codebase
 
-Explore the repository as needed to understand existing architecture, conventions, interfaces, tests, and relevant prior art.
+Inspect architecture, conventions, interfaces, tests, and relevant prior art as needed.
 
-Delegate substantial codebase research to a worker agent with <skill>research</skill> skill.
+Delegate substantial repository research to a worker agent using <skill>research</skill>.
 
-### 3. Design the implementation
+### Design implementation
 
-Identify the major modules and behaviors that need to be introduced or modified.
+Define implementation boundaries and consequential technical decisions.
 
-Prefer deep modules that encapsulate meaningful behavior behind small, stable, testable interfaces.
+Prefer deep modules that hide meaningful behavior behind small, stable, testable interfaces.
 
-Resolve or record:
+### Write specification
 
-* module responsibilities
-* interfaces and contracts
-* state transitions
-* command or API behavior
-* persistence and schema changes
-* interactions with existing components
-* compatibility and migration concerns
-* testing boundaries
-
-### 4. Write the specification
-
-Use the following structure:
+Use this structure:
 
 <spec-template>
 
 ## Problem Statement
 
-Describe the problem from the user’s perspective.
+Describe the problem from the user's perspective.
 
 ## Goal
 
@@ -69,38 +60,36 @@ Describe the intended outcome.
 
 ## Solution Overview
 
-Describe the solution from the user’s and implementer’s perspectives.
+Describe the solution from user and implementation perspectives.
 
 ## Requirements
 
-List the concrete requirements the implementation must satisfy.
+Define concrete implementation requirements.
 
-Use numbered requirements when ordering or traceability is useful.
+Use numbered requirements when useful for ordering or traceability.
 
 ## Implementation Decisions
 
-Record the implementation decisions made or inferred, including relevant:
+Record consequential implementation decisions, including where relevant:
 
-* modules to build or modify
-* interfaces to introduce or change
-* architectural decisions
+* modules and responsibilities
+* interfaces and architecture
 * schemas and data contracts
 * command or API behavior
-* state transitions
-* important component interactions
+* state transitions and component interactions
 * compatibility or migration behavior
 
-Prefer durable decisions over file-level instructions. Include paths, types, schemas, or snippets only when they express a decision more precisely than prose.
+Prefer durable decisions over file-level instructions. Include paths, types, schemas, or snippets only when they express a decision more precisely.
 
-When a prototype established a decision, include only its decision-rich portion and identify it as prototype-derived.
+For prototype-derived decisions, preserve only the decision-relevant result and identify its origin.
 
 ## Testing Decisions
 
-Describe how the implementation will be validated, including:
+Define validation strategy, including:
 
-* important behaviors and boundaries to test
-* characteristics of useful tests
-* relevant testing patterns already used by the repository
+* important behaviors and boundaries
+* useful test characteristics
+* relevant repository testing patterns
 * expected validation commands
 * applicable Coderail test-map behavior
 
@@ -108,38 +97,42 @@ Prefer observable behavior over implementation details.
 
 ## Out of Scope
 
-List adjacent work intentionally excluded from this specification.
+List intentionally excluded adjacent work.
 
 ## Assumptions
 
-Record inferred facts that affect implementation but do not require further user decisions.
+Record inferred facts that affect implementation without requiring user decisions.
 
 ## Further Notes
 
-Include additional context useful during implementation.
+Record additional implementation context.
 
 ## Ticket Plan
 
-Record the tickets created from this specification.
+Record tickets created from this specification, if any.
 
 </spec-template>
 
 ## Readiness
 
-A specification is ready when:
+Treat the specification as ready when:
 
-* its scope corresponds to an approved implementation-ready idea
-* requirements and important behaviors are defined
-* implementation boundaries and interfaces are sufficiently clear
+* scope matches one approved implementation-ready idea
+* requirements and important behavior are defined
+* implementation boundaries and interfaces are clear enough to implement
 * testing expectations are actionable
-* no unresolved uncertainty could materially change the design, public behavior, scope, or ticket decomposition
+* no unresolved uncertainty could materially change design, public behavior, scope, or ticket decomposition
 
-Reasonable low-impact assumptions may remain when they are explicitly recorded.
+Record reasonable low-impact assumptions instead of blocking progress.
 
-When material uncertainty remains, use `<skill>question</skill>` to collect the required decisions, then update `SPEC.md`.
+Use <skill>question</skill> for remaining material uncertainty, then update `SPEC.md`.
 
-## Ticket Plan
+## Tickets
 
-Once the specification is ready, read the `prompt.md` from this skill directory, delegate its complete content together with path to `SPEC.md` to worker agent, to create tickets for the implementation.
+When the specification becomes ready, ask the user whether to create implementation tickets.
 
-After ticket creation, ensure the `Ticket Plan` section of `SPEC.md` records the resulting tickets.
+When approved:
+
+1. Read `prompt.md` from this skill directory.
+2. Delegate its complete content together with the path to `SPEC.md` to a worker agent.
+3. Record the resulting tickets in the `Ticket Plan` section of `SPEC.md`.
