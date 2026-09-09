@@ -29,7 +29,7 @@ Define a coherent Coderail v2.0 command workflow and boundaries before splitting
 * Planning and execution remain independent: the user chooses which ideas become tickets and when. One implementation effort is not restricted to one ready idea.
 * `ticket` manages the queue and dependencies, potentially spanning multiple ideas. `loop` processes eligible open tickets in the current checkout, without selecting or interpreting ideas.
 * Other commands do not require `work`.
-* Each ticket records the specification from which it was created. Agents can consult that specification and, if needed, its idea, without making loop scheduling depend on ideas.
+* Tickets derived from a specification link to it in their body. Agents can consult that specification and, if needed, its idea, without making loop scheduling depend on ideas. Users can also create standalone tickets without a specification.
 * Tickets should be self-contained enough for implementation without consulting the originating specification or idea during ordinary work.
 * The loop selects the first non-blocked ticket, implements it, and reviews the result. Failed review leads to repair and another review of the same ticket; passing review allows selection of the next ticket.
 * The loop stops when all tickets are done or the ticket limit is reached.
