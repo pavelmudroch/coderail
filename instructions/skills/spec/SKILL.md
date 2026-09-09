@@ -1,9 +1,8 @@
 ---
-
 name: spec
 description: Convert an approved forged idea into an implementation-ready specification and optional ticket plan.
 disable-model-invocation: true
-------------------------------
+---
 
 Convert an approved `IDEA.md` into an implementation-ready `SPEC.md`.
 
