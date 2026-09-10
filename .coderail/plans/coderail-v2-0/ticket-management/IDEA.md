@@ -23,7 +23,7 @@ Users and agents can manage a repository ticket queue with clear lifecycle and d
 * `ticket create` does not require a specification or a `--spec` option. Absence of a specification link is valid for standalone tickets.
 * A dedicated skill guides agents to create and preserve a specific ticket body structure covering outcome, context, tasks, acceptance criteria, verification, and a specification link when applicable.
 * Recommend the same body structure for user-created tickets, without CLI enforcement. Exact structure and skill instructions belong in the specification.
-* Retain `create`, `next`, `activate`, `close`, `deactivate`, and `reopen`. Move `loop` to the agreed top-level command and remove deprecated `ticket clean`.
+* Retain `create`, `next`, `activate`, `close`, and `reopen`. Remove `deactivate`; `reopen` returns active or closed tickets to `open`. Move `loop` to the agreed top-level command and remove deprecated `ticket clean`.
 * Remove `ticket validate`. Top-level `doctor` owns explicit ticket validation, including malformed tickets, broken references, and dependency cycles.
 * Ticket commands still enforce rules needed for their operation; for example, `activate` rejects tickets with unsatisfied dependencies.
 * Retain exactly three lifecycle states: `open`, `active`, and `closed`.
@@ -38,8 +38,8 @@ Users and agents can manage a repository ticket queue with clear lifecycle and d
 * `ticket next` returns open tickets whose dependencies are satisfied, ordered by ascending numeric ticket ID. No priority field or manual queue ordering is needed.
 * Retain optional `--limit=<number>` to cap the number of tickets returned by `ticket next`; without it, return all eligible tickets.
 * Active tickets are excluded from `ticket next`; resuming active work belongs to `loop`.
-* Change dependencies on existing open tickets by editing their ticket files directly. Retain `-d <ticket>` on `create`, `deactivate`, and `reopen`; do not add a dependency-editing command. `doctor` diagnoses invalid edits.
-* On `deactivate` and `reopen`, `-d` adds dependencies while preserving existing ones. Omitting `-d` leaves dependencies unchanged; removing dependencies remains a direct file edit.
+* Change dependencies on existing open tickets by editing their ticket files directly. Retain `-d <ticket>` on `create` and `reopen`; do not add a dependency-editing command. `doctor` diagnoses invalid edits.
+* On `reopen`, `-d` adds dependencies while preserving existing ones. Omitting `-d` leaves dependencies unchanged; removing dependencies remains a direct file edit.
 * Tool ownership of front matter defines normal workflow, not an editing restriction. Manual dependency edits remain allowed as an occasional exception and are not expected to be frequent.
 
 ## Risks and Caveats
