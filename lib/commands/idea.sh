@@ -59,6 +59,7 @@ execute_command()
 
     script="$_CR_INSTALL_DIR/lib/commands/idea/$command.sh"
     (
+        _ensure_plans_dir
         . "$script"
         execute_command "$@"
     )
@@ -87,7 +88,7 @@ _read_idea_file()
     idea_file="$PLANS_DIR/$normalized_path/IDEA.md"
 
     if [ ! -f "$idea_file" ]; then
-        echo "File \"$idea_file\" does not exist"
+        echo "File does not exist"
         return 1
     fi
 

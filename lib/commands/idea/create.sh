@@ -99,7 +99,6 @@ execute_command()
         fi
     fi
 
-    _ensure_plans_dir
     idea_path="$(slugify "$idea_title")"
     target_dir="$PLANS_DIR"
     if [ -n "$parent_idea" ]; then
