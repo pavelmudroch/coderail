@@ -89,7 +89,7 @@ md_frontmatter_get()
         }
 
         in_frontmatter && $0 == "---" {
-            exit found ? 0 : 1
+            exit 0
         }
 
         in_frontmatter {
@@ -109,7 +109,7 @@ md_frontmatter_get()
 
         END {
             if (found != 1) {
-                exit 1
+                print ""
             }
         }
     '

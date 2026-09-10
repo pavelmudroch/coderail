@@ -94,8 +94,9 @@ description: This is a sample description.
 
 _test_frontmatter_get()
 {
+    key="$1"
     markdown="$(_read_markdown)"
-    printf '%s' "$markdown" | md_frontmatter_get "title"
+    printf '%s' "$markdown" | md_frontmatter_get "$key"
 }
 
 _test_frontmatter_set()
@@ -112,7 +113,8 @@ test_expect_fail "Validation: missing end delimiter" "Missing ending \"---\"" _t
 test_expect_fail "Validation: malformed key:value" "Malformed key:value at line 3: title= Sample Title" _test_validate_malformed_key_value
 test_expect_fail "Validation: malformed key" "Invalid key \"tit@le\" at line 3" _test_validate_malformed_key
 test_expect_fail "Validation: duplicate key" "Duplicate key \"status\" at line 3" _test_validate_duplicate_key
-test_expect "Get front matter key value" "Sample Title" _test_frontmatter_get
+test_expect "Get front matter key value" "Sample Title" _test_frontmatter_get "title"
+test_expect "Get missing front matter key non-present" "" _test_frontmatter_get "non-present"
 test_expect "Set front matter key value" "ready" _test_frontmatter_set
 
 print_tests_summary
