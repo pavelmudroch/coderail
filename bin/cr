@@ -199,8 +199,23 @@ if [ ! -d "$cwd" ]; then
     exit "$_CR_ERROR_EXIT_CODE"
 fi
 
+case "$command" in
+    doctor|idea|status|ticket|loop|test)
+        if ! _is_cwd_initialized; then
+            log_error "Current directory is not initialized for Coderail"
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+        ;;
+esac
+
 cd "$cwd"
 (
     . "$script"
     execute_command "$@"
 )
+
+_is_cwd_initialized()
+{
+    [ -d ".coderail" ] && return 0
+    return 1
+}
