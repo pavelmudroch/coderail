@@ -5,6 +5,12 @@ TICKET_STATUS_OPEN="open"
 TICKET_STATUS_ACTIVE="active"
 TICKET_STATUS_CLOSED="closed"
 
+TICKET_STATUS_KEY="status"
+TICKET_TITLE_KEY="title"
+TICKET_REASON_KEY="reason"
+TICKET_DUPLICATE_OF_KEY="duplicate-of"
+TICKET_DEPENDS_ON_KEY="depends-on"
+
 usage() {
     cat <<'EOF'
 Usage:
@@ -160,16 +166,16 @@ _ticket_is_satisfied()
         set -- "$@" "$ticket_path"
 
         ticket_content=$(_read_ticket_file "$ticket_path" 2>/dev/null) || return 1
-        status=$(printf '%s\n' "$ticket_content" | md_frontmatter_get "status") || return 1
+        status=$(printf '%s\n' "$ticket_content" | md_frontmatter_get "$TICKET_STATUS_KEY") || return 1
         [ "$status" = "$TICKET_STATUS_CLOSED" ] || return 1
-        reason=$(printf '%s\n' "$ticket_content" | md_frontmatter_get "reason") || return 1
+        reason=$(printf '%s\n' "$ticket_content" | md_frontmatter_get "$TICKET_REASON_KEY") || return 1
 
         case "$reason" in
             done)
                 return 0
                 ;;
             duplicate)
-                duplicate_of=$(printf '%s\n' "$ticket_content" | md_frontmatter_get "duplicate-of") || return 1
+                duplicate_of=$(printf '%s\n' "$ticket_content" | md_frontmatter_get "$TICKET_DUPLICATE_OF_KEY") || return 1
                 [ -n "$duplicate_of" ] || return 1
                 ticket_path=$(_resolve_ticket_path "$duplicate_of" 2>/dev/null) || return 1
                 ;;
@@ -183,7 +189,19 @@ _ticket_is_satisfied()
 _ticket_dependencies_satisfied()
 {
     ticket_path="$1"
-    # check every dependency, re-use helper _ticket_is_satisfied
+    ticket_content=$(_read_ticket_file "$ticket_path" 2>/dev/null) || return 1
+    depends_on=$(printf '%s\n' "$ticket_content" | md_frontmatter_get "$TICKET_DEPENDS_ON_KEY") || return 1
+    if [ -z "$depends_on" ]; then
+        return 0
+    fi
+
+    while [ -n "$depends_on" ]; do
+        dependency=${depends_on%%,*}
+        dependency=$(echo "$dependency" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        _ticket_is_satisfied "$(_resolve_ticket_path "$dependency" 2>/dev/null)" || return 1
+        depends_on=${depends_on#*,}
+        [ "$depends_on" = "$dependency" ] && depends_on=""
+    done
 }
 
 _merge_ticket_dependencies()

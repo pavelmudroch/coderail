@@ -189,6 +189,60 @@ test "_ticket_is_satisfied: missing file is not satisfied" _expect_satisfied_sta
 printf '%s\n' '---' 'status: closed' 'reason: done' > .coderail/tickets/close/0006-invalid.md
 test "_ticket_is_satisfied: unterminated front matter is not satisfied" _expect_satisfied_status 1 .coderail/tickets/close/0006-invalid.md
 
+mkdir "$test_dir/dependencies"
+cd "$test_dir/dependencies"
+mkdir -p .coderail/tickets/open .coderail/tickets/active .coderail/tickets/close
+
+_write_test_ticket .coderail/tickets/close/0001-done.md 'status: closed' 'reason: done'
+_write_test_ticket .coderail/tickets/close/0002-done.md 'status: closed' 'reason: done'
+_write_test_ticket .coderail/tickets/close/0003-duplicate.md 'status: closed' 'reason: duplicate' 'duplicate-of: 0001'
+_write_test_ticket .coderail/tickets/open/0004-unfinished.md 'status: open'
+_write_test_ticket .coderail/tickets/active/0005-unfinished.md 'status: active'
+
+_write_test_ticket .coderail/tickets/open/0073-dependent.md 'status: open'
+test_expect "_ticket_dependencies_satisfied: no depends on field is satisfied" '' \
+    _ticket_dependencies_satisfied .coderail/tickets/open/0073-dependent.md
+
+_write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' 'depends-on:'
+test_expect "_ticket_dependencies_satisfied: empty depends-on field is satisfied" '' \
+    _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
+
+for dependency in 0001 0003; do
+    _write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' "depends-on: $dependency"
+    test_expect "_ticket_dependencies_satisfied: single satisfied ID $dependency" '' \
+        _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
+done
+
+for dependency in 0004 0005 9999; do
+    _write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' "depends-on: $dependency"
+    test_expect_fail "_ticket_dependencies_satisfied: single blocked ID $dependency" '' \
+        _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
+done
+
+for reason in deferred dismissed; do
+    _write_test_ticket .coderail/tickets/close/0006-other.md 'status: closed' "reason: $reason"
+    _write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' 'depends-on: 0006'
+    test_expect_fail "_ticket_dependencies_satisfied: $reason dependency blocks" '' \
+        _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
+done
+
+for dependencies in '0001,0002' '0001,0002,0003'; do
+    _write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' "depends-on: $dependencies"
+    test_expect "_ticket_dependencies_satisfied: all IDs $dependencies satisfied" '' \
+        _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
+done
+
+for dependencies in '0004,0001,0002' '0001,0004,0002' '0001,0002,0004' '0001, 0004' '0001,9999'; do
+    _write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' "depends-on: $dependencies"
+    test_expect_fail "_ticket_dependencies_satisfied: blocked IDs $dependencies" '' \
+        _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
+done
+
+_write_test_ticket .coderail/tickets/active/0001-ambiguous.md 'status: active'
+_write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' 'depends-on: 0001'
+test_expect_fail "_ticket_dependencies_satisfied: ambiguous dependency blocks" '' \
+    _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
+
 print_tests_summary
 
 if some_tests_failed; then
