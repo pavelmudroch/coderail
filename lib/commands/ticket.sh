@@ -197,9 +197,9 @@ _ticket_dependencies_satisfied()
 
     while [ -n "$depends_on" ]; do
         dependency=${depends_on%%,*}
-        dependency=$(echo "$dependency" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        dependency=$(printf '%s\n' "$dependency" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         _ticket_is_satisfied "$(_resolve_ticket_path "$dependency" 2>/dev/null)" || return 1
-        depends_on=${depends_on#*,}
+        depends_on=$(printf '%s\n' "${depends_on#*,}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
         [ "$depends_on" = "$dependency" ] && depends_on=""
     done
 }

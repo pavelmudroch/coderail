@@ -199,9 +199,9 @@ _write_test_ticket .coderail/tickets/close/0003-duplicate.md 'status: closed' 'r
 _write_test_ticket .coderail/tickets/open/0004-unfinished.md 'status: open'
 _write_test_ticket .coderail/tickets/active/0005-unfinished.md 'status: active'
 
-_write_test_ticket .coderail/tickets/open/0073-dependent.md 'status: open'
+_write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open'
 test_expect "_ticket_dependencies_satisfied: no depends on field is satisfied" '' \
-    _ticket_dependencies_satisfied .coderail/tickets/open/0073-dependent.md
+    _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
 
 _write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' 'depends-on:'
 test_expect "_ticket_dependencies_satisfied: empty depends-on field is satisfied" '' \
@@ -212,6 +212,10 @@ for dependency in 0001 0003; do
     test_expect "_ticket_dependencies_satisfied: single satisfied ID $dependency" '' \
         _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
 done
+
+    _write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' "depends-on:     0001   ,   0003     "
+    test_expect "_ticket_dependencies_satisfied: multiple satisfied ID with spaces" '' \
+        _ticket_dependencies_satisfied .coderail/tickets/open/0010-dependent.md
 
 for dependency in 0004 0005 9999; do
     _write_test_ticket .coderail/tickets/open/0010-dependent.md 'status: open' "depends-on: $dependency"
