@@ -35,14 +35,30 @@ execute_command()
                 ;;
             -p|--parent)
                 shift
+                if [ -z "$1" ]; then
+                    log_error "Missing argument for --parent option"
+                    usage >&2
+                    exit "$_CR_USAGE_EXIT_CODE"
+                fi
                 parent_idea="$1"
                 ;;
             --parent=*)
-                parent_idea="${1#*=}"
+                value="${1#*=}"
+                if [ -z "$value" ]; then
+                    log_error "Missing argument for --parent option"
+                    usage >&2
+                    exit "$_CR_USAGE_EXIT_CODE"
+                fi
+                parent_idea="$value"
                 ;;
             --)
-                break
                 shift
+                break
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
                 ;;
             *)
                 if [ -n "$idea_title" ]; then

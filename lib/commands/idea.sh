@@ -43,6 +43,11 @@ execute_command()
                 shift
                 break
                 ;;
+            -*)
+                log_error "Unknown option: $1"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
             *)
                 log_error "Unknown argument: $1"
                 usage >&2

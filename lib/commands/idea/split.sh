@@ -40,8 +40,13 @@ execute_command()
                 exit "$_CR_USAGE_EXIT_CODE"
                 ;;
             --)
-                break
                 shift
+                break
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
                 ;;
             *)
                 if [ $arg_pos -eq 0 ]; then
