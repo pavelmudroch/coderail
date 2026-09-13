@@ -77,7 +77,7 @@ _test_expect()
 
     if output=$("$@" 2>&1); then
         if [ "$output" != "$expect" ]; then
-            printf '-- Got:\n%s\n-- Expected:\n%s\n' "$output" "$expect"
+            printf -- '-- Got:\n%s\n-- Expected:\n%s\n' "$output" "$expect"
             return 1
         fi
         return 0
@@ -99,7 +99,7 @@ _test_expect_fail()
         return 1
     else
         if [ "$output" != "$expect" ]; then
-            printf '-- Got:\n%s\n-- Expected:\n%s\n' "$output" "$expect"
+            printf -- '-- Got:\n%s\n-- Expected:\n%s\n' "$output" "$expect"
             return 1
         fi
         return 0
