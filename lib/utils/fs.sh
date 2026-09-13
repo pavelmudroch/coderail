@@ -12,7 +12,7 @@ _fs_find_first_existing_parent()
         [ "$target" = "$parent" ] && break
         target="$parent"
     done
-    echo "${target%/}"
+    printf '%s\n' "${target%/}"
 }
 
 _fs_temp_dir_at  ()
@@ -86,7 +86,7 @@ fs_temp_for_dir()
         parent=$(dirname "$target") || return 1
         temp_dir=$(_fs_temp_dir_at "$parent") || return 1
         cp -r "$target/." "$temp_dir/" 2>/dev/null || return 1
-        echo "$target" >"$temp_dir/.~cr-replace.lock" 2>/dev/null || return 1
+        printf '%s\n' "$target" >"$temp_dir/.~cr-replace.lock" 2>/dev/null || return 1
 
         printf "%s\n" "$temp_dir"
     else
@@ -99,9 +99,9 @@ fs_temp_for_dir()
         children="${children#"$clone"}"
         children="${children#/}"
         mkdir -p "$temp_dir/$children" 2>/dev/null || return 1
-        echo "$parent/$clone" >"$temp_dir/.~cr-replace.lock" 2>/dev/null || return 1
+        printf '%s/%s\n' "$parent" "$clone" >"$temp_dir/.~cr-replace.lock" 2>/dev/null || return 1
 
-        printf "%s\n" "$temp_dir/$children"
+        printf '%s/%s\n' "$temp_dir" "$children"
     fi
 }
 

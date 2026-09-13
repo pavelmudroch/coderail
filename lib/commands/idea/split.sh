@@ -86,7 +86,7 @@ execute_command()
         exit "$_CR_USAGE_EXIT_CODE"
     fi
 
-    if [ -z "$child_titles" ] || [ "$(echo "$child_titles" | wc -l)" -lt 2 ]; then
+    if [ -z "$child_titles" ] || [ "$(printf '%s\n' "$child_titles" | wc -l)" -lt 2 ]; then
         log_error "At least two child titles are required"
         usage >&2
         exit "$_CR_USAGE_EXIT_CODE"

@@ -3,11 +3,11 @@
 md_is_frontmatter_valid()
 {
     if [ -z "$1" ]; then
-        echo "Missing starting \"---\""
+        printf 'Missing starting "---"\n'
         exit 1
     fi
 
-    echo "$1" | awk '
+    printf '%s\n' "$1" | awk '
         NR == 1 {
             if ($0 != "---") {
                 error = 2
@@ -163,5 +163,5 @@ md_frontmatter_set() {
 
 md_frontmatter_empty()
 {
-    printf '%s\n%s\n' "---" "---"
+    printf -- '---\n---\n'
 }

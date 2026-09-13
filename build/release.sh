@@ -44,14 +44,13 @@ EOF
 }
 
 error() {
-    echo "error: $*" >&2
-    echo >&2
+    printf 'error: %s\n' "$*" >&2
     usage >&2
     exit 2
 }
 
 fatal() {
-    echo "error: $*" >&2
+    printf 'error: %s\n' "$*" >&2
     exit 1
 }
 
@@ -310,19 +309,19 @@ rollback_release_tags() {
 
     if git -C "$ROOT_DIR" rev-parse -q --verify "refs/tags/$target_tag" >/dev/null; then
         if ! git -C "$ROOT_DIR" tag -d "$target_tag" >/dev/null 2>&1; then
-            echo "error: failed to delete local release tag during rollback: $target_tag" >&2
+            printf 'error: failed to delete local release tag during rollback: %s\n' "$target_tag" >&2
             rollback_failed=true
         fi
     fi
 
     if [ "$previous_latest_exists" = true ]; then
         if ! git -C "$ROOT_DIR" update-ref refs/tags/latest "$previous_latest_ref"; then
-            echo "error: failed to restore local latest tag during rollback" >&2
+            printf 'error: failed to restore local latest tag during rollback\n' >&2
             rollback_failed=true
         fi
     elif git -C "$ROOT_DIR" rev-parse -q --verify refs/tags/latest >/dev/null; then
         if ! git -C "$ROOT_DIR" update-ref -d refs/tags/latest; then
-            echo "error: failed to remove local latest tag during rollback" >&2
+            printf 'error: failed to remove local latest tag during rollback\n' >&2
             rollback_failed=true
         fi
     fi

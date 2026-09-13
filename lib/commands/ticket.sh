@@ -137,21 +137,21 @@ _read_ticket_file()
     ticket_file="$1"
 
     if [ ! -f "$ticket_file" ]; then
-        echo "File does not exist"
+        printf 'File does not exist\n'
         return 1
     fi
 
     if ! ticket_content=$(cat "$ticket_file" 2>&1); then
-        echo "$ticket_file"
+        printf '%s\n' "$ticket_file"
         return 1
     fi
 
     if ! message="$(md_is_frontmatter_valid "$ticket_content")"; then
-        echo "Invalid frontmatter: \"$message\""
+        printf 'Invalid frontmatter: "%s"\n' "$message"
         return 1
     fi
 
-    echo "$ticket_content"
+    printf '%s\n' "$ticket_content"
 }
 
 _ticket_is_satisfied()

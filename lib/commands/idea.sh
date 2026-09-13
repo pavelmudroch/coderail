@@ -71,7 +71,7 @@ _normalize_idea_path()
     normalized_path="${normalized_path#$PLANS_DIR/}"
     normalized_path="${normalized_path%/IDEA.md}"
     normalized_path=$(path_normalize_relative "$normalized_path")
-    echo "$normalized_path"
+    printf '%s\n' "$normalized_path"
 }
 
 _ensure_plans_dir()
@@ -88,21 +88,21 @@ _read_idea_file()
     idea_file="$PLANS_DIR/$normalized_path/IDEA.md"
 
     if [ ! -f "$idea_file" ]; then
-        echo "File does not exist"
+        printf 'File does not exist\n'
         return 1
     fi
 
     if ! idea_content=$(cat "$idea_file" 2>&1); then
-        echo "$idea_file"
+        printf '%s\n' "$idea_file"
         return 1
     fi
 
     if ! message="$(md_is_frontmatter_valid "$idea_content")"; then
-        echo "Invalid frontmatter: \"$message\""
+        printf 'Invalid frontmatter: "%s"\n' "$message"
         return 1
     fi
 
-    echo "$idea_content"
+    printf '%s\n' "$idea_content"
 }
 
 
@@ -125,40 +125,40 @@ _validate_idea_path()
     fi
 
     if [ ! -d "$idea_dir" ]; then
-        echo "Not a directory"
+        printf 'Not a directory\n'
         return 1
     fi
 
     if ! idea_content=$(_read_idea_file "$idea_path"); then
-        echo "Failed to read idea file: $idea_content"
+        printf 'Failed to read idea file: %s\n' "$idea_content"
         return 1
     fi
 
-    status=$(echo "$idea_content" | md_frontmatter_get "status")
+    status=$(printf '%s\n' "$idea_content" | md_frontmatter_get "status")
     if [ -z "$status" ]; then
-        echo "Missing status in front matter"
+        printf 'Missing status in front matter\n'
         [ "$accumulate_errors" == true ] || return 1
     fi
 
-    title=$(echo "$idea_content" | md_frontmatter_get "title")
+    title=$(printf '%s\n' "$idea_content" | md_frontmatter_get "title")
     if [ -z "$title" ]; then
-        echo "Missing title in front matter"
+        printf 'Missing title in front matter\n'
         [ "$accumulate_errors" == true ] || return 1
     fi
 
     child_idea_count=$(find "$idea_dir" -type d ! -path "$idea_dir" -prune -print | awk 'END { print NR }')
     if [ "$status" == "$IDEA_STATUS_SPLIT" ] && [ "$child_idea_count" -lt 2 ]; then
-        echo "Split idea must have at least two child ideas"
+        printf 'Split idea must have at least two child ideas\n'
         return 1
     fi
 
     if [ "$status" != "$IDEA_STATUS_SPLIT" ] && [ "$child_idea_count" -ne 0 ]; then
-        echo "Non-split idea should not have child ideas"
+        printf 'Non-split idea should not have child ideas\n'
         return 1
     fi
 
     if [ "$status" != "$IDEA_STATUS_READY" ] && [ -f "$idea_dir/SPEC.md" ]; then
-        echo "SPEC.md file should not exist when idea is not ready"
+        printf 'SPEC.md file should not exist when idea is not ready\n'
         return 3
     fi
 }
@@ -168,8 +168,8 @@ _parse_idea_path()
     parsed_path="$(_normalize_idea_path "$1")"
     parsed_file="$PLANS_DIR/$parsed_path/IDEA.md"
     idea_content="$(_read_idea_file "$parsed_path")" || return 1
-    parsed_status=$(echo "$idea_content" | md_frontmatter_get "status")
-    parsed_title=$(echo "$idea_content" | md_frontmatter_get "title")
+    parsed_status=$(printf '%s\n' "$idea_content" | md_frontmatter_get "status")
+    parsed_title=$(printf '%s\n' "$idea_content" | md_frontmatter_get "title")
     parsed_parent="${parsed_path%/*}"
     if [ "$parsed_parent" = "$parsed_path" ]; then
         parsed_parent=""

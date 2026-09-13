@@ -67,7 +67,7 @@ _test_ticket_lock_lifecycle()
     _lock_ticket ".coderail/tickets/open/0010-lock-test.md" || return 1
     lock_file=".coderail/tickets/~0010-lock-test.md.lock"
     [ -f "$lock_file" ] || return 1
-    printf '%s\n' 'preserve' > "$lock_file"
+    printf 'preserve\n' > "$lock_file"
 
     if _lock_ticket ".coderail/tickets/active/0010-lock-test.md" 2>/dev/null; then
         return 1
@@ -186,7 +186,7 @@ duplicate-of: '; do
 done
 
 test "_ticket_is_satisfied: missing file is not satisfied" _expect_satisfied_status 1 .coderail/tickets/close/missing.md
-printf '%s\n' '---' 'status: closed' 'reason: done' > .coderail/tickets/close/0006-invalid.md
+printf -- '---\nstatus: closed\nreason: done\n' > .coderail/tickets/close/0006-invalid.md
 test "_ticket_is_satisfied: unterminated front matter is not satisfied" _expect_satisfied_status 1 .coderail/tickets/close/0006-invalid.md
 
 mkdir "$test_dir/dependencies"

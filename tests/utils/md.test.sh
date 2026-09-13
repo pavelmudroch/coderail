@@ -17,7 +17,7 @@ PROJECT_ROOT=$(
 
 _read_markdown()
 {
-    echo "---
+    printf -- '---
 status: forging
 title: Sample Title
 description: This is a sample description.
@@ -27,7 +27,7 @@ description: This is a sample description.
 This is some sample content under the heading.
 
 Another paragraph of sample content.
-"
+\n'
 }
 
 _test_validate_ok()

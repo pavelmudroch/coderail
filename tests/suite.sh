@@ -77,13 +77,13 @@ _test_expect()
 
     if output=$("$@" 2>&1); then
         if [ "$output" != "$expect" ]; then
-            echo "Got: $output, Expected: $expect"
+            printf '-- Got:\n%s\n-- Expected:\n%s\n' "$output" "$expect"
             return 1
         fi
         return 0
     else
-        echo "Command failed with output:"
-        echo "$output"
+        printf 'Command failed with output:\n'
+        printf '%s\n' "$output"
         return 1
     fi
 }
@@ -94,12 +94,12 @@ _test_expect_fail()
     shift
 
     if output=$("$@" 2>&1); then
-        echo "Expected failure, but command succeeded with output:"
-        echo "$output"
+        printf 'Expected failure, but command succeeded with output:\n'
+        printf '%s\n' "$output"
         return 1
     else
         if [ "$output" != "$expect" ]; then
-            echo "Got: $output, Expected: $expect"
+            printf '-- Got:\n%s\n-- Expected:\n%s\n' "$output" "$expect"
             return 1
         fi
         return 0

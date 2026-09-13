@@ -24,7 +24,7 @@ find "$SCRIPT_DIR" -type f -name '*.test.sh' | sort > "$test_files"
 while IFS= read -r test_file || [ -n "$test_file" ]; do
     sh "$test_file"
     test_status=$?
-    echo ""
+    printf '\n'
 
     if [ "$test_status" -ne 0 ]; then
         some_tests_failed=1

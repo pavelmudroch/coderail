@@ -100,17 +100,17 @@ _json_formatter()
     status="$4"
     parent="$5"
 
-    echo "  {"
-    echo "    \"path\": \"$path\","
-    echo "    \"file\": \"$file\","
-    echo "    \"title\": \"$title\","
-    echo "    \"status\": \"$status\","
+    printf '  {\n'
+    printf '    "path": "%s",\n' "$path"
+    printf '    "file": "%s",\n' "$file"
+    printf '    "title": "%s",\n' "$title"
+    printf '    "status": "%s",\n' "$status"
     if [ -z "$parent" ]; then
-        echo "    \"parent\": null"
+        printf '    "parent": null\n'
     else
-        echo "    \"parent\": \"$parent\""
+        printf '    "parent": "%s"\n' "$parent"
     fi
-    echo "  }"
+    printf '  }\n'
 }
 
 _plain_text_formatter()
