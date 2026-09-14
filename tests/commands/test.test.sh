@@ -31,8 +31,10 @@ _run_test()
 
 print_tests_header 'Test Command Tests'
 test_expect 'missing map' 'No tests found' _run_test missing
+test_expect 'short missing map' '' _run_test --short missing
 : > .coderail/test_map
 test_expect 'empty map' 'No tests found' _run_test missing
+test_expect 'short empty map' '' _run_test --short missing
 
 cat > .coderail/test_map <<'MAP'
 # Comment
@@ -51,6 +53,7 @@ wildcard
 deep/nested/two
 other' _run_test src/deep/nested/one.ts src/deep/nested/two.ts src/deep/nested/one.ts other/a.ts
 test_expect 'whole path matching' 'No tests found' _run_test prefix/src/a/b.ts other/ab.ts
+test_expect 'short unmatched file' '' _run_test --short other/ab.ts
 mkdir -p 'src/space dir'
 : > 'src/space dir/file name.ts'
 test_expect 'directory selection and spaces' 'space dir/file name
@@ -122,6 +125,10 @@ test_expect_fail 'cached failures stop each dependent file; cached successes all
 check:good
 after:good/one
 after:good/two' _run_test bad/one.ts bad/two.ts good/one.ts good/two.ts
+test_expect_fail 'short cached results for each dependent file' 'bad/one.ts fail
+bad/two.ts fail
+good/one.ts ok
+good/two.ts ok' _run_test --short bad/one.ts bad/two.ts good/one.ts good/two.ts
 
 cat > .coderail/test_map <<'MAP'
 [${path}/${file}.ts]
@@ -149,6 +156,60 @@ cat > consumed
 printf '%s\n' finished
 MAP
 test_expect 'commands cannot consume the command queue' finished _run_test any
+
+cat > .coderail/test_map <<'MAP'
+[${file}.ts]
+printf '%s\n' 'stdout:${file}'; printf '%s\n' 'stderr:${file}' >&2; test '${file}' != bad
+printf '%s\n' 'after-out:${file}'; printf '%s\n' 'after-err:${file}' >&2
+printf '%s\n' shared-out; printf '%s\n' shared-err >&2
+MAP
+
+# Exercise the real CLI and inspect each stream independently: the suite helper
+# normally merges stderr into stdout, which would hide accidental redirections.
+stream_status=0
+sh "$PROJECT_ROOT/bin/cr" --no-color --non-interactive test bad.ts good.ts good.ts \
+    > "$test_root/stdout" 2> "$test_root/stderr" || stream_status=$?
+test_expect 'CLI output: failure status preserved' 1 printf '%s' "$stream_status"
+test_expect 'CLI stdout: failed file, shared command, and later file output once' 'stdout:bad
+shared-out
+stdout:good
+after-out:good' cat "$test_root/stdout"
+test_expect 'CLI stderr: failed file, shared command, and later file output once' 'stderr:bad
+shared-err
+stderr:good
+after-err:good' cat "$test_root/stderr"
+
+stream_status=0
+sh "$PROJECT_ROOT/bin/cr" --no-color --non-interactive test good.ts \
+    > "$test_root/stdout" 2> "$test_root/stderr" || stream_status=$?
+test_expect 'CLI output: success status preserved' 0 printf '%s' "$stream_status"
+test_expect 'CLI stdout: successful commands' 'stdout:good
+after-out:good
+shared-out' cat "$test_root/stdout"
+test_expect 'CLI stderr: successful commands' 'stderr:good
+after-err:good
+shared-err' cat "$test_root/stderr"
+
+stream_status=0
+sh "$PROJECT_ROOT/bin/cr" --no-color --non-interactive test --short bad.ts good.ts good.ts \
+    > "$test_root/stdout" 2> "$test_root/stderr" || stream_status=$?
+test_expect 'short CLI failure status' 1 printf '%s' "$stream_status"
+test_expect 'short CLI summaries and deduplication' 'bad.ts fail
+good.ts ok' cat "$test_root/stdout"
+test_expect 'short CLI suppresses stderr' '' cat "$test_root/stderr"
+test_expect 'short successful commands' 'good.ts ok' _run_test --short good.ts
+cat > .coderail/test_map <<'MAP'
+[*]
+true
+MAP
+test_expect 'short success and literal filename' "space dir/quote'file.ts ok" _run_test --short "space dir/quote'file.ts"
+
+cat > .coderail/test_map <<'MAP'
+[*]
+printf noise; printf error >&2; exit 1
+MAP
+test_expect_fail 'short shared failure affects every dependent file' 'one fail
+two fail' _run_test --short one two
 
 printf '%s\n' 'printf unexpected' > .coderail/test_map
 test_expect_fail 'reject command without pattern before running anything' 'Failed to collect test commands' _run_test any
@@ -182,6 +243,7 @@ test_expect 'missing selector' 2 _usage_status
 test_expect 'unknown option' 2 _usage_status --invalid
 test_expect 'help' 0 _usage_status --help
 test_expect 'changed rejects value' 2 _usage_status --changed=yes
+test_expect 'short rejects value' 2 _usage_status --short=yes any
 
 print_tests_summary
 if some_tests_failed; then

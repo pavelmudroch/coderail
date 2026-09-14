@@ -13,12 +13,17 @@ Usage:
 
 Options:
   -h, --help           Show this help message and exit
+  --short             Output only <file> ok/fail for each tested file
   --changed            Run tests for all changed files. Git must be available
                        in the current working directory.
 
+Arguments:
+  <file|directory>     File(s) and or directory(ies) to run tests for. Mandatory
+                       unless --changed is specified.
+
 Map format:
   [src/${path}/${file}.ts]
-  deno test tests/${path}/${file}.test.ts
+  <command to run> tests/${path}/${file}.test.ts
 
   Each nonempty, noncomment line below a pattern is a shell command.
   Patterns match whole paths relative to the current directory. Named captures
@@ -28,11 +33,8 @@ Map format:
   Commands without capture references are shared and always run when matched.
   Commands run once after expansion, in file and map order; cached failures
   also stop later files that need that command. Any failure causes a nonzero exit.
-
-Arguments:
-  <file|directory>     File(s) and or directory(ies) to run tests for. Mandatory
-                       unless --changed is specified.
-
+  Test commands stream stdout and stderr directly to the corresponding output
+  streams, including when a command fails, unless --short is specified.
 EOF
 }
 
@@ -40,6 +42,7 @@ execute_command()
 {
     file_list=""
     changed=0
+    short=0
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -49,6 +52,15 @@ execute_command()
                 ;;
             --help=*)
                 log_error "--help does not take an argument"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
+            --short)
+                short=1
+                shift
+                ;;
+            --short=*)
+                log_error "--short does not take an argument"
                 usage >&2
                 exit "$_CR_USAGE_EXIT_CODE"
                 ;;
@@ -119,6 +131,7 @@ execute_command()
         return "$_CR_SUCCESS_EXIT_CODE"
     fi
 
+    # Inherit stdout and stderr so test output is visible as commands run.
     if sh -c "$commands" < /dev/null; then
         return "$_CR_SUCCESS_EXIT_CODE"
     else
@@ -159,7 +172,7 @@ _expand_test_paths()
 _collect_test_commands()
 {
     # ENVIRON preserves backslashes in filenames, unlike awk -v assignments.
-    CR_TEST_FILES=$file_list awk '
+    CR_TEST_FILES=$file_list awk -v short="$short" '
         # Recursive, greedy matching avoids non-POSIX awk capture extensions.
         function matches(pattern, path,    token, name, rest, size, value) {
             if (pattern == "") return path == ""
@@ -212,6 +225,10 @@ _collect_test_commands()
             }
             return result apostrophe
         }
+        function summary(file) {
+            if (short && file)
+                print "printf " quote("%s %s\n") " " quote(files[file]) " \"$cr_file_status\""
+        }
         /^[[:space:]]*(#|$)/ { next }
         {
             line = $0
@@ -257,7 +274,7 @@ _collect_test_commands()
                 print "unset cr_result_" id
                 print "cr_test_" id "() {"
                 print "  if [ \"${cr_result_" id "+set}\" != set ]; then"
-                print "    if sh -c " quote(unique_commands[id]) " < /dev/null; then"
+                print "    if sh -c " quote(unique_commands[id]) " < /dev/null" (short ? " > /dev/null 2>&1" : "") "; then"
                 print "      cr_result_" id "=0"
                 print "    else"
                 print "      cr_result_" id "=1"
@@ -267,15 +284,21 @@ _collect_test_commands()
                 print "}"
             }
             for (s = 1; s <= step_count; s++) {
-                if (step_files[s] != previous_file) print "cr_file_failed=0"
+                if (step_files[s] != previous_file) {
+                    summary(previous_file)
+                    print "cr_file_failed=0"
+                    if (short) print "cr_file_status=ok"
+                }
                 previous_file = step_files[s]
                 if (step_per_file[s]) print "if [ \"$cr_file_failed\" -eq 0 ]; then"
                 print "if ! cr_test_" steps[s] "; then"
                 print "  cr_status=1"
+                if (short) print "  cr_file_status=fail"
                 if (step_per_file[s]) print "  cr_file_failed=1"
                 print "fi"
                 if (step_per_file[s]) print "fi"
             }
+            summary(previous_file)
             print "exit \"$cr_status\""
         }
     '
