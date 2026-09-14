@@ -130,4 +130,89 @@ execute_command()
         usage >&2
         exit "$_CR_USAGE_EXIT_CODE"
     fi
+
+    if [ "$reason" = "duplicate" ] && [ -z "$duplicate_of" ]; then
+        log_error "--duplicate-of option is required when --reason is set to \"duplicate\""
+        usage >&2
+        exit "$_CR_USAGE_EXIT_CODE"
+    fi
+
+    if ! ticket_path="$(_resolve_ticket_path "$ticket" 2>&1)"; then
+        log_error "Failed to resolve ticket \"$ticket\": $ticket_path"
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    if ! _lock_ticket "$ticket_path" 2>/dev/null; then
+        log_error "Failed to lock ticket: \"$ticket_path\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+    trap '_unlock_ticket "$ticket_path"' 0
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+
+    if ! ticket_content="$(_read_ticket_file "$ticket_path")"; then
+        log_error "Failed to read ticket \"$ticket_path\": $ticket_content"
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    status=$(printf '%s\n' "$ticket_content" | md_frontmatter_get "$TICKET_STATUS_KEY")
+    if { [ "${ticket_path%/*}" != "$TICKETS_PATH/open" ] || [ "$status" != "$TICKET_STATUS_OPEN" ]; } &&
+        { [ "${ticket_path%/*}" != "$TICKETS_PATH/active" ] || [ "$status" != "$TICKET_STATUS_ACTIVE" ]; }
+    then
+        log_error "Ticket is not open or active: \"$ticket_path\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    if [ "$reason" = "done" ]; then
+        if [ "$status" != "$TICKET_STATUS_ACTIVE" ]; then
+            log_error "Ticket is not active: \"$ticket_path\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+        if ! _ticket_dependencies_satisfied "$ticket_path"; then
+            log_error "Ticket dependencies are not satisfied: \"$ticket_path\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+    fi
+
+    if [ "$reason" = "duplicate" ]; then
+        if ! duplicate_path="$(_resolve_ticket_path "$duplicate_of" 2>&1)"; then
+            log_error "Failed to resolve duplicate ticket \"$duplicate_of\": $duplicate_path"
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+        if [ "$duplicate_path" = "$ticket_path" ]; then
+            log_error "Ticket cannot be a duplicate of itself: \"$ticket_path\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+        duplicate_slug="${duplicate_path##*/}"
+        duplicate_of="${duplicate_slug%%-*}"
+    fi
+
+    closed_ticket_path="$TICKETS_PATH/close/${ticket_path##*/}"
+    if [ -e "$closed_ticket_path" ] || [ -L "$closed_ticket_path" ]; then
+        log_error "Ticket already exists at path: \"$closed_ticket_path\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    if ! fs_make_dir "$TICKETS_PATH/close"; then
+        log_error "Cannot write to \"$TICKETS_PATH/close\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    if ! md_frontmatter_set "$TICKET_STATUS_KEY" "$TICKET_STATUS_CLOSED" < "$ticket_path" \
+        | md_frontmatter_set "$TICKET_REASON_KEY" "$reason" \
+        | md_frontmatter_set "$TICKET_DUPLICATE_OF_KEY" "$duplicate_of" \
+        | fs_write "$closed_ticket_path"
+    then
+        log_error "Failed to write closed ticket: \"$closed_ticket_path\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    if ! rm -f "$ticket_path"; then
+        rm -f "$closed_ticket_path"
+        log_error "Failed to remove source ticket: \"$ticket_path\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    output "$closed_ticket_path"
 }
