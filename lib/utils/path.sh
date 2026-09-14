@@ -35,8 +35,9 @@ path_normalize_relative()
         /*)  return 1 ;;
     esac
 
-    awk -v path="$path" '
+    CR_NORMALIZE_PATH=$path awk '
         BEGIN {
+            path = ENVIRON["CR_NORMALIZE_PATH"]
             n = split(path, parts, "/")
             depth = 0
 
