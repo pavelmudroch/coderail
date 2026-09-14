@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 
-usage() {
+usage()
+{
     cat <<'EOF'
 Usage:
   cr ticket close [options] <ticket>

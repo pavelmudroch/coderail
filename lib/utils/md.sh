@@ -115,7 +115,8 @@ md_frontmatter_get()
     '
 }
 
-md_frontmatter_set() {
+md_frontmatter_set()
+{
     key=$1
     value=$2
 

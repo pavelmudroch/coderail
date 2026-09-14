@@ -11,7 +11,8 @@ TICKET_REASON_KEY="reason"
 TICKET_DUPLICATE_OF_KEY="duplicate-of"
 TICKET_DEPENDS_ON_KEY="depends-on"
 
-usage() {
+usage()
+{
     cat <<'EOF'
 Usage:
   cr ticket [options] <command>

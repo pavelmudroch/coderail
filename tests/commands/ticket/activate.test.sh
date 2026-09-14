@@ -54,7 +54,8 @@ _run_ticket_activate()
         trap "exit 143" TERM
 
         if [ "${ACTIVATE_FAIL_WRITE:-0}" -eq 1 ]; then
-            fs_write() { cat > /dev/null; return 1; }
+            fs_write()
+{ cat > /dev/null; return 1; }
         fi
         if [ "${ACTIVATE_FAIL_REMOVE:-0}" -eq 1 ]; then
             rm()

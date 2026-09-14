@@ -27,7 +27,8 @@ ROOT_DIR=$(
     pwd
 )
 
-usage() {
+usage()
+{
     cat <<'EOF'
 Usage:
   release.sh (--patch|--minor|--major)
@@ -43,18 +44,21 @@ Options:
 EOF
 }
 
-error() {
+error()
+{
     printf 'error: %s\n' "$*" >&2
     usage >&2
     exit 2
 }
 
-fatal() {
+fatal()
+{
     printf 'error: %s\n' "$*" >&2
     exit 1
 }
 
-set_bump() {
+set_bump()
+{
     [ -z "$bump" ] || error "multiple bump flags provided"
     bump=$1
 }
@@ -99,7 +103,8 @@ TEMP_DIR="${TMPDIR:-/tmp}"
 TEMP_DIR=${TEMP_DIR%/}
 tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-release.XXXXXX")
 
-cleanup() {
+cleanup()
+{
     rm -rf "$tmp_dir"
 }
 trap cleanup EXIT HUP INT TERM
@@ -109,11 +114,13 @@ remote_tags_file=$tmp_dir/remote-tags
 remote_refs_file=$tmp_dir/remote-refs
 all_tags_file=$tmp_dir/all-tags
 
-write_local_tags() {
+write_local_tags()
+{
     git -C "$ROOT_DIR" tag --list > "$local_tags_file"
 }
 
-write_remote_tags() {
+write_remote_tags()
+{
     if ! git -C "$ROOT_DIR" ls-remote --tags origin > "$remote_refs_file" 2>/dev/null; then
         fatal "unable to read release tags from origin"
     fi
@@ -128,14 +135,16 @@ write_remote_tags() {
     ' "$remote_refs_file" > "$remote_tags_file"
 }
 
-write_all_tags() {
+write_all_tags()
+{
     write_local_tags
     write_remote_tags
 
     cat "$local_tags_file" "$remote_tags_file" > "$all_tags_file"
 }
 
-read_declared_version() {
+read_declared_version()
+{
     declared_version=
 
     [ -f "$ROOT_DIR/lib/version.sh" ] || return 0
@@ -147,7 +156,8 @@ read_declared_version() {
     )
 }
 
-highest_release_version() {
+highest_release_version()
+{
     awk '
         /^v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$/ {
             split(substr($0, 2), version, ".")
@@ -176,7 +186,8 @@ highest_release_version() {
     ' "$all_tags_file"
 }
 
-derive_target() {
+derive_target()
+{
     write_all_tags
     read_declared_version
 
@@ -223,22 +234,26 @@ derive_target() {
     fi
 }
 
-assert_main_branch() {
+assert_main_branch()
+{
     branch=$(git -C "$ROOT_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || printf detached)
 
     [ "$branch" = main ] || fatal "current branch must be main before releasing; found $branch"
 }
 
-assert_clean_worktree() {
+assert_clean_worktree()
+{
     [ -z "$(git -C "$ROOT_DIR" status --porcelain)" ] ||
         fatal "worktree must be clean before release validation"
 }
 
-tag_exists_in_file() {
+tag_exists_in_file()
+{
     grep -Fx "$1" "$2" >/dev/null 2>&1
 }
 
-assert_target_tag_available() {
+assert_target_tag_available()
+{
     if tag_exists_in_file "$target_tag" "$local_tags_file"; then
         fatal "derived version tag already exists locally: $target_tag"
     fi
@@ -248,13 +263,15 @@ assert_target_tag_available() {
     fi
 }
 
-validate_repo_state() {
+validate_repo_state()
+{
     assert_main_branch
     assert_clean_worktree
     assert_target_tag_available
 }
 
-assert_file_contains_line() {
+assert_file_contains_line()
+{
     file=$1
     expected_line=$2
     error_message=$3
@@ -263,14 +280,16 @@ assert_file_contains_line() {
     grep -Fx "$expected_line" "$ROOT_DIR/$file" >/dev/null 2>&1 || fatal "$error_message"
 }
 
-validate_version_file() {
+validate_version_file()
+{
     assert_file_contains_line \
         lib/version.sh \
         "coderail_version=\"$target_version\"" \
         "expected lib/version.sh to contain coderail_version=\"$target_version\""
 }
 
-validate_changelog() {
+validate_changelog()
+{
     changelog=$ROOT_DIR/CHANGELOG.md
     release_link="[$target_tag]: https://github.com/pavelmudroch/coderail/releases/tag/$target_tag"
     release_compare_link="[$target_tag]: https://github.com/pavelmudroch/coderail/compare/v$previous_version...$target_tag"
@@ -290,12 +309,14 @@ validate_changelog() {
         fatal "expected CHANGELOG.md [Unreleased] link: $unreleased_link"
 }
 
-validate_metadata() {
+validate_metadata()
+{
     validate_version_file
     validate_changelog
 }
 
-capture_latest_state() {
+capture_latest_state()
+{
     if previous_latest_ref=$(git -C "$ROOT_DIR" rev-parse -q --verify refs/tags/latest 2>/dev/null); then
         previous_latest_exists=true
     else
@@ -304,7 +325,8 @@ capture_latest_state() {
     fi
 }
 
-rollback_release_tags() {
+rollback_release_tags()
+{
     rollback_failed=false
 
     if git -C "$ROOT_DIR" rev-parse -q --verify "refs/tags/$target_tag" >/dev/null; then
@@ -329,7 +351,8 @@ rollback_release_tags() {
     [ "$rollback_failed" = false ] || fatal "rollback failed after release publish failure"
 }
 
-publish_release() {
+publish_release()
+{
     release_commit=$(git -C "$ROOT_DIR" rev-parse HEAD)
 
     capture_latest_state

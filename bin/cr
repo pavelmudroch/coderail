@@ -60,7 +60,8 @@ register_temp_resource()
     printf '%s\n' "$resource" >> "$_CR_TEMP_RESOURCE_FILE"
 }
 
-usage() {
+usage()
+{
     cat <<'EOF'
 Usage:
   cr [options] <command>
@@ -95,7 +96,8 @@ Environment Variables:
 EOF
 }
 
-version() {
+version()
+{
     . "$_CR_INSTALL_DIR/lib/version.sh"
     output "cr version $coderail_version"
 }

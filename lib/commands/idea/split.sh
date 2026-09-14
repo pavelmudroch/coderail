@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 
-usage() {
+usage()
+{
     cat <<'EOF'
 Usage:
   cr idea split [options] <idea_path> <child_title> <child_title>

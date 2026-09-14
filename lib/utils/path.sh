@@ -26,7 +26,8 @@ path_is_within()
     esac
 }
 
-path_normalize_relative() {
+path_normalize_relative()
+{
     path="$1"
 
     case $path in

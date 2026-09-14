@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 
-slugify() {
+slugify()
+{
     printf '%s\n' "$1" | \
     tr '[:upper:]' '[:lower:]' | \
     sed 's/[^a-z0-9]/-/g' | \

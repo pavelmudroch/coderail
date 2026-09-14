@@ -6,7 +6,8 @@ IDEA_STATUS_SPLIT="split"
 
 PLANS_DIR=".coderail/plans"
 
-usage() {
+usage()
+{
     cat <<'EOF'
 Usage:
   cr idea [options] <command>

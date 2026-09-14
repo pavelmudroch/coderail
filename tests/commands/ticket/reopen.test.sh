@@ -54,7 +54,8 @@ _run_ticket_reopen()
         trap "exit 143" TERM
 
         if [ "${REOPEN_FAIL_WRITE:-0}" -eq 1 ]; then
-            fs_write() { cat > /dev/null; return 1; }
+            fs_write()
+{ cat > /dev/null; return 1; }
         fi
         if [ "${REOPEN_FAIL_REMOVE:-0}" -eq 1 ]; then
             rm()

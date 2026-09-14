@@ -14,7 +14,8 @@ TEMP_DIR=${TEMP_DIR%/}
 tmp_dir=$(mktemp -d "$TEMP_DIR/coderail-all-test.XXXXXX")
 test_files=$tmp_dir/test-files
 
-cleanup() {
+cleanup()
+{
     rm -rf "$tmp_dir"
 }
 trap cleanup EXIT HUP INT TERM
