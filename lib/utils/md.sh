@@ -161,6 +161,29 @@ md_frontmatter_set() {
     '
 }
 
+md_frontmatter_remove()
+{
+    key="$1"
+
+    awk -v key="$key" '
+        NR == 1 {
+            in_frontmatter = 1
+            print
+            next
+        }
+
+        in_frontmatter && $0 == "---" {
+            in_frontmatter = 0
+        }
+
+        in_frontmatter && substr($0, 1, index($0, ":") - 1) == key {
+            next
+        }
+
+        { print }
+    '
+}
+
 md_frontmatter_empty()
 {
     printf -- '---\n---\n'
