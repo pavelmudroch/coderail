@@ -1,6 +1,6 @@
 ---
 name: spec
-description: Convert an approved forged idea into an implementation-ready specification and optional ticket plan.
+description: Convert an approved forged idea into an implementation-ready specification.
 disable-model-invocation: true
 ---
 
@@ -125,13 +125,3 @@ Treat the specification as ready when:
 Record reasonable low-impact assumptions instead of blocking progress.
 
 Use <skill>question</skill> for remaining material uncertainty, then update `SPEC.md`.
-
-## Tickets
-
-When the specification becomes ready, ask the user whether to create implementation tickets.
-
-When approved:
-
-1. Read `prompt.md` from this skill directory.
-2. Delegate its complete content together with the path to `SPEC.md` to a worker agent.
-3. Record the resulting tickets in the `Ticket Plan` section of `SPEC.md`.

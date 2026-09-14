@@ -1,10 +1,15 @@
-Read the provided `SPEC.md`. Identify implementation units and decompose the specification into small local tickets.
+---
+name: ticket
+description: Manage implementation tickets based on context.
+disable-model-invocation: true
+---
+Take available context, identify implementation units and decompose them into small local tickets.
 
 ## Ticket model
 
 Create tickets as vertical slices that deliver a specific feature or value across required system layers.
 
-Within each ticket, create tasks as focused horizontal slices within a specific layer.
+Within each ticket, create tasks as focused horizontal slices scoped to a specific layer, component, or concern.
 
 Prefer:
 
@@ -21,7 +26,7 @@ For each implementation unit:
 
    `cr ticket create <title>`
 
-   Add `--requires <ticket_id>` for dependencies. Repeat the option for multiple dependencies.
+   Add `-d <ticket_id>` for each dependency. Repeat the option for multiple dependencies.
 
 2. Edit the created ticket file returned by `cr`.
 
@@ -31,7 +36,7 @@ For each implementation unit:
 
    `1. [ ] Task description`
 
-   Use `[x]` only for completed tasks.
+   Use `[x]` for completed tasks.
 
 5. Add details for each task under `## Task details`, including:
 
@@ -41,7 +46,7 @@ For each implementation unit:
 
 Add relevant files, documentation, specifications, or related tickets under `## References`.
 
-Do not manually create ticket files or front matter. Let `cr ticket create` manage them.
+Create ticket files and front matter through `cr ticket create`.
 
 ## Ticket shape
 
