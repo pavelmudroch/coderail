@@ -137,17 +137,17 @@ _validate_idea_path()
     status=$(printf '%s\n' "$idea_content" | md_frontmatter_get "status")
     if [ -z "$status" ]; then
         printf 'Missing status in front matter\n'
-        [ "$accumulate_errors" == true ] || return 1
+        [ "$accumulate_errors" = true ] || return 1
     fi
 
     title=$(printf '%s\n' "$idea_content" | md_frontmatter_get "title")
     if [ -z "$title" ]; then
         printf 'Missing title in front matter\n'
-        [ "$accumulate_errors" == true ] || return 1
+        [ "$accumulate_errors" = true ] || return 1
     fi
 
     child_idea_count=$(find "$idea_dir" -type d ! -path "$idea_dir" -prune -print | awk 'END { print NR }')
-    if [ "$status" == "$IDEA_STATUS_SPLIT" ] && [ "$child_idea_count" -lt 2 ]; then
+    if [ "$status" = "$IDEA_STATUS_SPLIT" ] && [ "$child_idea_count" -lt 2 ]; then
         printf 'Split idea must have at least two child ideas\n'
         return 1
     fi
