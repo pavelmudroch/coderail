@@ -102,6 +102,12 @@ version()
     output "cr version $coderail_version"
 }
 
+_is_cwd_initialized()
+{
+    [ -d ".coderail" ] && return 0
+    return 1
+}
+
 _cleanup_on_exit()
 {
     _status=$?
@@ -215,9 +221,3 @@ cd "$cwd"
     . "$script"
     execute_command "$@"
 )
-
-_is_cwd_initialized()
-{
-    [ -d ".coderail" ] && return 0
-    return 1
-}
