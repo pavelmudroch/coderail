@@ -31,10 +31,10 @@ _run_test()
 
 print_tests_header 'Test Command Tests'
 test_expect 'missing map' 'No tests found' _run_test missing
-test_expect 'short missing map' '' _run_test --short missing
+test_expect 'short missing map' 'No tests found' _run_test --short missing
 : > .coderail/test_map
 test_expect 'empty map' 'No tests found' _run_test missing
-test_expect 'short empty map' '' _run_test --short missing
+test_expect 'short empty map' 'No tests found' _run_test --short missing
 
 cat > .coderail/test_map <<'MAP'
 # Comment
@@ -53,7 +53,7 @@ wildcard
 deep/nested/two
 other' _run_test src/deep/nested/one.ts src/deep/nested/two.ts src/deep/nested/one.ts other/a.ts
 test_expect 'whole path matching' 'No tests found' _run_test prefix/src/a/b.ts other/ab.ts
-test_expect 'short unmatched file' '' _run_test --short other/ab.ts
+test_expect 'short unmatched file' 'No tests found' _run_test --short other/ab.ts
 mkdir -p 'src/space dir'
 : > 'src/space dir/file name.ts'
 test_expect 'directory selection and spaces' 'space dir/file name
