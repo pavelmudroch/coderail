@@ -13,7 +13,7 @@ Usage:
 
 Options:
   -h, --help           Show this help message and exit
-  --short             Output only <file> ok/fail for each tested file
+  -s, --short          Output only <file> ok/fail for each tested file
   --changed            Run tests for all changed files. Git must be available
                        in the current working directory.
 
@@ -55,7 +55,7 @@ execute_command()
                 usage >&2
                 exit "$_CR_USAGE_EXIT_CODE"
                 ;;
-            --short)
+            -s|--short)
                 short=1
                 shift
                 ;;

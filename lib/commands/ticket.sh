@@ -90,6 +90,7 @@ _resolve_ticket_path()
 {
     ticket="$1"
     resolved_path=""
+    ticket="${ticket##*/}"
 
     for ticket_path in "$TICKETS_PATH"/open/*.md \
         "$TICKETS_PATH"/active/*.md \

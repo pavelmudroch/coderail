@@ -6,18 +6,18 @@ usage()
 Usage:
   cr ticket reopen [options] <ticket>
 
-  Reopen an existing ticket by its ID or slug.
+  Reopen an existing ticket by its ID, path or slug.
 
 Options:
   -h, --help           Show this help message and exit
   -d, --depends-on <ticket>
-                       The ticket id, or ticket slug this ticket depends on
+                       The ticket id, path or ticket slug this ticket depends on
                        Can be specified multiple times for multiple dependencies
                        Serves as additional dependencies for the ticket being
                        reopened, does not replace existing dependencies
 
 Arguments:
-  <ticket>             The ID or slug of the ticket to reopen
+  <ticket>             The ID, path or slug of the ticket to reopen
 EOF
 }
 

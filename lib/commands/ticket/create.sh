@@ -11,8 +11,9 @@ Usage:
 Options:
   -h, --help           Show this help message and exit
   -d, --depends-on <ticket>
-                       The ticket id, or ticket slug this new ticket depends on
-                       Can be specified multiple times for multiple dependencies
+                       The ticket id, path or ticket slug this new ticket
+                       depends on. Can be specified multiple times for multiple
+                       dependencies
 
 Arguments:
   <ticket-title>       The title of the ticket to create

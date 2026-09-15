@@ -6,13 +6,13 @@ usage()
 Usage:
   cr ticket activate [options] <ticket>
 
-  Activate an existing ticket by its ID or slug.
+  Activate an existing ticket by its ID, path or slug.
 
 Options:
   -h, --help           Show this help message and exit
 
 Arguments:
-  <ticket>             The ID or slug of the ticket to activate
+  <ticket>             The ID, path or slug of the ticket to activate
 EOF
 }
 

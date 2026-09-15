@@ -6,18 +6,19 @@ usage()
 Usage:
   cr ticket close [options] <ticket>
 
-  Close an existing ticket by its ID or slug.
+  Close an existing ticket by its ID, path or slug.
 
 Options:
   -h, --help           Show this help message and exit
   --reason <done | duplicate | deferred | dismissed>
                        The reason for closing the ticket (defaults to "done")
   --duplicate-of <ticket>
-                       The ticket ID or slug that this ticket is a duplicate of,
-                       only valid when --reason is set to "duplicate"
+                       The ticket ID, path or slug that this ticket is a
+                       duplicate of, only valid when --reason is set to
+                       "duplicate"
 
 Arguments:
-  <ticket>             The ID or slug of the ticket to close
+  <ticket>             The ID, path or slug of the ticket to close
 EOF
 }
 
