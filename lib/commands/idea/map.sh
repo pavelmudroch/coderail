@@ -93,13 +93,33 @@ EOF
     output "$result"
 }
 
+_json_escape()
+{
+    printf '%s\n' "$1" | awk '
+        BEGIN {
+            escapes["\""] = "\\\""
+            escapes["\\"] = "\\\\"
+            for (i = 1; i < 32; i++) {
+                escapes[sprintf("%c", i)] = sprintf("\\u%04x", i)
+            }
+        }
+        {
+            if (NR > 1) printf "\\n"
+            for (i = 1; i <= length($0); i++) {
+                character = substr($0, i, 1)
+                printf "%s", character in escapes ? escapes[character] : character
+            }
+        }
+    '
+}
+
 _json_formatter()
 {
-    path="$1"
-    file="$2"
-    title="$3"
-    status="$4"
-    parent="$5"
+    path=$(_json_escape "$1")
+    file=$(_json_escape "$2")
+    title=$(_json_escape "$3")
+    status=$(_json_escape "$4")
+    parent=$(_json_escape "$5")
 
     printf '  {\n'
     printf '    "path": "%s",\n' "$path"
