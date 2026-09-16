@@ -99,6 +99,7 @@ execute_command()
     fi
 
     idea_file="$PLANS_DIR/$idea_path/IDEA.md"
+    log_verbose "Checking idea: \"$idea_file\""
     if ! idea_content="$(_read_idea_file "$idea_path")"; then
         log_error "Failed to read idea file: $idea_content"
         exit "$_CR_ERROR_EXIT_CODE"
@@ -110,6 +111,7 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Preparing to split idea: \"$idea_file\""
     if ! temp_dir=$(fs_temp_for_dir "$PLANS_DIR/$idea_path"); then
         log_error "Cannot write to \"$PLANS_DIR/$idea_path\""
         exit "$_CR_ERROR_EXIT_CODE"
@@ -128,6 +130,7 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Saving split idea and its children: \"$PLANS_DIR/$idea_path\""
     if ! fs_stage_temp_dir "$temp_dir"; then
         log_error "Failed to update idea at: \"$PLANS_DIR/$idea_path\""
         exit "$_CR_ERROR_EXIT_CODE"
@@ -157,6 +160,7 @@ _create_child_ideas()
         child_idea_name=$(slugify "$child_title")
         child_idea_path="$(_normalize_idea_path "$child_idea_name")" || exit 1
         fs_make_dir "$temp_dir/$child_idea_path" || exit 1
+        log_verbose "Creating child idea in '$IDEA_STATUS_FORGING' status: \"$PLANS_DIR/$idea_path/$child_idea_path/IDEA.md\""
         md_frontmatter_empty \
         | md_frontmatter_set "title" "$child_title" \
         | md_frontmatter_set "status" "$IDEA_STATUS_FORGING" \

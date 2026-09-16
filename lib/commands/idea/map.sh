@@ -63,6 +63,7 @@ execute_command()
         result="["
     fi
 
+    log_verbose "Building idea map..."
     first=true
     while IFS= read -r path; do
         log_verbose "Checking idea at $path"

@@ -22,6 +22,7 @@ _run_test()
 "
         output() { printf "%s\n" "$*"; }
         log_error() { printf "%s\n" "$*" >&2; }
+        log_verbose() { :; }
         . "$1/lib/utils/path.sh"
         . "$1/lib/commands/test.sh"
         shift

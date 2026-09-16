@@ -116,6 +116,7 @@ execute_command()
     set --
     while IFS= read -r dependency; do
         [ -n "$dependency" ] || continue
+        log_verbose "Resolving ticket dependency: \"$dependency\""
         if ! dependency_path="$(_resolve_ticket_path "$dependency" 2>&1)"; then
             log_error "Failed to resolve dependency \"$dependency\": $dependency_path"
             exit "$_CR_ERROR_EXIT_CODE"
@@ -127,6 +128,7 @@ $depends_on_tickets
 EOF
     depends_on="$(_merge_ticket_dependencies "$@")"
 
+    log_verbose "Finding the next available ticket ID..."
     ticket_id="$(_next_ticket_id)"
     ticket_file="$TICKETS_PATH/open/$ticket_id-$ticket_slug.md"
     if [ -e "$ticket_file" ] || [ -L "$ticket_file" ]; then
@@ -134,6 +136,7 @@ EOF
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Creating open ticket: \"$ticket_file\""
     if ! fs_make_dir "$TICKETS_PATH/open"; then
         log_error "Cannot write to \"$TICKETS_PATH/open\""
         exit "$_CR_ERROR_EXIT_CODE"

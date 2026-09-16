@@ -57,6 +57,7 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Checking idea: \"$PLANS_DIR/$idea_path/IDEA.md\""
     if ! idea_content="$(_read_idea_file "$idea_path")"; then
         log_error "Failed to read idea file: $idea_content"
         exit "$_CR_ERROR_EXIT_CODE"
@@ -69,6 +70,7 @@ execute_command()
     fi
 
     idea_file="$PLANS_DIR/$idea_path/IDEA.md"
+    log_verbose "Returning idea to '$IDEA_STATUS_FORGING': \"$idea_file\""
     if ! printf '%s' "$idea_content" \
         | md_frontmatter_set "status" "$IDEA_STATUS_FORGING" \
         | fs_write "$idea_file"

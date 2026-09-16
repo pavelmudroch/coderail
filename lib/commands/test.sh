@@ -101,16 +101,19 @@ execute_command()
     fi
 
     if [ ! -f "$TEST_MAP_FILE" ]; then
+        log_verbose "Test map file not found: \"$TEST_MAP_FILE\""
         output "No tests found"
         exit "$_CR_SUCCESS_EXIT_CODE"
     fi
 
+    log_verbose "Reading test map: \"$TEST_MAP_FILE\""
     if ! test_map_content=$(cat "$TEST_MAP_FILE"); then
         log_error "Failed to read test map file: $TEST_MAP_FILE"
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
     if [ "$changed" -eq 1 ]; then
+        log_verbose "Finding staged, unstaged and untracked files..."
         if ! changed_file_list=$(_get_changed_file_list); then
             log_error "Failed to list changed files. Run --changed inside a Git working tree."
             exit "$_CR_ERROR_EXIT_CODE"
@@ -118,23 +121,29 @@ execute_command()
         file_list="$file_list$EOL$changed_file_list"
     fi
 
+    log_verbose "Collecting files from selected paths..."
     if ! file_list=$(printf '%s\n' "$file_list" | _expand_test_paths); then
         log_error "Failed to list files for testing"
         exit "$_CR_ERROR_EXIT_CODE"
     fi
+    log_verbose "Matching files to configured test commands..."
     if ! commands=$(printf '%s\n' "$test_map_content" | _collect_test_commands); then
         log_error "Failed to collect test commands"
         exit "$_CR_ERROR_EXIT_CODE"
     fi
     if [ -z "$commands" ]; then
+        log_verbose "No test commands matched the selected files"
         output "No tests found"
         return "$_CR_SUCCESS_EXIT_CODE"
     fi
 
     # Inherit stdout and stderr so test output is visible as commands run.
+    log_verbose "Running matched test commands..."
     if sh -c "$commands" < /dev/null; then
+        log_verbose "All matched test commands passed"
         return "$_CR_SUCCESS_EXIT_CODE"
     else
+        log_verbose "One or more matched test commands failed"
         return "$_CR_ERROR_EXIT_CODE"
     fi
 }
@@ -161,6 +170,7 @@ _expand_test_paths()
         fi
         test_path=$normalized_test_path
         if [ -d "$test_path" ]; then
+            log_verbose "Finding files in directory: \"$test_path\""
             test_directory_files=$(find "./$test_path" -type f -print) || return 1
             printf '%s\n' "$test_directory_files" | sed 's|^\(\./\)*||'
         else

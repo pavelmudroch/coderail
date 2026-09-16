@@ -139,11 +139,13 @@ execute_command()
         exit "$_CR_USAGE_EXIT_CODE"
     fi
 
+    log_verbose "Resolving ticket: \"$ticket\""
     if ! ticket_path="$(_resolve_ticket_path "$ticket" 2>&1)"; then
         log_error "Failed to resolve ticket \"$ticket\": $ticket_path"
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Locking ticket for closure: \"$ticket_path\""
     if ! _lock_ticket "$ticket_path" 2>/dev/null; then
         log_error "Failed to lock ticket: \"$ticket_path\""
         exit "$_CR_ERROR_EXIT_CODE"
@@ -171,6 +173,7 @@ execute_command()
             log_error "Ticket is not active: \"$ticket_path\""
             exit "$_CR_ERROR_EXIT_CODE"
         fi
+        log_verbose "Checking ticket dependencies: \"$ticket_path\""
         if ! _ticket_dependencies_satisfied "$ticket_path"; then
             log_error "Ticket dependencies are not satisfied: \"$ticket_path\""
             exit "$_CR_ERROR_EXIT_CODE"
@@ -178,6 +181,7 @@ execute_command()
     fi
 
     if [ "$reason" = "duplicate" ]; then
+        log_verbose "Resolving duplicate ticket: \"$duplicate_of\""
         if ! duplicate_path="$(_resolve_ticket_path "$duplicate_of" 2>&1)"; then
             log_error "Failed to resolve duplicate ticket \"$duplicate_of\": $duplicate_path"
             exit "$_CR_ERROR_EXIT_CODE"
@@ -196,6 +200,7 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Closing ticket with reason '$reason': \"$ticket_path\" -> \"$closed_ticket_path\""
     if ! fs_make_dir "$TICKETS_PATH/close"; then
         log_error "Cannot write to \"$TICKETS_PATH/close\""
         exit "$_CR_ERROR_EXIT_CODE"

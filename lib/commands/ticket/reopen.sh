@@ -108,11 +108,13 @@ execute_command()
         exit "$_CR_USAGE_EXIT_CODE"
     fi
 
+    log_verbose "Resolving ticket: \"$ticket\""
     if ! ticket_path="$(_resolve_ticket_path "$ticket" 2>&1)"; then
         log_error "Failed to resolve ticket \"$ticket\": $ticket_path"
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Locking ticket for reopening: \"$ticket_path\""
     if ! _lock_ticket "$ticket_path" 2>/dev/null; then
         log_error "Failed to lock ticket: \"$ticket_path\""
         exit "$_CR_ERROR_EXIT_CODE"
@@ -137,6 +139,7 @@ execute_command()
     set -- "$depends_on"
     while IFS= read -r dependency; do
         [ -n "$dependency" ] || continue
+        log_verbose "Resolving additional ticket dependency: \"$dependency\""
         if ! dependency_path="$(_resolve_ticket_path "$dependency" 2>&1)"; then
             log_error "Failed to resolve dependency \"$dependency\": $dependency_path"
             exit "$_CR_ERROR_EXIT_CODE"
@@ -158,6 +161,7 @@ EOF
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Reopening ticket: \"$ticket_path\" -> \"$open_ticket_path\""
     if ! fs_make_dir "$TICKETS_PATH/open"; then
         log_error "Cannot write to \"$TICKETS_PATH/open\""
         exit "$_CR_ERROR_EXIT_CODE"

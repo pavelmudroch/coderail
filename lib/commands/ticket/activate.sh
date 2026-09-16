@@ -73,11 +73,13 @@ execute_command()
         exit "$_CR_USAGE_EXIT_CODE"
     fi
 
+    log_verbose "Resolving ticket: \"$ticket\""
     if ! ticket_path="$(_resolve_ticket_path "$ticket" 2>&1)"; then
         log_error "Failed to resolve ticket \"$ticket\": $ticket_path"
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Locking ticket for activation: \"$ticket_path\""
     if ! _lock_ticket "$ticket_path" 2>/dev/null; then
         log_error "Failed to lock ticket: \"$ticket_path\""
         exit "$_CR_ERROR_EXIT_CODE"
@@ -98,6 +100,7 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Checking ticket dependencies: \"$ticket_path\""
     if ! _ticket_dependencies_satisfied "$ticket_path"; then
         log_error "Ticket dependencies are not satisfied: \"$ticket_path\""
         exit "$_CR_ERROR_EXIT_CODE"
@@ -109,6 +112,7 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Activating ticket: \"$ticket_path\" -> \"$active_ticket_path\""
     if ! fs_make_dir "$TICKETS_PATH/active"; then
         log_error "Cannot write to \"$TICKETS_PATH/active\""
         exit "$_CR_ERROR_EXIT_CODE"

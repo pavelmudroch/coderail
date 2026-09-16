@@ -88,6 +88,7 @@ execute_command()
             exit "$_CR_ERROR_EXIT_CODE"
         fi
 
+        log_verbose "Checking parent idea: \"$PLANS_DIR/$parent_idea/IDEA.md\""
         if ! parent_idea_content="$(_read_idea_file "$parent_idea")"; then
             log_error "Failed to read parent idea file: $parent_idea_content"
             exit "$_CR_ERROR_EXIT_CODE"
@@ -113,6 +114,7 @@ execute_command()
         exit "$_CR_ERROR_EXIT_CODE"
     fi
 
+    log_verbose "Creating idea in '$IDEA_STATUS_FORGING' status: \"$idea_file\""
     if ! temp_dir=$(fs_temp_for_dir "$idea_path"); then
         log_error "Cannot write to \"$idea_path\""
         exit "$_CR_ERROR_EXIT_CODE"
