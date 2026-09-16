@@ -36,7 +36,7 @@ execute_command()
                 ;;
             -p|--parent)
                 shift
-                if [ -z "$1" ]; then
+                if [ -z "${1-}" ]; then
                     log_error "Missing argument for --parent option"
                     usage >&2
                     exit "$_CR_USAGE_EXIT_CODE"
