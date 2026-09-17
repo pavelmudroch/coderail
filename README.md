@@ -374,10 +374,10 @@ These are all supported configuration keys and their environment overrides:
 | --- | --- | --- | --- |
 | `default_harness` | `DEFAULT_HARNESS` | None | Optional preferred harness: `codex`, `claude`, `copilot`, or `gemini`. |
 | `test_shell` | `TEST_SHELL` | Valid `SHELL`, otherwise `sh` | Shell command name or path recognized by `command -v`; runs test-map commands. |
-| `codex_command` | `CODEX_COMMAND` | `codex` | Agent executable; see the command-key limitation below. |
-| `claude_command` | `CLAUDE_COMMAND` | `claude` | Agent executable; see the command-key limitation below. |
-| `copilot_command` | `COPILOT_COMMAND` | `copilot` | Agent executable; see the command-key limitation below. |
-| `gemini_command` | `GEMINI_COMMAND` | `gemini` | Agent executable; see the command-key limitation below. |
+| `codex_command` | `CODEX_COMMAND` | `codex` | Agent executable; command name on `PATH` or path, without command-line arguments. |
+| `claude_command` | `CLAUDE_COMMAND` | `claude` | Agent executable; command name on `PATH` or path, without command-line arguments. |
+| `copilot_command` | `COPILOT_COMMAND` | `copilot` | Agent executable; command name on `PATH` or path, without command-line arguments. |
+| `gemini_command` | `GEMINI_COMMAND` | `gemini` | Agent executable; command name on `PATH` or path, without command-line arguments. |
 | `codex_home` | `CODEX_HOME` | `$HOME/.codex` | Agent home directory; explicit values must name an existing directory. |
 | `claude_home` | `CLAUDE_HOME` | `$HOME/.claude` | Agent home directory; explicit values must name an existing directory. |
 | `copilot_home` | `COPILOT_HOME` | `$HOME/.copilot` | Agent home directory; explicit values must name an existing directory. |
@@ -385,17 +385,10 @@ These are all supported configuration keys and their environment overrides:
 
 The `$HOME` defaults above are expanded by CodeRail itself. Use literal paths
 in configuration files; shell expansion works when setting environment variables.
-Executable environment overrides accept a command name on `PATH` or a path,
-with no command-line arguments. They must resolve successfully; symbolic links
-are followed. Empty environment overrides are ignored. `DEFAULT_HARNESS` is
-optional; when nonempty, it must name a supported harness and overrides the
-configured `default_harness`.
-
-One current limitation in [the configuration loader](lib/utils/conf.sh) affects
-command settings: configuration-file keys ending in `_command` currently ignore
-their supplied value and locate the corresponding default command (`codex`,
-`claude`, `copilot`, or `gemini`). That command must be available when the file
-is read. Use the environment override to select a custom executable.
+Executable configuration values and environment overrides must resolve
+successfully; symbolic links are followed. Empty environment overrides are
+ignored. `DEFAULT_HARNESS` is optional; when nonempty, it must name a supported
+harness and overrides the configured `default_harness`.
 
 For example, select a harness and override the test shell for one invocation:
 

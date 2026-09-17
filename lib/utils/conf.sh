@@ -172,28 +172,28 @@ load_config()
     fi
 
     if [ -n "${CODEX_COMMAND:-}" ]; then
-        if ! codex_command="$(path_locate_executable "$CODEX_COMMAND")"; then
+        if ! codex_command="$(command -v "$CODEX_COMMAND")"; then
             log_error "Unrecognized codex command in env variable CODEX_COMMAND: \"$CODEX_COMMAND\""
             exit "$_CR_ERROR_EXIT_CODE"
         fi
     fi
 
     if [ -n "${CLAUDE_COMMAND:-}" ]; then
-        if ! claude_command="$(path_locate_executable "$CLAUDE_COMMAND")"; then
+        if ! claude_command="$(command -v "$CLAUDE_COMMAND")"; then
             log_error "Unrecognized claude command in env variable CLAUDE_COMMAND: \"$CLAUDE_COMMAND\""
             exit "$_CR_ERROR_EXIT_CODE"
         fi
     fi
 
     if [ -n "${COPILOT_COMMAND:-}" ]; then
-        if ! copilot_command="$(path_locate_executable "$COPILOT_COMMAND")"; then
+        if ! copilot_command="$(command -v "$COPILOT_COMMAND")"; then
             log_error "Unrecognized copilot command in env variable COPILOT_COMMAND: \"$COPILOT_COMMAND\""
             exit "$_CR_ERROR_EXIT_CODE"
         fi
     fi
 
     if [ -n "${GEMINI_COMMAND:-}" ]; then
-        if ! gemini_command="$(path_locate_executable "$GEMINI_COMMAND")"; then
+        if ! gemini_command="$(command -v "$GEMINI_COMMAND")"; then
             log_error "Unrecognized gemini command in env variable GEMINI_COMMAND: \"$GEMINI_COMMAND\""
             exit "$_CR_ERROR_EXIT_CODE"
         fi
@@ -265,28 +265,28 @@ _parse_config_file()
                 test_shell="$value"
                 ;;
             "codex_command")
-                codex_command="$(path_locate_executable codex)" || {
+                codex_command="$(command -v "$value")" || {
                     message=$(printf "Failed to locate codex executable in file \"%s\" at line %d" "$config_file" "$current_line")
                     log_error "$message"
                     exit "$_CR_ERROR_EXIT_CODE"
                 }
                 ;;
             "claude_command")
-                claude_command="$(path_locate_executable claude)" || {
+                claude_command="$(command -v "$value")" || {
                     message=$(printf "Failed to locate claude executable in file \"%s\" at line %d" "$config_file" "$current_line")
                     log_error "$message"
                     exit "$_CR_ERROR_EXIT_CODE"
                 }
                 ;;
             "copilot_command")
-                copilot_command="$(path_locate_executable copilot)" || {
+                copilot_command="$(command -v "$value")" || {
                     message=$(printf "Failed to locate copilot executable in file \"%s\" at line %d" "$config_file" "$current_line")
                     log_error "$message"
                     exit "$_CR_ERROR_EXIT_CODE"
                 }
                 ;;
             "gemini_command")
-                gemini_command="$(path_locate_executable gemini)" || {
+                gemini_command="$(command -v "$value")" || {
                     message=$(printf "Failed to locate gemini executable in file \"%s\" at line %d" "$config_file" "$current_line")
                     log_error "$message"
                     exit "$_CR_ERROR_EXIT_CODE"
