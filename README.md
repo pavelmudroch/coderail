@@ -1,154 +1,61 @@
-# Coderail
+# CodeRail
 
-**Coderail keeps engineers in the development loop, prioritizing understood and reviewable changes over fully autonomous implementation.**
+**Coderail keeps engineers in the development loop, prioritizing understood and
+reviewable changes over fully autonomous implementation.**
 
-Coderail is a lightweight, repo-local CLI and skill set for coordinating coding agents through scoped work, branch-local tickets, and repository-specific validation.
+It is a lightweight command-line tool, skill set, and shared workflow for
+engineers working with coding agents. Its main purpose is to keep engineers in
+the loop, helping them understand the system, the codebase, and the implementation
+produced with an agent.
 
-It helps different coding tools follow the same project workflow without requiring every agent to know each repository convention, validation command, test runner, formatter, linter, or ticket format.
+Engineers discuss ideas, guide the work, and build their understanding as the
+implementation develops. CodeRail supports that collaboration with
+repository-local ideas, implementation tickets, and configured test commands.
 
-Coderail automates repetitive development mechanics while keeping direction, review, and integration decisions under human control.
+The preferred approach is to open your project in a coding-agent harness (the
+application where you work with the agent) and invoke CodeRail's skills. You
+discuss and guide the work; the agent follows the skills and uses `cr` to manage
+ideas, tickets, and validation. You can also call `cr` directly and maintain the
+documents yourself. Both approaches use the same project files.
 
-## Table of Contents
+## Table of contents
 
-* [Purpose](#purpose)
-* [What Coderail Does](#what-coderail-does)
-* [What Coderail Does Not Do](#what-coderail-does-not-do)
-* [Supported Systems](#supported-systems)
-* [Installation](#installation)
-* [Quick Start](#quick-start)
-* [Workflow](#workflow)
-  * [Choose a workflow](#choose-a-workflow)
-  * [Forge complex ideas](#forge-complex-ideas)
-  * [Create and review a specification](#create-and-review-a-specification)
-  * [Create and review tickets](#create-and-review-tickets)
-  * [Implement tickets](#implement-tickets)
-  * [Reconcile specification drift](#reconcile-specification-drift)
-  * [Update documentation](#update-documentation)
-  * [Review the complete change](#review-the-complete-change)
-  * [Manual: clean and integrate](#manual-clean-and-integrate)
-  * [Managed: finish work](#managed-finish-work)
-* [Configuration](#configuration)
-  * [`~/.coderail/config.ini`](#coderailconfigini)
-  * [`.coderail/config.ini`](#coderailconfigini-1)
-  * [Legacy `.coderail/conf.ini` fallback](#legacy-coderailconfini-fallback)
-  * [`.coderail/test.map`](#coderailtestmap)
-  * [`.coderail/work.ini`](#coderailworkini)
-* [Command Reference](#command-reference)
-  * [`cr init`](#cr-init)
-  * [`cr install`](#cr-install)
-  * [`cr uninstall`](#cr-uninstall)
-  * [`cr upgrade`](#cr-upgrade)
-  * [`cr test`](#cr-test)
-  * [`cr work`](#cr-work)
-  * [`cr clean`](#cr-clean)
-  * [`cr ticket`](#cr-ticket)
-* [Development](#development)
-  * [Release Helper](#release-helper)
-* [Inspirations](#inspirations)
-* [License](#license)
+- [Current status](#current-status)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+  - [Work with an agent (preferred)](#work-with-an-agent-preferred)
+  - [Use the CLI directly](#use-the-cli-directly)
+- [Working with ideas](#working-with-ideas)
+- [Working with tickets](#working-with-tickets)
+- [Running tests](#running-tests)
+- [Project files and configuration](#project-files-and-configuration)
+- [Getting help](#getting-help)
+- [License](#license)
 
-## Purpose
+## Current status
 
-Coderail keeps coding agents within explicit project boundaries and provides a consistent workflow across supported tools:
+CodeRail is under development. The following commands are implemented:
 
-* [`codex` (OpenAI Codex)](https://developers.openai.com/codex/cli)
-* [`claude` (Anthropic Claude)](https://code.claude.com/docs/en/quickstart#step-1-install-claude-code)
-* [`copilot` (GitHub Copilot)](https://github.com/features/copilot/cli)
-* [`gemini` (Google Gemini)](https://geminicli.com/)
+| Command | Purpose |
+| --- | --- |
+| `cr init` | Initialize a project for CodeRail. |
+| `cr idea` | Create, organize, and track ideas. |
+| `cr ticket` | Manage implementation tickets and their dependencies. |
+| `cr test` | Run configured test commands for selected paths or changed files. |
 
-It combines reusable agent skills with a small command-line tool for workflow state, ticket management, validation, and cleanup.
-
-The main idea is simple:
-
-**Coderail helps agents safely complete understandable work inside a branch.
-Git keeps the permanent history.**
-
-Coderail is intentionally designed around bounded automation. Agents can research, plan, implement, validate, and review work, but the engineer remains responsible for approving direction, understanding changes, and deciding how the result is integrated.
-
-## What Coderail Does
-
-Coderail provides:
-
-* a lightweight POSIX shell CLI
-* reusable skills for agent-guided engineering
-* repo-local idea, specification, review, and ticket files
-* branch-local ticket lifecycle and dependency management
-* repository-specific validation command routing
-* consistent behavior across supported coding tools
-* reduced agent context pollution
-* cleanup of temporary workflow files before integration
-
-For larger changes, the included skills guide work through:
-
-```txt
-idea forging
-→ specification
-→ tickets
-→ implementation
-→ validation
-→ review
-→ cleanup
-→ integration
-```
-
-For small and well-understood changes, planning stages can be skipped and a single ticket can be created from a short implementation plan.
-
-## What Coderail Does Not Do
-
-Coderail is not:
-
-* a permanent issue tracker
-* a replacement for Git history
-* a replacement for CI
-* a general build system
-* a project management platform
-* a general-purpose or fully autonomous workflow engine
-* a database of every past decision
-* a system for silently choosing architecture or merging code
-* a place to satisfy every possible future use case
-
-Coderail does not attempt to remove engineers from the development process. Its purpose is to reduce repetitive coordination work without replacing engineering judgment.
-
-## Supported Systems
-
-Coderail is intended for Unix-like environments:
-
-* Linux
-* macOS
-* Windows through WSL
-
-Coderail uses POSIX shell scripts and assumes an environment close to standard Linux or macOS shell behavior.
-
-Native Windows support outside WSL is not a primary target.
+The `install`, `uninstall`, `doctor`, `status`, and `loop` commands are planned.
+They appear in `cr --help` but are not available yet.
 
 ## Installation
 
-Use the bootstrap installer:
+Run the install script to install the latest release into `~/.coderail`:
 
 ```sh
-curl -fsSL https://github.com/pavelmudroch/coderail/raw/refs/heads/main/INSTALL | sh
+curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/INSTALL | sh
 ```
 
-The installer requires a Unix-like shell environment, standard Unix tools, and either `curl` or `wget`.
-
-It accepts no command-line arguments. Configure it with environment variables:
-
-```txt
-CODERAIL_INSTALL_DIR       Installation directory, defaults to ~/.coderail
-CODERAIL_INSTALL_VERSION   Version to install: latest, main, X.Y.Z, or vX.Y.Z
-```
-
-`CODERAIL_INSTALL_VERSION` defaults to `latest`, which installs the `latest` tag.
-
-* `latest` installs the latest stable release
-* `main` installs the current main branch
-* `X.Y.Z` and `vX.Y.Z` install the matching release tag
-
-The installation directory must not exist or must be empty.
-
-After installation, add the Coderail `bin` directory to your `PATH`. The installer prints the required command but does not modify shell startup files.
-
-For the default installation directory:
+Add the following line to your shell's startup file, and run it in your current
+terminal to make `cr` available immediately:
 
 ```sh
 export PATH="$HOME/.coderail/bin:$PATH"
@@ -157,1043 +64,405 @@ export PATH="$HOME/.coderail/bin:$PATH"
 Verify the installation:
 
 ```sh
-cr --help
-```
-
-Every command and subcommand supports `--help` for complete usage information.
-
-## Quick Start
-
-Initialize Coderail inside a repository:
-
-```sh
-cr init
-```
-
-Install Coderail skills and instructions for a coding tool:
-
-```sh
-cr install codex
-```
-
-Configure repository-specific validation commands in:
-
-```txt
-.coderail/test.map
-```
-
-Create a ticket:
-
-```sh
-cr ticket create "Add request timeout handling"
-```
-
-Select the next dependency-ready ticket:
-
-```sh
-cr ticket next --limit 1
-```
-
-Activate and complete the created ticket:
-
-```sh
-cr ticket activate 0001
-```
-
-Validate changed files:
-
-```sh
-cr test --changed
-```
-
-Close the completed ticket as satisfied:
-
-```sh
-cr ticket close 0001
-```
-
-Clean temporary workflow files before integrating completed work:
-
-```sh
-cr clean
-```
-
-## Workflow
-
-Coderail's recommended workflow is branch-based.
-
-The complete workflow is useful for complex or uncertain work. Small changes can
-skip idea forging, specification, or additional review when the intended change
-is already clear.
-
-For larger work, use fresh agent contexts between idea forging, specification,
-ticket creation, and implementation when practical. Repo-local Coderail files
-carry the agreed state between sessions.
-
-### Choose a workflow
-
-Use one branch lifecycle. The idea-forging, ticket, implementation, documentation,
-and review steps below apply to both.
-
-| Manual workflow | Managed workflow |
-| --- | --- |
-| Create and name the branch with Git. | Start with `cr work start <work-name>`. |
-| Finish with `cr clean`, then use the repository's normal integration process. | Finish with `cr work finish`, which stages a local squash integration. |
-
-For the manual workflow, create the branch with Git:
-
-```sh
-git checkout -b feat/<feature-name>
-git checkout -b fix/<issue-or-fix-name>
-```
-
-Coderail does not require a particular branch naming convention. Follow the
-rules of the repository you are working in.
-
-For the more automated managed workflow, create and record a local work branch:
-
-```sh
-cr work start "Add request timeout handling"
-```
-
-This creates and switches to `coderail/add-request-timeout-handling`, records
-the starting branch in `.coderail/work.ini`, and does not push to a remote.
-Commit the work record before commands that require a clean worktree, such as
-`cr ticket loop`.
-
-### Forge complex ideas
-
-For a complex or unclear problem, invoke the `cr-forge` skill to turn a rough
-idea into a clear, defensible direction.
-
-Discuss the problem with the agent until the following are aligned:
-
-* problem and motivation
-* desired outcome
-* boundaries
-* constraints
-* trade-offs
-* selected direction
-* explicitly rejected alternatives
-* unresolved questions
-
-The skill maintains the current idea in:
-
-```txt
-.coderail/IDEA.md
-```
-
-Review this file before continuing. The forge challenges assumptions and
-alternatives but does not research the codebase, design the implementation, or
-create tickets. It is ready for specification when it captures the agreed
-direction without prematurely defining implementation details.
-
-Small or straightforward changes can skip idea forging.
-
-### Create and review a specification
-
-Invoke the `cr-spec` skill when the selected direction is ready to become an implementation specification.
-
-The skill writes:
-
-```txt
-.coderail/SPEC.md
-```
-
-The specification can contain:
-
-* problem statement
-* intended outcome
-* implementation decisions
-* requirements
-* testing decisions
-* assumptions
-* out-of-scope items
-
-Review and revise the specification before creating tickets.
-
-For small changes, a short implementation plan can replace the specification. If the plan becomes too large for one ticket, return to `cr-spec`.
-
-### Create and review tickets
-
-Invoke `cr-tickets-from-context` to split the specification into actionable branch-local tickets.
-
-Tickets are stored under:
-
-```txt
-.coderail/tickets/
-```
-
-Each ticket should represent a meaningful vertical slice of functionality. Tasks inside the ticket describe the ordered implementation work required to deliver that slice.
-
-Review generated tickets before implementation, especially:
-
-* ticket boundaries
-* dependencies
-* expected outcomes
-* validation criteria
-* overlap between tickets
-
-### Implement tickets
-
-Invoke `cr-ticket-pick` to select the next open ticket whose dependencies are satisfied.
-
-The implementation workflow:
-
-1. Activates the selected ticket.
-2. Completes its tasks in order.
-3. Reviews agent or worker output.
-4. Runs repository validation through `cr test`.
-5. Records detected specification drift in `.coderail/DISCOVERY.md`.
-6. Records a concise implementation summary.
-7. Closes the ticket only after successful verification.
-
-Completed implementation changes can be committed to the feature branch at ticket-sized checkpoints.
-
-Use the `cr-review` skill for an uncertain, security-sensitive, compatibility-sensitive, or otherwise risky ticket when the additional review cost is justified.
-
-Several ready tickets can be processed through an agent CLI with:
-
-```sh
-cr ticket loop
-```
-
-The loop requires a Git repository and a completely clean worktree when it starts. Commit or remove newly created or modified ticket files before starting it.
-
-The loop is explicitly invoked and bounded by the user. It is intended to remove repetitive ticket handoff work, not to replace human review or run indefinitely.
-
-### Reconcile specification drift
-
-When implementation reveals that the specification no longer matches repository reality, `cr-ticket-implement` records the finding in:
-
-```txt
-.coderail/DISCOVERY.md
-```
-
-Invoke `cr-drift` to verify each discovery against the repository. It updates the specification first, then reconciles only the affected tickets. Verified, rejected, and stale discoveries are resolved; discoveries that need an architectural decision remain for the user. Discoveries are evidence, not a source of truth.
-
-### Update documentation
-
-For user-facing changes, invoke the `cr-docs-guidelines` skill.
-
-It can use the following temporary workflow files as source material:
-
-* idea
-* specification
-* tickets
-* implementation summaries
-* review output
-
-Documentation changes can be committed separately when appropriate.
-
-### Review the complete change
-
-After all tickets are complete, run the repository's full validation suite.
-
-Then manually invoke the `cr-review` skill against the complete branch or combined change.
-
-The final review should check:
-
-* correctness
-* regressions
-* failure handling
-* security
-* concurrency and lifecycle behavior
-* API, CLI, configuration, and data compatibility
-* test coverage
-
-Resolve ordinary findings within the existing implementation or create follow-up tickets when useful.
-
-Return to idea forging or the specification phase only when a finding invalidates an earlier decision or materially changes the intended behavior.
-
-Final review remains manually invoked because its cost and value depend on the size and risk of the change.
-
-### Manual: clean and integrate
-
-For the manual workflow, remove temporary Coderail workflow files before using
-the repository's normal integration process:
-
-```sh
-cr clean --dry-run
-cr clean
-```
-
-`cr clean` preserves permanent repository configuration:
-
-```txt
-.coderail/config.ini
-.coderail/conf.ini (legacy fallback)
-.coderail/.gitignore
-.coderail/test.map
-```
-
-It removes temporary branch-scoped workflow files such as:
-
-```txt
-.coderail/IDEA.md
-.coderail/SPEC.md
-.coderail/REVIEW.md
-.coderail/tickets/closed/0001-example.md
-```
-
-If only the preserved configuration files and empty directories other than `.coderail/loop/` remain, cleanup is a no-op. The temporary `.coderail/loop/` directory is removed as a unit, including when it is the only cleanup target. When ticket files exist, every ticket must be valid and satisfied before cleanup succeeds. A ticket is satisfied when it is closed as `done`, or is a `duplicate` whose chain ends at a ticket closed as `done`.
-
-When no ticket files exist, `cr clean` uses Git's index to identify helper-file candidates that cannot be restored exactly. It lists those files and requires a `y` confirmation before permanently deleting them; `--force` skips the warning and confirmation. Cleanup removes files, including ticket files, but leaves empty directories other than `.coderail/loop/`.
-
-After cleanup, integrate the branch using the repository's normal process, such as:
-
-* opening a pull request
-* squash merging
-* rebasing
-* creating a merge commit
-* merging locally
-* pushing through a protected-branch workflow
-
-Coderail deliberately does not prescribe the repository's integration policy.
-
-Temporary workflow files can be committed on the feature branch when preserving their intermediate history is useful, but they should normally be removed before the completed change is integrated.
-
-### Managed: finish work
-
-For the managed workflow started with `cr work start`, use:
-
-```sh
-cr work finish
-```
-
-It requires the recorded work branch, a clean worktree with no untracked or
-unstaged files, and all tickets resolved. It switches to the recorded base branch,
-stages a squash integration, and removes branch-local Coderail workflow files
-from that integration while preserving the base branch configuration.
-
-Failed or conflicted squash preparation preserves loop diagnostics. After a
-squash integration is prepared, `cr work finish` removes the complete
-`.coderail/loop/` directory before handling staged results or committing, so
-later failures do not preserve it. The temporary work branch remains available
-as the intentional durable history of the work.
-
-This is more automated than the manual lifecycle, but it does not push and
-does not create a commit without confirmation. You can inspect and commit the
-staged integration yourself, or confirm a configured or selected supported
-tool's proposed integration commit message.
-
-For automatic generation only, `work finish` gives the tool a unique private
-file for the raw Conventional Commit message. It validates the single-use file
-then removes it before showing the message for confirmation; agent standard
-output and error remain diagnostics, never commit-message input. Direct
-`cr-commit` remains the human-oriented instruction for proposing a message.
-
-## Configuration
-
-### `~/.coderail/config.ini`
-
-User-local Coderail settings live here.
-
-### `.coderail/config.ini`
-
-This is the canonical repository configuration. Its settings override
-user-local settings.
-
-### Legacy `.coderail/conf.ini` fallback
-
-Existing `.coderail/conf.ini` is a deprecated fallback. It remains supported,
-but Coderail warns to rename it to `config.ini`. When both files exist,
-`config.ini` takes precedence over `conf.ini` for matching settings.
-
-Supported settings:
-
-```ini
-default_tool = codex
-auto_review = true
-```
-
-`default_tool` selects `codex`, `claude`, `copilot`, or `gemini`.
-`auto_review` accepts `true` or `false` and controls the initial review setting
-for `cr ticket loop`.
-
-When no tool argument is provided, `cr install`, `cr uninstall`, `cr ticket loop`,
-and automatic commit-message generation in `cr work finish` use `default_tool`.
-
-`--auto-review` enables reviews for one ticket-loop invocation, and
-`--no-auto-review` disables them. Either explicit option overrides
-`auto_review`.
-
-### `.coderail/test.map`
-
-The test map defines which validation commands Coderail runs for selected or changed files.
-
-It is intentionally INI-like, but it is not standard INI. Section names are path globs, and lines inside sections are shell commands.
-
-Example:
-
-```ini
-[default]
-deno fmt --check
-
-[{path:**/*.ts}]
-biome format {path}
-biome check {path}
-
-[net/tcp/**/*.ts]
-deno test tests/net/tcp.test.ts
-
-[lib/{rel:**}/{base:*}.sh]
-sh test/{rel}/{base}.test.sh
-```
-
-Rules:
-
-* The first `#` starts a Coderail comment, even inside quoted shell text.
-* Comment parsing follows Coderail syntax and is not shell-aware.
-* `[default]` commands always run but define no captures.
-* Use `[default]` for commands that do not need the selected path.
-* Other section names are glob patterns and can define captures with `{name:glob}`.
-* Capture names must start with a letter or underscore and contain only letters, digits, and underscores.
-* A capture name can appear only once in a section.
-* The same capture name can be reused in another section.
-* `*` matches within one path segment.
-* `**` can match across `/`.
-* Literal `{`, `}`, and `\` in section patterns must be escaped as `\{`, `\}`, and `\\`.
-* The first `:` in a capture separates its name from its glob.
-* Later `:` characters are part of the glob.
-* Commands can use only captures defined by the matching section.
-* Capture values are shell-quoted before command execution.
-* Commands run in file order.
-* All commands are rendered and deduplicated before execution.
-* Coderail continues collecting validation failures after an individual command fails.
-
-Capture examples:
-
-```txt
-[{path:**/*.ts}]            captures the matched path as {path}
-[lib/{rel:**}/{base:*}.sh]  captures the nested directory as {rel}
-                            and the filename stem as {base}
-```
-
-There are no implicit placeholders.
-
-`{path}`, `{name}`, `{ext}`, and `{dir}` expand only when the matching section explicitly defines those captures. Other brace text remains literal.
-
-### `.coderail/work.ini`
-
-`cr work start` creates this branch-local record with the base branch, work
-branch, and work name. `cr work finish` uses it to stage the squash integration.
-`cr clean` preserves the record; `cr work finish` omits it from the integration.
-
-## Command Reference
-
-`cr` runs repo-local workflow commands from the current directory or a directory selected with `--cwd`.
-
-Basic form:
-
-```sh
-cr [options] <command>
-```
-
-Global options:
-
-```txt
--h, --help      Show help and exit
---version       Show version information and exit
--v, --verbose   Enable verbose logging
--q, --quiet     Suppress notices and log output
---cwd <dir>     Run repo-local commands from another directory
-```
-
-`--quiet` does not suppress command result output such as created ticket paths or `cr test` result lines.
-
-`--cwd` applies to repo-local commands such as `init`, `work`, `ticket`, `test`,
-and `clean`.
-
-For installation-root commands such as `upgrade`, `install`, and `uninstall`, it is accepted and ignored.
-
-Show top-level help:
-
-```sh
-cr --help
-```
-
-Show the installed version:
-
-```sh
 cr --version
 ```
 
-Run a repo-local command from another directory:
+## Quick start
 
-```sh
-cr --cwd /path/to/project test --changed
-```
-
-The following commands are currently implemented:
-
-```txt
-upgrade
-install
-uninstall
-init
-work
-clean
-ticket
-test
-```
-
-### `cr init`
-
-Initialize the current working directory for Coderail-based development.
+From your project's root directory, initialize CodeRail:
 
 ```sh
 cr init
 ```
 
-It creates the following files and directories when they do not already exist:
+### Work with an agent (preferred)
 
-```txt
-.coderail/
-.coderail/tickets/
-.coderail/.gitignore
-.coderail/config.ini
-.coderail/test.map
-```
+Open the project in your coding-agent harness with CodeRail's skills available.
+Use the harness's skill invocation mechanism to select each skill and provide
+the context below. Skill invocations happen in the harness; `cr` commands run in
+the terminal, either by you or by the agent.
 
-`.coderail/.gitignore` contains a `loop` rule that keeps local agent
-transcripts out of Git. `cr ticket loop` creates `.coderail/loop/` lazily when
-it needs to record a transcript. Existing initialization files are left
-untouched, except `.coderail/.gitignore` is updated as needed to add the
-`loop` rule.
+Work through these stages one at a time, discussing decisions and reviewing the
+result before moving to the next:
 
-Examples:
+| Invoke skill | Provide | What the agent does |
+| --- | --- | --- |
+| `forge` | An idea such as "Add search", or an existing `IDEA.md` path. | Discusses the outcome, scope, and decisions with you, maintains `IDEA.md`, and uses `cr idea` to manage its state or split it into child ideas. |
+| `spec` | The ready idea, for example `.coderail/plans/add-search/IDEA.md`. | Writes an implementation specification in `SPEC.md` next to the idea. |
+| `ticket` | The specification, for example `.coderail/plans/add-search/SPEC.md`. | Breaks the work into small tickets, creates them with `cr ticket`, and fills in tasks, validation criteria, references, and dependencies. |
+| `implement` | A ticket ID or path, or no ticket to select the next available one. | Activates the ticket, implements its tasks, validates the changes with `cr test`, and closes the ticket when complete. |
 
-```sh
-cr init
-cr --cwd /path/to/project init
-```
+For example, invoke `spec` in your harness and pass
+`.coderail/plans/add-search/IDEA.md`. The skill guides the agent through writing
+the specification; there is no `cr spec` command to run.
 
-### `cr install`
+Follow [Running tests](#running-tests) to configure the project's validation
+commands before implementation. Stay involved as the agent works: discuss
+decisions, inspect the changes, and make sure you understand the result.
 
-Install Coderail root instructions and skills for one or more supported coding tools.
+### Use the CLI directly
 
-Codex, Copilot, and Claude also receive agent instruction files. Gemini does not receive agent files.
-
-Usage:
-
-```sh
-cr install [options] [<tool> ...]
-```
-
-Supported tools:
-
-```txt
-codex
-copilot
-claude
-gemini
-```
-
-Default target directories:
-
-```txt
-codex    ~/.codex
-copilot  ~/.copilot
-claude   ~/.claude
-gemini   ~/.gemini
-```
-
-Target directories can be overridden with:
-
-```txt
-CODERAIL_CODEX_HOME
-CODERAIL_COPILOT_HOME
-CODERAIL_CLAUDE_HOME
-CODERAIL_GEMINI_HOME
-```
-
-Coderail writes a `.coderail-install` manifest into each target root.
-
-Later installations use the manifest to:
-
-* update managed files
-* remove stale managed files
-* distinguish managed files from unrelated user files
-
-Manifest entries are validated as relative paths below the target root.
-
-If an existing file is not managed by Coderail, or a managed file was modified, installation refuses to overwrite it unless `--force` is used.
-
-Options:
-
-```txt
--h, --help   Show help and exit
--f, --force  Allow overwriting untracked or modified installation files
-```
-
-Examples:
+You can perform the same workflow yourself, using `cr` for file creation and
+state changes and your editor for the document contents. Start with an idea:
 
 ```sh
-cr install codex
-cr install codex claude
-cr install --force copilot
-CODERAIL_CODEX_HOME=/tmp/codex-home cr install codex
+cr idea create "Add search"
 ```
 
-### `cr uninstall`
+Open `.coderail/plans/add-search/IDEA.md` in your editor. Below its metadata,
+describe the problem, the desired behavior, and the scope.
 
-Remove files previously installed through `cr install`.
-
-Usage:
+When the problem, scope, and key decisions are settled, mark the idea ready for
+an implementation specification:
 
 ```sh
-cr uninstall [options] [<tool> ...]
+cr idea ready .coderail/plans/add-search/IDEA.md
 ```
 
-It supports the same tools and target-directory overrides as `cr install`.
-
-Uninstallation reads the target root's `.coderail-install` manifest and removes only managed files.
-
-Modified managed files are preserved by default. Use `--force` to remove them.
-
-Options:
-
-```txt
--h, --help   Show help and exit
--f, --force  Allow removing modified installation files
-```
-
-Examples:
+Write `SPEC.md` next to the idea, describing the intended behavior,
+implementation approach, and how you will verify the result. Review it, then
+break the work into implementation tickets. For this small example:
 
 ```sh
-cr uninstall codex
-cr uninstall codex claude
-cr uninstall --force gemini
-CODERAIL_CLAUDE_HOME=/tmp/claude-home cr uninstall claude
+cr ticket create "Implement search"
 ```
 
-### `cr upgrade`
+The ticket command prints the path to the new Markdown file. Open it and add the
+implementation scope and acceptance criteria below its metadata. Reference the
+idea and specification so the reasoning stays accessible.
 
-Upgrade the complete managed Coderail installation, including the CLI, libraries, instructions, and root documentation.
-
-By default, it installs the `latest` tag.
-
-Upgrade replaces locally modified managed files and removes managed files that are stale in the target version. It preserves unrelated files, but fails if an unmanaged file already occupies a path managed by the target version.
-
-Usage:
+List available tickets and activate this one using its slug:
 
 ```sh
-cr upgrade [options]
+cr ticket next
+cr ticket activate implement-search
 ```
 
-Options:
-
-```txt
--h, --help        Show help and exit
---version X.Y.Z   Upgrade to a release version
---version vX.Y.Z  Upgrade to a release version
---canary          Upgrade to the latest build from main
-```
-
-Examples:
+Implement the change and review the code.
+Follow [Running tests](#running-tests) to configure and run the relevant tests.
+Once you understand the changes and have verified that they meet the acceptance
+criteria, close the ticket:
 
 ```sh
-cr upgrade
-cr upgrade --version 1.2.3
-cr upgrade --canary
+cr ticket close implement-search
 ```
 
-### `cr test`
+## Working with ideas
 
-Run validation commands from `.coderail/test.map` for specified files, directories, or files changed in Git.
+An idea records a problem or desired outcome to explore before planning the
+implementation. Each idea lives in `.coderail/plans/<idea-slug>/IDEA.md`;
+child ideas live in subdirectories of their parent.
 
-Usage:
+Prefer invoking `forge` in your harness to create or refine an idea through
+discussion with the agent. You can start with a description or pass an existing
+idea file. Once the idea is ready, invoke `spec` with its `IDEA.md` path to produce
+`SPEC.md` alongside it.
+
+If you create the idea manually, use the Markdown body below the metadata to capture:
+
+- **Problem:** What needs to change, and why?
+- **Desired outcome:** What should the user or system be able to do?
+- **Scope:** What is included, and what is outside this idea?
+- **Key decisions:** What have you agreed on, and why?
+- **Open questions:** What still needs to be resolved?
+
+This checklist is guidance; the CLI does not enforce a body format or assess
+whether an idea is complete.
+
+| State | Meaning |
+| --- | --- |
+| `forging` | The idea is being explored and refined. New ideas start here. |
+| `ready` | The problem, scope, and key decisions are settled enough to write an implementation specification. |
+| `split` | The idea has been divided into child ideas that are refined separately. |
+
+The agent uses `cr idea` to manage these states during forging. For direct CLI
+use, mark a forging idea ready once you have resolved the questions needed to
+write its specification. If a ready idea needs further exploration, reforge it
+to return it to `forging`:
 
 ```sh
-cr test [options] [<file|dir> ...]
+cr idea ready .coderail/plans/add-search/IDEA.md
+cr idea reforge .coderail/plans/add-search/IDEA.md
 ```
 
-At least one selector is required:
-
-```txt
---changed   Run validation for changed files in the current Git repository
-<file|dir>  Run validation for a relative file path or directory
-```
-
-Directory selectors expand recursively to regular files.
-
-For each selected path, `cr test`:
-
-1. Finds matching sections in `.coderail/test.map`.
-2. Expands capture placeholders.
-3. Deduplicates rendered commands.
-4. Runs commands in file order.
-5. Reports the path as `passed`, `failed`, or `no tests found`.
-
-The `[default]` section always applies.
-
-Coderail continues running matching commands after individual failures so all possible failures can be reported. The final exit status is non-zero when any validation command fails.
-
-Use verbose mode to inspect full command output:
+Split a broad forging idea into at least two smaller ideas:
 
 ```sh
-cr --verbose test --changed
+cr idea create "Improve search"
+cr idea split .coderail/plans/improve-search/IDEA.md "Filter results" "Sort results"
 ```
 
-Absolute paths and parent-directory traversal are not supported. Use paths relative to the selected working directory.
-
-Examples:
+The parent becomes `split`, and each child starts in `forging`. You can add more
+children to a split parent with `create --parent`:
 
 ```sh
+cr idea create --parent .coderail/plans/improve-search/IDEA.md "Save searches"
+```
+
+View the idea hierarchy and statuses with `cr idea map`. Use `cr idea map --json`
+when you need structured output.
+
+## Working with tickets
+
+Each ticket should describe one small, reviewable change with explicit acceptance
+criteria. Use its Markdown body to record the scope, reference the specification,
+and explain how to verify completion. Keeping work small helps you understand
+the agent's decisions and review the implementation as it develops.
+
+Prefer invoking `ticket` in your harness with the specification to have the
+agent create and populate tickets. Then invoke `implement` with a ticket, or
+without one to work on the next available ticket. The agent uses `cr ticket`
+for the lifecycle and `cr test` for validation while you guide and review the
+work.
+
+Tickets live under `.coderail/tickets/` and move from `open` to `active` to
+`closed`. Commands accept a ticket ID, path, or slug; these examples use slugs.
+
+For direct CLI use, create tickets and declare any work that must finish first:
+
+```sh
+cr ticket create "Build search index"
+cr ticket create --depends-on build-search-index "Display search results"
+cr ticket next --limit 1
+cr ticket activate build-search-index
+```
+
+Repeat `--depends-on` for multiple dependencies. `cr ticket next` lists only open
+tickets whose dependencies are satisfied. Activation also requires satisfied
+dependencies.
+
+Implement the active ticket, review the changes, and verify its acceptance
+criteria before closing it:
+
+```sh
+cr ticket close build-search-index
+cr ticket next
+```
+
+Closing the index ticket as done makes the results ticket available. Closing
+with the default reason, `done`, requires an active ticket with satisfied
+dependencies. For other outcomes, use `cr ticket close --reason <reason> <ticket>`:
+
+| Reason | Use when |
+| --- | --- |
+| `done` | The work is complete. This is the default. |
+| `duplicate` | Another ticket covers the work. Also pass `--duplicate-of <ticket>`. |
+| `deferred` | The work is postponed. |
+| `dismissed` | The work will not be pursued. |
+
+A dependency is satisfied when it is closed as `done`, or closed as a duplicate
+whose referenced ticket ultimately resolves to `done`. Deferred and dismissed
+tickets do not satisfy dependencies.
+
+Return a closed ticket to `open` when it needs more work:
+
+```sh
+cr ticket reopen build-search-index
+```
+
+Reopening preserves existing dependencies. You can add more with `--depends-on`.
+
+## Running tests
+
+`cr test` matches selected files against `.coderail/test_map` and executes the
+configured commands. Those commands can invoke your project's test runner,
+linters, or other checks, regardless of the project's programming language.
+
+The `implement` skill runs `cr test` through the agent. You can also run it
+directly; both approaches use the same test map and shell configuration.
+
+`cr init` creates a comment-only map. Add patterns and commands for your project
+before running tests. For example, if your project provides `test-file` and
+`lint-file` scripts that accept a source path:
+
+```text
+[src/${file}]
+./scripts/test-file "src/${file}"
+./scripts/lint-file "src/${file}"
+```
+
+Replace these example commands with your own. For `src/search.ts`, `${file}`
+captures `search.ts`, and CodeRail substitutes it into both commands. Patterns
+match whole paths relative to the working directory. Named captures and `*`
+can span directories; `?` matches one character. Quote substituted values as
+needed for your commands and shell.
+
+Run commands for a file, a directory, or files changed in Git:
+
+```sh
+cr test src/search.ts
+cr test src/
 cr test --changed
-cr test README.md
-cr test lib
-cr test src/app.ts tests/app.test.ts
-cr --cwd /path/to/project test --changed
 ```
 
-### `cr clean`
+Supply at least one path or `--changed`. The latter includes staged, unstaged,
+and untracked files, excluding deleted files, and requires a Git working tree.
+Use `cr test --short --changed` for compact `<file> ok/fail` output.
 
-Remove temporary Coderail workflow files after branch work is complete.
+Commands normally stream their output directly. Identical commands run once
+per invocation after capture substitution. A failed command stops later
+capture-dependent commands for that file; shared commands without capture
+references still run. Any command failure makes `cr test` exit with a nonzero
+status. If no commands match, it reports `No tests found`.
 
-Usage:
+The command shell is selected in this order, using the first configured value:
+
+1. The `TEST_SHELL` environment variable.
+2. `test_shell` in `.coderail/coderail.conf` under the directory where `cr` was launched.
+3. `test_shell` in `<install-dir>/.coderail/coderail.conf`.
+4. The `SHELL` environment variable.
+5. `sh` as the fallback.
+
+An unrecognized `TEST_SHELL` or configured `test_shell` causes an error. An
+unrecognized `SHELL` produces a warning and falls back to `sh`.
+
+For example, select Bash with:
+
+```ini
+test_shell=/bin/bash
+```
+
+Write map commands for the selected shell. Set `test_shell` in the repository
+configuration when the commands require a specific shell across contributors.
+
+## Project files and configuration
+
+CodeRail keeps project data in `.coderail/` at the project root:
+
+| Path | Contents |
+| --- | --- |
+| `.coderail/plans/` | Ideas and their hierarchy, with `IDEA.md` and its implementation specification, `SPEC.md`, when written. |
+| `.coderail/tickets/` | Ticket Markdown files, organized into `open/`, `active/`, and `close/` directories. |
+| `.coderail/test_map` | File patterns and the commands to run for matching files. |
+| `.coderail/coderail.conf` | Repository configuration shared by commands run for this project. |
+
+`cr init` creates the plans directory, repository configuration, and test map.
+Ticket directories are created as needed. Whether you commit these files to
+version control is up to you; CodeRail does not require it.
+
+Configuration is loaded in this order, with later values overriding earlier ones:
+
+1. Built-in defaults.
+2. `<install-dir>/.coderail/coderail.conf`, where `<install-dir>` is the directory
+   containing CodeRail's `bin/` and `lib/` directories. With the installation
+   above, this is `~/.coderail/.coderail/coderail.conf`.
+3. `.coderail/coderail.conf` under the directory where `cr` was launched.
+4. Nonempty environment overrides listed below.
+
+Missing configuration files are skipped. Local configuration is read before
+changing directories, so `--cwd` does not change which configuration file is
+loaded. Each file is validated as it is read; an invalid setting fails even if
+a later file or environment variable would override it.
+
+Both configuration files use case-sensitive `key=value` lines. Blank lines and
+lines starting with `#` (after optional whitespace) are ignored. Surrounding
+whitespace is trimmed from keys and values. Values are literal: quotes are not
+removed, `$HOME` and `~` are not expanded, and inline comments are not supported.
+Unknown keys and lines without `=` cause an error. For example:
+
+```ini
+# Preferred agent harness
+default_harness=codex
+
+# Shell used to execute commands from the test map
+test_shell=/bin/bash
+```
+
+These are all supported configuration keys and their environment overrides:
+
+| Configuration key | Environment override | Built-in default | Accepted value / purpose |
+| --- | --- | --- | --- |
+| `default_harness` | `DEFAULT_HARNESS` | None | Optional preferred harness: `codex`, `claude`, `copilot`, or `gemini`. |
+| `test_shell` | `TEST_SHELL` | Valid `SHELL`, otherwise `sh` | Shell command name or path recognized by `command -v`; runs test-map commands. |
+| `codex_command` | `CODEX_COMMAND` | `codex` | Agent executable; see the command-key limitation below. |
+| `claude_command` | `CLAUDE_COMMAND` | `claude` | Agent executable; see the command-key limitation below. |
+| `copilot_command` | `COPILOT_COMMAND` | `copilot` | Agent executable; see the command-key limitation below. |
+| `gemini_command` | `GEMINI_COMMAND` | `gemini` | Agent executable; see the command-key limitation below. |
+| `codex_home` | `CODEX_HOME` | `$HOME/.codex` | Agent home directory; explicit values must name an existing directory. |
+| `claude_home` | `CLAUDE_HOME` | `$HOME/.claude` | Agent home directory; explicit values must name an existing directory. |
+| `copilot_home` | `COPILOT_HOME` | `$HOME/.copilot` | Agent home directory; explicit values must name an existing directory. |
+| `gemini_home` | `GEMINI_HOME` | `$HOME/.gemini` | Agent home directory; explicit values must name an existing directory. |
+
+The `$HOME` defaults above are expanded by CodeRail itself. Use literal paths
+in configuration files; shell expansion works when setting environment variables.
+Executable environment overrides accept a command name on `PATH` or a path,
+with no command-line arguments. They must resolve successfully; symbolic links
+are followed. Empty environment overrides are ignored. `DEFAULT_HARNESS` is
+optional; when nonempty, it must name a supported harness and overrides the
+configured `default_harness`.
+
+One current limitation in [the configuration loader](lib/utils/conf.sh) affects
+command settings: configuration-file keys ending in `_command` currently ignore
+their supplied value and locate the corresponding default command (`codex`,
+`claude`, `copilot`, or `gemini`). That command must be available when the file
+is read. Use the environment override to select a custom executable.
+
+For example, select a harness and override the test shell for one invocation:
 
 ```sh
-cr clean [options]
+DEFAULT_HARNESS=claude TEST_SHELL=/bin/sh cr test src/
 ```
 
-It preserves:
+Output behavior has separate environment controls:
 
-```txt
-.coderail/config.ini
-.coderail/conf.ini (legacy fallback)
-.coderail/.gitignore
-.coderail/test.map
-.coderail/work.ini
-```
+| Environment variable | Values and behavior |
+| --- | --- |
+| `LOG_LEVEL` | `verbose` enables verbose logging; `quiet` suppresses warnings, informational messages, and verbose logs. Other values are ignored; errors and command output remain visible. |
+| `NO_COLOR` | Any nonempty value disables colored output, including `0`. |
+| `NON_INTERACTIVE` | Any nonempty value disables interactive output, including `0`. |
 
-If those are the only files and the remaining directories other than `.coderail/loop/` are empty, cleanup succeeds as a no-op. The temporary `.coderail/loop/` directory is removed as a unit, including when it is the only cleanup target. When ticket files exist, cleanup validates every ticket and removes workflow files only when every ticket is satisfied: closed as `done`, or closed as `duplicate` with a chain ending at `done`. It removes files, including ticket files, but leaves empty directories other than `.coderail/loop/`.
+Logging defaults to normal verbosity. Color and interactive output are enabled
+only when standard error is a terminal and logging is not quiet.
 
-Without ticket files, cleanup checks its helper-file candidates against Git's index. Files not recoverable exactly from the index are listed with a permanent-deletion warning and require a `y` confirmation; `--force` skips the warning and confirmation. `--dry-run` never removes or prompts, and validates ticket readiness before printing the removal plan when ticket files exist.
+Use global CLI options to adjust individual invocations:
 
-Options:
+| Option | Purpose |
+| --- | --- |
+| `--cwd <dir>`, `--cwd=<dir>` | Select the working directory; defaults to the launch directory (or the lowercase `cwd` environment variable if nonempty). Does not relocate configuration loading. |
+| `-v`, `--verbose` | Enable verbose logging. |
+| `-q`, `--quiet` | Suppress warnings, informational messages, and verbose logs; errors and command output remain visible. |
+| `--no-color` | Disable colored output. |
+| `--non-interactive` | Disable prompts and interactive output. |
 
-```txt
--h, --help   Show help and exit
---dry-run    Print planned removals without changing files
---force      Remove files without confirmation
-```
+CLI logging options are applied after the output environment variables.
+The last `--verbose` or `--quiet` option wins for verbosity; short options can
+be combined (for example, `-qv` ends with verbose logging). Only `--cwd` takes a
+value; the other options are switches and reject `=value` arguments.
 
-Examples:
+These global options can appear anywhere in the command line before a `--`
+end-of-options separator. For example, these commands are equivalent:
 
 ```sh
-cr clean --dry-run
-cr clean
-cr clean --force
+cr --verbose ticket create "Add search"
+cr ticket --verbose create "Add search"
+cr ticket create --verbose "Add search"
 ```
 
-### `cr work`
+## Getting help
 
-Manage a local work branch created from the current branch.
-
-Usage:
+Use `--help` at any command level to see its arguments and options. Run help for
+project commands from an initialized project directory:
 
 ```sh
-cr work <command>
+cr --help
+cr ticket --help
+cr ticket close --help
 ```
 
-Subcommands:
-
-```txt
-start <work-name>  Create and switch to coderail/<slug>, then write .coderail/work.ini
-finish             Stage a squash integration of recorded work onto its base branch
-```
-
-`cr work start` requires a Git repository, `.coderail`, and a clean worktree.
-It never pushes the new branch. `cr work finish` requires all tickets resolved
-and no untracked or unstaged files; when it produces integration changes, it
-leaves them staged on the base branch and can optionally create their commit
-through a supported tool.
-
-### `cr ticket`
-
-Manage branch-local tickets under `.coderail/tickets`.
-
-Usage:
+Add `--verbose` when you need more diagnostic output, for example:
 
 ```sh
-cr ticket <command> [options]
+cr --verbose test src/
 ```
 
-Tickets move through three lifecycle states:
-
-```txt
-open
-active
-closed
-```
-
-Ticket arguments accept:
-
-* numeric ID
-* name
-* slug
-* relative path
-* absolute path
-
-Use a path when a reference is ambiguous.
-
-Run `cr init` before using ticket commands.
-
-Subcommands:
-
-```txt
-create [-d <ticket> ...] <name>                      Create an open ticket
-next [--limit N]                                     List ready open tickets
-activate <ticket>                                    Move an open ticket to active
-close [--reason <reason>] [--duplicate-of <ticket>] <ticket>
-                                                      Move an active ticket to closed
-deactivate [-d <ticket> ...] <ticket>                Move an active ticket to open
-reopen [-d <ticket> ...] <ticket>                    Move a closed ticket to open
-validate [<ticket> ...]                              Validate tickets
-loop [options] [<tool>]                              Process ready tickets with an agent CLI
-clean [--dry-run] [--prune] [--yes]                  Deprecated; use cr clean
-```
-
-Dependency options accept ticket IDs, names, slugs, or paths and store resolved ticket IDs in the ticket file.
-
-The following commands require dependencies to be satisfied:
-
-```txt
-next
-activate
-close --reason done
-```
-
-A dependency is satisfied when it is:
-
-* closed as `done`, or
-* closed as a duplicate whose original ticket is satisfied
-
-Close reasons:
-
-```txt
-done       Work completed; default
-duplicate  Duplicate of another ticket; requires --duplicate-of
-deferred   Valid work intentionally postponed
-dismissed  Work no longer required
-```
-
-#### `cr ticket loop`
-
-`cr ticket loop` requires a Git repository and a completely clean worktree when it starts. Commit or remove newly created or modified ticket files before running it.
-
-It repeatedly:
-
-1. Selects an open ticket whose dependencies are satisfied.
-2. Hands the ticket to a supported agent CLI for implementation.
-3. Requires the agent to close the ticket as satisfied.
-4. When automatic review is enabled and the ticket closes as `done`, hands its stable ID to an autonomous reviewer.
-5. Stages all post-agent changes after the ticket is closed as satisfied.
-6. Runs review if configured and the ticket closed as `done`.
-7. Reconciles recorded specification drift at the configured cadence.
-8. Continues until the configured limit is reached or no ready ticket remains.
-
-Usage:
-
-```sh
-cr ticket loop [options] [<tool>] [-- <tool-args>...]
-```
-
-Supported tools:
-
-```txt
-codex
-copilot
-claude
-gemini
-```
-
-If `<tool>` is omitted, Coderail uses `default_tool`.
-
-Use `--` to pass remaining arguments directly to the selected agent CLI for
-each implementation and auto-review handoff:
-
-```sh
-cr ticket loop codex -- --model gpt-5
-```
-
-Options:
-
-```txt
--m <count>, --max <count>  Maximum successful implementation handoffs; default is 5
---all                      Process all ready open tickets; incompatible with --max
---drift-check <cadence>    Reconcile drift: never, each, end, or a positive integer; default each
---auto-review              Run an autonomous review after each ticket closes as done
---no-auto-review           Do not run autonomous reviews after tickets close as done
-```
-
-Automatic review is disabled by default. `auto_review = true` enables it, and
-either `--auto-review` or `--no-auto-review` overrides that setting for the
-invocation. It runs the normal implementation handoff first, then reviews
-tickets closed as `done`. A clean review leaves the ticket closed and its
-changes are staged normally. A within-scope finding adds tasks to and reopens
-the source ticket; the reopened-ticket checkpoint is staged, then the ticket
-returns to normal dependency-aware scheduling. A broader finding creates a
-dependent follow-up ticket while the reviewed ticket stays closed.
-
-`--max` counts successful implementation handoffs, not unique ticket IDs. Reimplementing a reopened ticket consumes another slot. `--all` can continue through reopened tickets and review-created follow-up tickets until none are ready.
-
-`--drift-check` is command-only; it is not a configuration key. The default
-`each` checks an existing discovery at startup and after every successful
-implementation/review iteration. `never` skips all checks. `end` checks at
-startup and whenever the runnable queue is exhausted or the processing limit
-is reached, processing tickets made runnable by reconciliation until stable
-when `--all` is used. A positive
-integer checks at startup, after each full successful-iteration interval, and
-once for a non-empty partial interval at exit. Drift checks do not consume a
-`--max` slot; `--max` remains a hard processing cap.
-
-Implementation captures specification drift in `.coderail/DISCOVERY.md` with
-`resolved: false`; it does not reconcile or delete that document. When a check
-finds it, the loop invokes `cr-drift`. That skill verifies findings and updates
-the specification before affected tickets, then writes the explicit resolution
-marker. The command validates that marker: `true` stages reconciliation changes
-and removes the document; `false` stages the changes and stops for a user
-decision. Invalid markers and failed drift agents preserve the document and
-leave that invocation's changes unstaged.
-
-Each implementation and review phase appends its combined standard output and
-error to `.coderail/loop/<ticket-basename>.txt`; drift uses the dedicated
-`.coderail/loop/drift.txt`. Agent output is not streamed to the terminal.
-Inspect the current handoff with:
-
-```sh
-tail -f .coderail/loop/0001-demo.txt
-```
-
-`cr ticket loop` creates `.coderail/loop/` lazily for its ignored transcripts;
-`.coderail/.gitignore` contains the `loop` rule that keeps them out of Git.
-Repeated implementation and review handoffs append to the same ticket
-transcript. Diagnostics remain available after successful and failed
-ticket-loop invocations, then every successful `cr work finish` removes the
-complete loop directory without a separate prompt. A failed or conflicted
-squash preserves it; failures after squash preparation do not.
-
-Ignored diagnostics are local and temporary, but may still contain secrets
-from agent output. Inspect and handle them accordingly. The temporary work
-branch, not these raw diagnostics, is the intentional durable history.
-
-By default, the terminal shows compact ticket progress: the title, ticket
-file, transcript inspection command, phase status, and durations. For a
-limited run, headings use `[current/total]` from the ready-ticket snapshot at
-each selection; the total can change after reopened tickets or review-created
-follow-ups. `--all` uses `[current]` headings. `--verbose` adds operational
-notices for selection, validation, and staging. `--quiet` suppresses both
-progress and notices, while transcripts continue to be written.
-
-`cr ticket loop` deliberately does not:
-
-* parse agent JSON output
-* split standard output and standard error
-* summarize transcripts
-* broker agent questions
-* automatically approve review findings
-* merge completed work
-
-#### Deprecated `cr ticket clean`
-
-`cr ticket clean` is deprecated. Use:
-
-```sh
-cr clean
-```
-
-The legacy command remains available for backward compatibility.
-
-It requires no active tickets.
-
-By default, it removes:
-
-* tickets completed as `done`
-* duplicate tickets whose original ticket is completed
-
-When an open ticket depends on a removed closed ticket, the removed dependency reference is deleted.
-
-Options include:
-
-```txt
---dry-run   Preview changes
---prune     Remove all closed tickets and open tickets that depend on
-            unsatisfied closed tickets
---yes       Confirm destructive pruning when required
-```
-
-Examples:
-
-```sh
-cr ticket create "Add README examples"
-cr ticket create -d 0001 "Document ticket workflow"
-cr ticket next --limit 3
-cr ticket activate 0002
-cr ticket close 0002
-cr ticket close --reason duplicate --duplicate-of 0001 0003
-cr ticket deactivate -d 0001 0004
-cr ticket reopen 0005
-cr ticket validate
-cr ticket loop codex
-cr ticket loop --all claude
-cr ticket loop --max 2 --auto-review gemini
-```
-
-## Development
-
-Run the full test suite:
-
-```sh
-sh test/all.sh
-```
-
-Run release helper tests directly or through the repository test map:
-
-```sh
-sh test/build/release.test.sh
-cr test build/release.sh
-```
-
-### Release Helper
-
-Maintainers publish stable releases with:
-
-```sh
-./build/release.sh --patch
-./build/release.sh --minor
-./build/release.sh --major
-```
-
-The helper derives the next stable version from the highest `vX.Y.Z` tag visible locally or on `origin`.
-
-Before publishing, it requires:
-
-* the current branch to be `main`
-* a clean working tree
-* matching version metadata in `lib/version.sh`
-* a matching release section and links in `CHANGELOG.md`
-
-Running the helper is the publishing action.
-
-It:
-
-1. Creates an annotated version tag.
-2. Moves the annotated `latest` tag.
-3. Pushes both tag updates to `origin` atomically.
-
-This keeps the release process simple, predictable, and free from unexplained semantic-version teleportation.
-
-## Inspirations
-
-Matt Pocock's [`skills`](https://github.com/mattpocock/skills) project helped shape the idea that coding agents behave better when given explicit, reusable skills and operational rails instead of large one-off prompts.
-
-The [`andrej-karpathy-skills`](https://github.com/multica-ai/andrej-karpathy-skills) project by Multica AI inspired parts of the agent instruction structure used by Coderail.
-
-Coderail is not a fork of either project, but some instruction files were reused, adapted, or inspired by their work.
+If CodeRail reports that the current directory is not initialized, check that
+you are in the project root and run `cr init` if the project has not been set up.
+
+If `cr test` reports `No tests found`, check that `.coderail/test_map` contains
+commands and that its patterns match the selected paths relative to your working
+directory. With `--changed`, also check that there are changed files to select.
+This message means no mapped commands ran.
 
 ## License
 
-`AGPL-3.0-or-later`
+[AGPL-3.0-or-later](LICENSE)
