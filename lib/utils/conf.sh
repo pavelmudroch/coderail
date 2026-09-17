@@ -111,11 +111,12 @@ load_config()
     _parse_config_file "$local_config_file"
     reinit_log
 
-    if [ -n "${DEFAULT_HARNESS:-}" ] && _is_supported_harness "$DEFAULT_HARNESS"; then
+    if [ -n "${DEFAULT_HARNESS:-}" ]; then
+        if ! _is_supported_harness "$DEFAULT_HARNESS"; then
+            log_error "Unsupported default harness in env variable DEFAULT_HARNESS: \"$DEFAULT_HARNESS\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
         default_harness="$DEFAULT_HARNESS"
-    else
-        log_error "Unsupported default harness in env variable DEFAULT_HARNESS: \"$DEFAULT_HARNESS\""
-        exit "$_CR_ERROR_EXIT_CODE"
     fi
 
     if [ -n "${TEST_SHELL:-}" ]; then
