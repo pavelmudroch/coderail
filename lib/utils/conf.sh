@@ -92,6 +92,17 @@ load_config()
         shift
     done
 
+    default_harness=""
+    test_shell=""
+    codex_command="codex"
+    codex_home="$HOME/.codex"
+    claude_command="claude"
+    claude_home="$HOME/.claude"
+    copilot_command="copilot"
+    copilot_home="$HOME/.copilot"
+    gemini_command="gemini"
+    gemini_home="$HOME/.gemini"
+
     global_config_file="$_CR_INSTALL_DIR/.coderail/coderail.conf"
     _parse_config_file "$global_config_file"
     reinit_log
@@ -99,6 +110,93 @@ load_config()
     local_config_file="$(pwd)/.coderail/coderail.conf"
     _parse_config_file "$local_config_file"
     reinit_log
+
+    if [ -n "${DEFAULT_HARNESS:-}" ] && _is_supported_harness "$DEFAULT_HARNESS"; then
+        default_harness="$DEFAULT_HARNESS"
+    else
+        log_error "Unsupported default harness in env variable DEFAULT_HARNESS: \"$DEFAULT_HARNESS\""
+        exit "$_CR_ERROR_EXIT_CODE"
+    fi
+
+    if [ -n "${TEST_SHELL:-}" ]; then
+        if ! command -v "$TEST_SHELL" >/dev/null 2>&1; then
+            log_error "Unrecognized test shell in env variable TEST_SHELL: \"$TEST_SHELL\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+        test_shell="$TEST_SHELL"
+    fi
+
+    if [ -z "$test_shell" ]; then
+        test_shell="sh"
+
+        if [ -n "$SHELL" ]; then
+            if ! command -v "$SHELL" >/dev/null 2>&1; then
+                log_warn "Unrecognized SHELL environment variable: \"$SHELL\": falling back to default test shell \"$test_shell\""
+            else
+                test_shell="$SHELL"
+            fi
+        fi
+    fi
+
+    if [ -n "${CODEX_HOME:-}" ]; then
+        [ -d "$CODEX_HOME" ] || {
+            log_error "Invalid codex home directory in env variable CODEX_HOME: \"$CODEX_HOME\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        }
+        codex_home="$CODEX_HOME"
+    fi
+
+    if [ -n "${CLAUDE_HOME:-}" ]; then
+        [ -d "$CLAUDE_HOME" ] || {
+            log_error "Invalid claude home directory in env variable CLAUDE_HOME: \"$CLAUDE_HOME\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        }
+        claude_home="$CLAUDE_HOME"
+    fi
+
+    if [ -n "${COPILOT_HOME:-}" ]; then
+        [ -d "$COPILOT_HOME" ] || {
+            log_error "Invalid copilot home directory in env variable COPILOT_HOME: \"$COPILOT_HOME\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        }
+        copilot_home="$COPILOT_HOME"
+    fi
+
+    if [ -n "${GEMINI_HOME:-}" ]; then
+        [ -d "$GEMINI_HOME" ] || {
+            log_error "Invalid gemini home directory in env variable GEMINI_HOME: \"$GEMINI_HOME\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        }
+        gemini_home="$GEMINI_HOME"
+    fi
+
+    if [ -n "${CODEX_COMMAND:-}" ]; then
+        if ! codex_command="$(path_locate_executable "$CODEX_COMMAND")"; then
+            log_error "Unrecognized codex command in env variable CODEX_COMMAND: \"$CODEX_COMMAND\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+    fi
+
+    if [ -n "${CLAUDE_COMMAND:-}" ]; then
+        if ! claude_command="$(path_locate_executable "$CLAUDE_COMMAND")"; then
+            log_error "Unrecognized claude command in env variable CLAUDE_COMMAND: \"$CLAUDE_COMMAND\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+    fi
+
+    if [ -n "${COPILOT_COMMAND:-}" ]; then
+        if ! copilot_command="$(path_locate_executable "$COPILOT_COMMAND")"; then
+            log_error "Unrecognized copilot command in env variable COPILOT_COMMAND: \"$COPILOT_COMMAND\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+    fi
+
+    if [ -n "${GEMINI_COMMAND:-}" ]; then
+        if ! gemini_command="$(path_locate_executable "$GEMINI_COMMAND")"; then
+            log_error "Unrecognized gemini command in env variable GEMINI_COMMAND: \"$GEMINI_COMMAND\""
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
+    fi
 }
 
 _parse_config_file()
@@ -149,7 +247,82 @@ _parse_config_file()
         value=${value%"${value##*[![:space:]]}"}
 
         case "$key" in
-            # parse known keys here
+            "default_harness")
+                if ! _is_supported_harness "$value"; then
+                    message=$(printf "Unsupported harness \"%s\" in file \"%s\" at line %d" "$value" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                fi
+                default_harness="$value"
+                ;;
+            "test_shell")
+                if ! command -v "$value" >/dev/null 2>&1; then
+                    message=$(printf "Unrecognized test shell \"%s\" in file \"%s\" at line %d" "$value" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                fi
+                test_shell="$value"
+                ;;
+            "codex_command")
+                codex_command="$(path_locate_executable codex)" || {
+                    message=$(printf "Failed to locate codex executable in file \"%s\" at line %d" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                }
+                ;;
+            "claude_command")
+                claude_command="$(path_locate_executable claude)" || {
+                    message=$(printf "Failed to locate claude executable in file \"%s\" at line %d" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                }
+                ;;
+            "copilot_command")
+                copilot_command="$(path_locate_executable copilot)" || {
+                    message=$(printf "Failed to locate copilot executable in file \"%s\" at line %d" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                }
+                ;;
+            "gemini_command")
+                gemini_command="$(path_locate_executable gemini)" || {
+                    message=$(printf "Failed to locate gemini executable in file \"%s\" at line %d" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                }
+                ;;
+            "codex_home")
+                [ -d "$value" ] || {
+                    message=$(printf "Invalid codex home directory \"%s\" in file \"%s\" at line %d" "$value" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                }
+                codex_home="$value"
+                ;;
+            "claude_home")
+                [ -d "$value" ] || {
+                    message=$(printf "Invalid claude home directory \"%s\" in file \"%s\" at line %d" "$value" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                }
+                claude_home="$value"
+                ;;
+            "copilot_home")
+                [ -d "$value" ] || {
+                    message=$(printf "Invalid copilot home directory \"%s\" in file \"%s\" at line %d" "$value" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                }
+                copilot_home="$value"
+                ;;
+            "gemini_home")
+                [ -d "$value" ] || {
+                    message=$(printf "Invalid gemini home directory \"%s\" in file \"%s\" at line %d" "$value" "$config_file" "$current_line")
+                    log_error "$message"
+                    exit "$_CR_ERROR_EXIT_CODE"
+                }
+                gemini_home="$value"
+                ;;
             *)
                 message=$(printf "Unknown configuration key \"%s\" in file \"%s\" at line %d" "$key" "$config_file" "$current_line")
                 log_error "$message"

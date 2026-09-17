@@ -139,7 +139,7 @@ execute_command()
 
     # Inherit stdout and stderr so test output is visible as commands run.
     log_verbose "Running matched test commands..."
-    if sh -c "$commands" < /dev/null; then
+    if "$test_shell" -c "$commands" < /dev/null; then
         log_verbose "All matched test commands passed"
         return "$_CR_SUCCESS_EXIT_CODE"
     else

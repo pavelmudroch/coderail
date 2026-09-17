@@ -71,3 +71,26 @@ path_normalize_relative()
         }
     '
 }
+
+path_locate_executable()
+{
+    executable="$1"
+    if ! executable="$(command -v "$executable" 2>/dev/null)"; then
+        return 1
+    fi
+
+    while [ -L "$executable" ]; do
+        exec_dir=$(
+            CDPATH= cd -- "$(dirname "$executable")"
+            pwd
+        )
+        link_target=$(readlink "$executable")
+
+        case "$link_target" in
+            /*) executable="$link_target" ;;
+            *) executable="$exec_dir/$link_target" ;;
+        esac
+    done
+
+    printf '%s\n' "$executable"
+}

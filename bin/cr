@@ -12,13 +12,26 @@ EOL='
 '
 _CR_DIR_NAME=".coderail"
 
+_is_supported_harness()
+{
+    harness="$1"
+    case "$harness" in
+        "codex"|"claude"|"copilot"|"gemini")
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 _coderail_init()
 {
     if [ ! "$__CR_INITIALIZED__" -eq 0 ]; then
         return
     fi
     __CR_INITIALIZED__=1
-    script_path=$1
+    script_path="$1"
 
     while [ -L "$script_path" ]; do
         script_dir=$(
@@ -48,9 +61,9 @@ _coderail_init()
 _coderail_init "$0"
 
 . "$_CR_INSTALL_DIR/lib/utils/log.sh"
-. "$_CR_INSTALL_DIR/lib/utils/conf.sh"
 . "$_CR_INSTALL_DIR/lib/utils/fs.sh"
 . "$_CR_INSTALL_DIR/lib/utils/path.sh"
+. "$_CR_INSTALL_DIR/lib/utils/conf.sh"
 . "$_CR_INSTALL_DIR/lib/utils/md.sh"
 . "$_CR_INSTALL_DIR/lib/utils/text.sh"
 
