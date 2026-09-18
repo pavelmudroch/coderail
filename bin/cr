@@ -92,6 +92,7 @@ Options:
 
 Commands:
   init                 Initialize current directory for CodeRail
+  upgrade              Upgrade this CodeRail installation
   install              Install CodeRail for specific agent harnesses
   uninstall            Uninstall CodeRail for specific agent harnesses
   doctor               Inspect or repair broken CodeRail state
