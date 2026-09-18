@@ -11,7 +11,7 @@ Define a coherent Coderail v2.0 command workflow and boundaries before splitting
 
 * `idea` is working. Core `init` is almost done; optional template functionality needs further forging.
 * Commands to forge: `init` templates, `install`, `uninstall`, `doctor`, `ticket`, `test`, `loop`, and `status`.
-* Shared command boundaries and the eight-child decomposition are confirmed. Child ideas continue command-specific forging.
+* Shared command boundaries and the nine-child decomposition are confirmed. Child ideas continue command-specific forging.
 * Current CLI help describes installation for agent harnesses, state inspection and repair, ticket management, test execution, ticket implementation loops, and working-directory status.
 * The README describes v1. The main v2 improvement is idea-tree forging, alongside command adjustments.
 * How the v1 `work` command fits into v2 remains unresolved.
@@ -20,6 +20,7 @@ Define a coherent Coderail v2.0 command workflow and boundaries before splitting
 ## Decisions
 
 * `install` and `uninstall` manage user-level harness instructions and skills, as in v1. Project-local harness installation is out of scope.
+* Coderail's own installation, upgrade, and removal belong to a separate sibling idea. `cr uninstall --self` checks for installed harness instructions; `--with-harnesses` selects their removal and `--without-harnesses` preserves them. If selected, harness removal must succeed before Coderail is removed. Checksum mismatches fail without `--force`; with `--force`, edited files deliberately kept by the user count as successful outcomes. `--yes` approves edited-file deletion, not harness removal selection. Declining harness removal preserves the instructions and still uninstalls Coderail itself. When harness instructions exist and neither harness-selection flag is supplied, prompt with Yes/No; if interactive input is unavailable, fail with guidance to supply one of the flags.
 * `init` prepares the project. Repository-level Coderail files consist of tickets, specifications, ideas, and helper files.
 * `init` supports no template, one template, or multiple templates. User-prepared templates provide project directory structures and base configuration files, optionally with startup scripts such as dependency installation. Examples include Deno, Bun, and Zig project setups.
 * `status` provides a read-only, user-facing summary of what has been done and what can be done next in the current repository, including ideas needing further forging and specifications awaiting implementation.
@@ -52,9 +53,10 @@ Define a coherent Coderail v2.0 command workflow and boundaries before splitting
 
 ## Decomposition
 
-Confirmed and split. Separate specifications allow each command's public behavior and failure handling to be forged independently. Installation and uninstallation share one managed-file lifecycle. All children start in `forging`.
+Confirmed and split. Separate specifications allow each capability's public behavior and failure handling to be forged independently. Harness installation and removal share one managed-file lifecycle; Coderail's own installation, upgrade, and removal form a separate lifecycle. All children start in `forging`.
 
 * [Harness installation and removal](harness-installation-and-removal/IDEA.md) — `install` and `uninstall`; manage user-level Coderail harness files.
+* [Coderail installation, upgrade, and removal](coderail-installation-upgrade-and-removal/IDEA.md) — install and upgrade Coderail itself, and remove it with `cr uninstall --self`; coordinate effects on harness files with the harness installation idea.
 * [Project initialization and templates](project-initialization-and-templates/IDEA.md) — `init`; extend existing project initialization with optional user-prepared structures, configuration files, and startup scripts, supporting zero, one, or multiple templates.
 * [Diagnosis and repair](diagnosis-and-repair/IDEA.md) — `doctor`; find problems, repair where possible, and provide actionable repair guidance.
 * [Ticket management](ticket-management/IDEA.md) — `ticket`; manage self-contained tickets, source-spec references, dependencies, and lifecycle independently of idea selection.
