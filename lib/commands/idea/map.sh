@@ -167,7 +167,9 @@ _plain_text_formatter()
     else
         branch="└──"
     fi
-    printf '%s%s %s %s: %s\n' "$tree_prefix" "$branch" "$(color_yellow "$title")" "$(color_gray "($status)")" "$(color_green "\"$file\"")"
+
+    status_icon="$(_status_icon "$status")"
+    printf '%s%s %s %s %s: %s\n' "$tree_prefix" "$branch" "$status_icon" "$(color_yellow "$title")" "$(color_gray "($status)")" "$(color_green "\"$file\"")"
 }
 
 _has_later_sibling()
@@ -197,4 +199,22 @@ _has_later_sibling()
     done <<EOF
 $paths
 EOF
+}
+
+_status_icon()
+{
+    case "$1" in
+        ready)
+            printf '%s' "$(color_green "✔")"
+            ;;
+        forging)
+            printf '%s' "$(color_red "⛭")"
+            ;;
+        split)
+            printf '%s' "$(color_blue "⌥")"
+            ;;
+        *)
+            printf '%s' "$(color_red "?")"
+            ;;
+    esac
 }
