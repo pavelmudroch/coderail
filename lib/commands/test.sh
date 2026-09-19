@@ -14,7 +14,7 @@ Usage:
 Options:
   -h, --help           Show this help message and exit
   -s, --short          Output only <file> ok/fail for each tested file
-  --changed            Run tests for all changed files. Git must be available
+  -c, --changed        Run tests for all changed files. Git must be available
                        in the current working directory.
 
 Arguments:
@@ -22,8 +22,9 @@ Arguments:
                        unless --changed is specified.
 
 Map format:
-  [src/${path}/${file}.ts]
-  <command to run> tests/${path}/${file}.test.ts
+  example:
+    [src/${path}/${file}.ts]
+    <command to run> tests/${path}/${file}.test.ts
 
   Each nonempty, noncomment line below a pattern is a shell command.
   Patterns match whole paths relative to the current directory. Named captures
@@ -32,9 +33,13 @@ Map format:
   Commands referencing captures stop for a file after its first failure.
   Commands without capture references are shared and always run when matched.
   Commands run once after expansion, in file and map order; cached failures
-  also stop later files that need that command. Any failure causes a nonzero exit.
-  Test commands stream stdout and stderr directly to the corresponding output
-  streams, including when a command fails, unless --short is specified.
+  also stop later files that need that command. Any failure causes a nonzero
+  exit. Test commands stream stdout and stderr directly to the corresponding
+  output streams, including when a command fails, unless --short is specified.
+
+Environment variables:
+  TEST_SHELL        The shell to use for executing test commands. Defaults to
+                    the `sh` if not set, neither configured.
 EOF
 }
 
@@ -64,7 +69,7 @@ execute_command()
                 usage >&2
                 exit "$_CR_USAGE_EXIT_CODE"
                 ;;
-            --changed)
+            -c|--changed)
                 changed=1
                 shift
                 ;;
@@ -77,10 +82,18 @@ execute_command()
                 shift
                 break
                 ;;
-            -*)
+            --*)
                 log_error "Unknown option: $1"
                 usage >&2
                 exit "$_CR_USAGE_EXIT_CODE"
+                ;;
+            -*)
+                short_opts="${1#-}"
+                while [ -n "$short_opts" ]; do
+                    char="${short_opts%"${short_opts#?}"}"
+                    short_opts=${short_opts#?}
+                    set -- "-$char" "$@"
+                done
                 ;;
             *)
                 file_list="$file_list$EOL$1"

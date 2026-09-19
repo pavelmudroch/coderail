@@ -115,3 +115,10 @@ fs_stage_temp_dir()
     rm -f "$temp_dir/.~cr-replace.lock" 2>/dev/null
     cp -rf "$temp_dir/." "$target/" 2>/dev/null || return 1
 }
+
+fs_create_temp_dir()
+{
+    temp_dir=$(mktemp -d 2>/dev/null) || return 1
+    register_temp_resource "$temp_dir"
+    printf "%s\n" "$temp_dir"
+}

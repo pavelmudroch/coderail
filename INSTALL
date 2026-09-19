@@ -40,22 +40,22 @@ _download_install_target()
     destination="$2"
 
     if command -v curl >/dev/null 2>&1; then
-        if ! curl -fsSL "$url" -o "$destination"; then
-            printf '"curl" cannot download archive\n'
+        if ! message=$(curl -fsSL "$url" -o "$destination" 2>&1); then
+            printf '%s\n' "$message"
             return 1
         fi
         return 0
     fi
 
     if command -v wget >/dev/null 2>&1; then
-        if ! wget -q -O "$destination" "$url"; then
-            printf '"wget" cannot download archive\n'
+        if ! message=$(wget -q -O "$destination" "$url" 2>&1); then
+            printf '%s\n' "$message"
             return 1
         fi
         return 0
     fi
 
-    printf 'Missing required "curl" or "wget"\n'
+    printf 'Missing required "curl" or "wget" tool\n'
 }
 
 _validate_downloaded_install_target()
@@ -71,8 +71,10 @@ trap 'exit 143' TERM
 
 cr_install_dir=${CODERAIL_INSTALL_DIR:-"$HOME/.coderail"}
 cr_install_version=${CODERAIL_INSTALL_VERSION:-latest}
-if ! cr_install_target_url=$( _get_install_target_url "$cr_install_version" ); then
-    printf 'error: Failed to download target: %s\n' "$cr_install_version"
+
+printf 'Downloading archive for version: %s...\n' "$cr_install_version"
+if ! cr_install_target_url=$(_get_install_target_url "$cr_install_version"); then
+    printf 'error: Failed to download archive: %s\n' "$cr_install_target_url"
     exit 1
 fi
 
@@ -80,3 +82,19 @@ if ! message=$(_download_install_target "$cr_install_target_url" "$temp_dir/arch
     printf 'error: Failed to download target: %s\n' "$cr_install_target_url"
     exit 1
 fi
+
+printf 'Extracting archive...\n'
+if ! command -v tar >/dev/null 2>&1; then
+    printf 'error: Missing required "tar" tool\n'
+    exit 1
+fi
+
+if ! tar -xzf "$temp_dir/archive.tar.gz" -C "$temp_dir"; then
+    printf 'error: Failed to extract archive\n'
+    exit 1
+fi
+
+printf 'Installing coderail to %s...\n' "$cr_install_dir"
+# set up private variables for downloaded cr upgrade tool and execute it
+cr_upgrade_tool="$temp_dir/bin/cr"
+

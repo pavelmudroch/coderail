@@ -66,6 +66,8 @@ _coderail_init "$0"
 . "$_CR_INSTALL_DIR/lib/utils/conf.sh"
 . "$_CR_INSTALL_DIR/lib/utils/md.sh"
 . "$_CR_INSTALL_DIR/lib/utils/text.sh"
+. "$_CR_INSTALL_DIR/lib/version.sh"
+
 
 register_temp_resource()
 {
@@ -112,7 +114,6 @@ EOF
 
 version()
 {
-    . "$_CR_INSTALL_DIR/lib/version.sh"
     output "cr version $coderail_version"
 }
 
