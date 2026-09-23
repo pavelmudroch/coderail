@@ -51,7 +51,7 @@ They appear in `cr --help` but are not available yet.
 Run the install script to install the latest release into `~/.coderail`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/INSTALL | sh
+curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | sh
 ```
 
 Add the following line to your shell's startup file, and run it in your current

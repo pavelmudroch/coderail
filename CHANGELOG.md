@@ -7,9 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### V 2.0 planned
+### Added
 
-- Major refactor of whole codebase based on actual usage.
+- `cr idea` with `create`, `reforge`, `ready`, `split`, and `map` subcommands
+  for managing ideas from initial shaping through specification readiness.
+- Generic agent skills for forging ideas, writing specifications, creating and
+  implementing tickets, research, questions, coding, and commits.
+- Self-updating installation through `install.sh` and `cr upgrade`.
+
+### Changed
+
+- Rebuilt the CLI, initialization, test runner, logging, configuration, and
+  ticket handling around the v2 workflow and current usage.
+- Rebuilt ticket lifecycle commands: `create`, `next`, `activate`, `close`, and
+  `reopen`.
+- `cr test` now uses `.coderail/test_map`, supports changed-file selection and
+  compact output, and has a focused test suite under `tests/`.
+- The project documentation now describes the v2 idea-to-ticket workflow and
+  its current command surface.
+- Global options now include `--no-color` and `--non-interactive`; combined
+  short logging options are supported.
+
+### Removed
+
+- `cr clean`, `cr work`, and the v1 implementations of `cr install` and
+  `cr uninstall`; their placeholder CLI commands remain planned.
+- Ticket subcommands `clean`, `deactivate`, `loop`, and `validate`.
+- The legacy `INSTALL` script, legacy test layout under `test/`, and the
+  former harness-specific skill set.
 
 ## [v1.3.0] - 2026-08-03
 
