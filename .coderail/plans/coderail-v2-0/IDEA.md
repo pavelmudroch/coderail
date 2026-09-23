@@ -11,7 +11,7 @@ Define a coherent Coderail v2.0 command workflow and boundaries before splitting
 
 * `idea` is working. Core `init` is almost done; optional template functionality needs further forging.
 * Commands to forge: `init` templates, `install`, `uninstall`, `doctor`, `ticket`, `test`, `loop`, and `status`.
-* Shared command boundaries and the nine-child decomposition are confirmed. Child ideas continue command-specific forging.
+* Shared command boundaries and the child decomposition are confirmed. Child ideas continue command-specific forging.
 * Current CLI help describes installation for agent harnesses, state inspection and repair, ticket management, test execution, ticket implementation loops, and working-directory status.
 * The README describes v1. The main v2 improvement is idea-tree forging, alongside command adjustments.
 * How the v1 `work` command fits into v2 remains unresolved.
@@ -57,6 +57,7 @@ Confirmed and split. Separate specifications allow each capability's public beha
 
 * [Harness installation and removal](harness-installation-and-removal/IDEA.md) — `install` and `uninstall`; manage user-level Coderail harness files.
 * [Coderail installation, upgrade, and removal](coderail-installation-upgrade-and-removal/IDEA.md) — install and upgrade Coderail itself, and remove it with `cr uninstall --self`; coordinate effects on harness files with the harness installation idea.
+* [Internal installation and manifest protection](internal-installation-and-manifest-protection/IDEA.md) — install an extracted release payload into a Coderail destination, use a reusable checksum/manifest utility to protect user-facing files, and maintain the installed-file manifest.
 * [Project initialization and templates](project-initialization-and-templates/IDEA.md) — `init`; extend existing project initialization with optional user-prepared structures, configuration files, and startup scripts, supporting zero, one, or multiple templates.
 * [Diagnosis and repair](diagnosis-and-repair/IDEA.md) — `doctor`; find problems, repair where possible, and provide actionable repair guidance.
 * [Ticket management](ticket-management/IDEA.md) — `ticket`; manage self-contained tickets, source-spec references, dependencies, and lifecycle independently of idea selection.
