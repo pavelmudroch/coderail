@@ -19,9 +19,29 @@ _terminal_width()
 
 _log_cleanup()
 {
-    [ "$log_spinner_pid" -ne -1 ] || return 0
-    kill "$log_spinner_pid" 2>/dev/null || true
-    wait "$log_spinner_pid" 2>/dev/null || true
+    spinner_pid=$log_spinner_pid
+
+    if [ "$spinner_pid" -eq -1 ] &&
+    [ -n "${_CR_TEMP_SPINNER_PID_FILE:-}" ] &&
+    [ -f "$_CR_TEMP_SPINNER_PID_FILE" ]
+    then
+        IFS= read -r spinner_pid < "$_CR_TEMP_SPINNER_PID_FILE" || return 0
+    fi
+
+    case $spinner_pid in
+        -1|''|*[!0-9]*)
+            return 0
+            ;;
+    esac
+
+    kill "$spinner_pid" 2>/dev/null || true
+    wait "$spinner_pid" 2>/dev/null || true
+    log_spinner_pid=-1
+    log_in_spinner=0
+
+    if [ -n "${_CR_TEMP_SPINNER_PID_FILE:-}" ]; then
+        rm -f "$_CR_TEMP_SPINNER_PID_FILE"
+    fi
 }
 
 color_red()
@@ -146,6 +166,48 @@ log_verbose()
     fi
 }
 
+log_confirm()
+{
+    [ "$#" -eq 1 ] || return 2
+
+    question="$1"
+    printf '%s [y/N] ' "$question" >&2
+
+    if [ "${log_interactive:-0}" != 1 ] || ! tty -s <&0; then
+        log_error "Confirmation input is unavailable"
+        return 2
+    fi
+
+    while :; do
+        if ! IFS= read -r answer; then
+            log_error "Failed to read confirmation input"
+            return 2
+        fi
+
+        if ! answer=$(printf '%s\n' "$answer" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'); then
+            log_error "Failed to read confirmation input"
+            return 2
+        fi
+        if ! answer=$(printf '%s\n' "$answer" | tr '[:upper:]' '[:lower:]'); then
+            log_error "Failed to read confirmation input"
+            return 2
+        fi
+
+        case "$answer" in
+            y|yes)
+                return 0
+                ;;
+            ''|n|no)
+                return 1
+                ;;
+            *)
+                log_warn "Please answer yes or no."
+                printf '%s [y/N] ' "$question" >&2
+                ;;
+        esac
+    done
+}
+
 progress_bar()
 {
     [ "$log_in_spinner" -eq 1 ] && spinner_close
@@ -191,17 +253,20 @@ spinner()
     ) &
 
     log_spinner_pid=$!
+    if [ -n "${_CR_TEMP_SPINNER_PID_FILE:-}" ]; then
+        printf '%s\n' "$log_spinner_pid" > "$_CR_TEMP_SPINNER_PID_FILE"
+    fi
 }
 
 spinner_close()
 {
     [ "$log_interactive" -eq 1 ] || return 0
-    [ "$log_in_spinner" -eq 1 ] || return 0
-    [ "$log_spinner_pid" -ne -1 ] || return 0
-    kill "$log_spinner_pid" 2>/dev/null || true
-    wait "$log_spinner_pid" 2>/dev/null || true
-    log_spinner_pid=-1
-    log_in_spinner=0
+    if [ "$log_in_spinner" -ne 1 ] &&
+    { [ -z "${_CR_TEMP_SPINNER_PID_FILE:-}" ] || [ ! -s "$_CR_TEMP_SPINNER_PID_FILE" ]; }
+    then
+        return 0
+    fi
+    _log_cleanup
     printf '\r\033[K' >&2
 }
 

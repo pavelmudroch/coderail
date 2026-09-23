@@ -56,6 +56,12 @@ _coderail_init()
         log_error "Failed to create temporary resource file"
         return 1
     fi
+
+    _CR_TEMP_SPINNER_PID_FILE="${TMPDIR:-/tmp}/coderail-$$.spinner-pid"
+    if [ ! : > "$_CR_TEMP_SPINNER_PID_FILE" ]; then
+        log_error "Failed to create temporary spinner PID file"
+        return 1
+    fi
 }
 
 _coderail_init "$0"
@@ -66,6 +72,8 @@ _coderail_init "$0"
 . "$_CR_INSTALL_DIR/lib/utils/conf.sh"
 . "$_CR_INSTALL_DIR/lib/utils/md.sh"
 . "$_CR_INSTALL_DIR/lib/utils/text.sh"
+. "$_CR_INSTALL_DIR/lib/version.sh"
+
 
 register_temp_resource()
 {
@@ -92,6 +100,7 @@ Options:
 
 Commands:
   init                 Initialize current directory for CodeRail
+  upgrade              Upgrade this CodeRail installation
   install              Install CodeRail for specific agent harnesses
   uninstall            Uninstall CodeRail for specific agent harnesses
   doctor               Inspect or repair broken CodeRail state
@@ -111,7 +120,6 @@ EOF
 
 version()
 {
-    . "$_CR_INSTALL_DIR/lib/version.sh"
     output "cr version $coderail_version"
 }
 
@@ -128,6 +136,7 @@ _cleanup_on_exit()
     trap - 0 HUP INT TERM
 
     _log_cleanup
+    rm -f "$_CR_TEMP_SPINNER_PID_FILE"
     if [ -f "$_CR_TEMP_RESOURCE_FILE" ]; then
         awk '
             { resources[NR] = $0 }
