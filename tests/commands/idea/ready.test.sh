@@ -100,7 +100,7 @@ test_expect "ready: normalizes nested full file path" '".coderail/plans/parent/c
 test "ready: changes status and preserves metadata and body" cmp "$test_dir/expected" .coderail/plans/parent/child/IDEA.md
 test "ready: parent preserved" cmp "$test_dir/parent" .coderail/plans/parent/IDEA.md
 test_expect "ready: attachment preserved" 'Keep these notes.' cat .coderail/plans/parent/child/notes.txt
-test "ready: does not create specification" test ! -e .coderail/plans/parent/child/SPEC.md
+test "ready: does not create specification" command test ! -e .coderail/plans/parent/child/SPEC.md
 test "ready: rejects already ready idea" _expect_ready_failure 1 'Only forging ideas can be marked as ready:' parent/child
 test "ready: repeated call preserves file" cmp "$test_dir/expected" .coderail/plans/parent/child/IDEA.md
 

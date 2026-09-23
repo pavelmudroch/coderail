@@ -60,7 +60,7 @@ _expect_map_failure()
 print_tests_header "Idea Map Command Tests"
 
 test_expect "map: missing plans directory" 'No ideas found' _run_idea_map
-test "map: creates plans directory" test -d .coderail/plans
+test "map: creates plans directory" command test -d .coderail/plans
 test_expect "map: empty directory with --json" 'No ideas found' _run_idea_map --json
 
 # Create out of order; titles deliberately differ from directory sort order.

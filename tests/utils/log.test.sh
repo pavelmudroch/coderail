@@ -47,60 +47,55 @@ _test_cleanup_stops_subshell_spinner()
     rm -rf "$spinner_test_dir"
 }
 
-_write_confirm_script()
-{
-    confirm_interactive=$1
-
-    printf '%s\n' \
-        '#!/usr/bin/env sh' \
-        'set -eu' \
-        'log_level=1' \
-        'log_color=0' \
-        'log_interactive=1' \
-        '. "$1/lib/utils/log.sh"' \
-        'reinit_log' \
-        "log_interactive=$confirm_interactive" \
-        'log_confirm "Continue?"' > "$test_dir/confirm.sh"
-}
-
-_run_terminal_confirm()
+_run_confirm()
 {
     confirm_interactive=$1
     expected_status=$2
     shift 2
-    _write_confirm_script "$confirm_interactive"
 
+    _prepare_log
     confirm_status=0
-    printf '%s\n' "$@" | script -q -e -c "sh '$test_dir/confirm.sh' '$PROJECT_ROOT'" /dev/null \
-        > "$test_dir/confirm.stdout" 2> "$test_dir/confirm.stderr" || confirm_status=$?
+    if [ "$#" -eq 0 ]; then
+        : | (
+            tty() { return 0; }
+            log_interactive=$confirm_interactive
+            log_confirm "Continue?"
+        ) > "$test_dir/confirm.stdout" 2> "$test_dir/confirm.stderr" || confirm_status=$?
+    else
+        printf '%s\n' "$@" | (
+            tty() { return 0; }
+            log_interactive=$confirm_interactive
+            log_confirm "Continue?"
+        ) > "$test_dir/confirm.stdout" 2> "$test_dir/confirm.stderr" || confirm_status=$?
+    fi
     [ "$confirm_status" -eq "$expected_status" ]
 }
 
 _test_confirm_yes()
 {
-    _run_terminal_confirm 1 0 ' YeS '
+    _run_confirm 1 0 ' YeS '
 }
 
 _test_confirm_no()
 {
-    _run_terminal_confirm 1 1 ' no '
+    _run_confirm 1 1 ' no '
 }
 
 _test_confirm_empty_defaults_to_no()
 {
-    _run_terminal_confirm 1 1 ''
+    _run_confirm 1 1 ''
 }
 
 _test_confirm_invalid_reprompts()
 {
-    _run_terminal_confirm 1 0 'maybe' 'yes' || return 1
-    grep -Fq 'Please answer yes or no.' "$test_dir/confirm.stdout"
+    _run_confirm 1 0 'maybe' 'yes' || return 1
+    grep -Fq 'Please answer yes or no.' "$test_dir/confirm.stderr"
 }
 
 _test_confirm_noninteractive()
 {
-    _run_terminal_confirm 0 2 'yes' || return 1
-    grep -Fq 'Confirmation input is unavailable' "$test_dir/confirm.stdout"
+    _run_confirm 0 2 'yes' || return 1
+    grep -Fq 'Confirmation input is unavailable' "$test_dir/confirm.stderr"
 }
 
 _test_confirm_redirected_stdin()
@@ -116,13 +111,8 @@ _test_confirm_redirected_stdin()
 
 _test_confirm_eof()
 {
-    _write_confirm_script 1
-    confirm_status=0
-    : | script -q -e -c "sh '$test_dir/confirm.sh' '$PROJECT_ROOT'" /dev/null \
-        > "$test_dir/confirm.stdout" 2> "$test_dir/confirm.stderr" || confirm_status=$?
-
-    [ "$confirm_status" -eq 2 ] && \
-        grep -Fq 'Failed to read confirmation input' "$test_dir/confirm.stdout"
+    _run_confirm 1 2 || return 1
+    grep -Fq 'Failed to read confirmation input' "$test_dir/confirm.stderr"
 }
 
 test "cleanup stops spinner started in a subshell" _test_cleanup_stops_subshell_spinner

@@ -131,7 +131,7 @@ cp -R .coderail/plans/rollback "$test_dir/original"
 # The second child fails after the first was staged; this path has no diagnostic.
 test "split: blocked second child fails" _expect_split_failure 1 '' rollback First Blocked
 test "split: failure preserves parent and attachments" diff -r "$test_dir/original" .coderail/plans/rollback
-test "split: failure leaves no first child" test ! -e .coderail/plans/rollback/first
+test "split: failure leaves no first child" command test ! -e .coderail/plans/rollback/first
 test_expect "split: temporary resources cleaned up" '' find . -name '.cr-tmp-*'
 
 print_tests_summary

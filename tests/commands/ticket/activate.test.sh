@@ -100,7 +100,7 @@ printf 'reason: body text\nduplicate-of: body text\n' >> "$test_dir/expected"
 test_expect "activate: resolves ID and creates active directory" '.coderail/tickets/active/0001-first.md' \
     _run_ticket_activate 0001
 test "activate: removes closure fields and preserves other metadata and body" cmp "$test_dir/expected" .coderail/tickets/active/0001-first.md
-test "activate: removes open file" test ! -e .coderail/tickets/open/0001-first.md
+test "activate: removes open file" command test ! -e .coderail/tickets/open/0001-first.md
 test_expect "activate: releases lock" '' find .coderail/tickets -name '*.lock'
 test "activate: rejects already active ticket" _expect_activate_failure 1 'Ticket is not open' 0001
 
@@ -128,7 +128,7 @@ for dependency in 0001 0012 9999; do
     test "activate: dependency $dependency blocks" _expect_activate_failure 1 'dependencies are not satisfied' 0005
     test "activate: blocked ticket preserved" cmp "$test_dir/original" .coderail/tickets/open/0005-blocked.md
 done
-test "activate: blocked ticket has no active copy" test ! -e .coderail/tickets/active/0005-blocked.md
+test "activate: blocked ticket has no active copy" command test ! -e .coderail/tickets/active/0005-blocked.md
 
 _write_test_ticket .coderail/tickets/open/0006-locked.md 'status: open'
 printf 'Preserve lock.\n' > .coderail/tickets/~0006-locked.md.lock
@@ -139,7 +139,7 @@ rm .coderail/tickets/~0006-locked.md.lock
 _write_test_ticket .coderail/tickets/open/0007-collision.md 'status: open'
 mkdir .coderail/tickets/active/0007-collision.md
 test "activate: rejects existing destination directory" _expect_activate_failure 1 'Ticket already exists' 0007
-test "activate: preserves destination directory" test -d .coderail/tickets/active/0007-collision.md
+test "activate: preserves destination directory" command test -d .coderail/tickets/active/0007-collision.md
 rmdir .coderail/tickets/active/0007-collision.md
 ln -s missing .coderail/tickets/active/0007-collision.md
 test "activate: rejects dangling destination symlink" _expect_activate_failure 1 'Ticket already exists' 0007
@@ -161,13 +161,13 @@ export ACTIVATE_FAIL_WRITE
 test "activate: write error fails" _expect_activate_failure 1 'Failed to write active ticket' 0020
 unset ACTIVATE_FAIL_WRITE
 test "activate: write error preserves original" cmp "$test_dir/original" .coderail/tickets/open/0020-failure.md
-test "activate: write error leaves no active copy" test ! -e .coderail/tickets/active/0020-failure.md
+test "activate: write error leaves no active copy" command test ! -e .coderail/tickets/active/0020-failure.md
 ACTIVATE_FAIL_REMOVE=1
 export ACTIVATE_FAIL_REMOVE
 test "activate: removal error fails" _expect_activate_failure 1 'Failed to remove open ticket' 0020
 unset ACTIVATE_FAIL_REMOVE
 test "activate: removal error preserves original" cmp "$test_dir/original" .coderail/tickets/open/0020-failure.md
-test "activate: removal error rolls back active copy" test ! -e .coderail/tickets/active/0020-failure.md
+test "activate: removal error rolls back active copy" command test ! -e .coderail/tickets/active/0020-failure.md
 
 test_expect "activate: failure paths release locks" '' find .coderail/tickets -name '*.lock'
 test_expect "activate: temporary resources cleaned up" '' find . -name '.cr-tmp-*'

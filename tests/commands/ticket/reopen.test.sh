@@ -98,7 +98,7 @@ printf 'reason: body text\nduplicate-of: body text\n' >> .coderail/tickets/close
 printf 'reason: body text\nduplicate-of: body text\n' >> "$test_dir/expected"
 test_expect "reopen: creates open directory" '.coderail/tickets/open/0001-first.md' _run_ticket_reopen 0001
 test "reopen: removes closure fields and preserves body, dependencies and unrelated metadata" cmp "$test_dir/expected" .coderail/tickets/open/0001-first.md
-test "reopen: removes source" test ! -e .coderail/tickets/close/0001-first.md
+test "reopen: removes source" command test ! -e .coderail/tickets/close/0001-first.md
 test "reopen: rejects open ticket" _expect_reopen_failure 1 'Ticket is not closed' 0001
 
 _write_test_ticket .coderail/tickets/active/0002-active.md 'status: active'
@@ -145,16 +145,16 @@ export REOPEN_FAIL_WRITE
 test "reopen: write failure" _expect_reopen_failure 1 'Failed to write open ticket' 0020
 unset REOPEN_FAIL_WRITE
 test "reopen: write failure preserves source" cmp "$test_dir/original" .coderail/tickets/close/0020-failure.md
-test "reopen: write failure leaves no destination" test ! -e .coderail/tickets/open/0020-failure.md
+test "reopen: write failure leaves no destination" command test ! -e .coderail/tickets/open/0020-failure.md
 REOPEN_FAIL_REMOVE=1
 export REOPEN_FAIL_REMOVE
 test "reopen: removal failure" _expect_reopen_failure 1 'Failed to remove source ticket' 0020
 unset REOPEN_FAIL_REMOVE
 test "reopen: removal failure preserves source" cmp "$test_dir/original" .coderail/tickets/close/0020-failure.md
-test "reopen: removal failure rolls back destination" test ! -e .coderail/tickets/open/0020-failure.md
+test "reopen: removal failure rolls back destination" command test ! -e .coderail/tickets/open/0020-failure.md
 ln -s missing .coderail/tickets/open/0020-failure.md
 test "reopen: rejects existing destination" _expect_reopen_failure 1 'Ticket already exists' 0020
-test "reopen: preserves destination symlink" test -L .coderail/tickets/open/0020-failure.md
+test "reopen: preserves destination symlink" command test -L .coderail/tickets/open/0020-failure.md
 
 test_expect "reopen: releases locks" '' find .coderail/tickets -name '*.lock'
 test_expect "reopen: cleans temporary resources" '' find . -name '.cr-tmp-*'
@@ -165,7 +165,7 @@ mkdir -p .coderail/tickets/close
 _write_test_ticket .coderail/tickets/close/0001-blocked.md 'status: closed'
 printf 'preserve\n' > .coderail/tickets/open
 test "reopen: blocked destination directory" _expect_reopen_failure 1 'Cannot write to' 0001
-test "reopen: preserves source on blocked directory" test -f .coderail/tickets/close/0001-blocked.md
+test "reopen: preserves source on blocked directory" command test -f .coderail/tickets/close/0001-blocked.md
 test_expect "reopen: preserves blocked destination" 'preserve' cat .coderail/tickets/open
 test_expect "reopen: blocked directory releases lock" '' find .coderail/tickets -name '*.lock'
 
