@@ -106,6 +106,24 @@ _test_expect_fail()
     fi
 }
 
+_suite_run_test_function()
+{
+    shift
+    "$@"
+}
+
+_suite_run_test()
+{
+    _suite_run_test_function "$@"
+    status=$?
+
+    if [ "$suite_failed_test_counter" -gt "$1" ]; then
+        return 1
+    fi
+
+    return "$status"
+}
+
 test()
 {
     message=$1
@@ -122,7 +140,7 @@ test()
         return
     fi
 
-    if stderr_output=$("$test_function" "$@" 2>&1); then
+    if stderr_output=$(_suite_run_test "$suite_failed_test_counter" "$test_function" "$@" 2>&1); then
         _suite_status_line "$message" '[ OK ]' "$suite_green"
         suite_passed_test_counter=$((suite_passed_test_counter + 1))
         return
