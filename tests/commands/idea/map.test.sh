@@ -74,12 +74,12 @@ printf 'Specification\n' > .coderail/plans/zulu/child-b/SPEC.md
 printf 'Keep these notes.\n' > .coderail/plans/alpha/notes.txt
 
 test_expect "map: sorted nested tree, branches and mixed statuses" '/
-├── Last title (forging): ".coderail/plans/alpha/IDEA.md"
-└── First title (split): ".coderail/plans/zulu/IDEA.md"
-    ├── Child A (split): ".coderail/plans/zulu/child-a/IDEA.md"
-    │   ├── One (forging): ".coderail/plans/zulu/child-a/one/IDEA.md"
-    │   └── Two (forging): ".coderail/plans/zulu/child-a/two/IDEA.md"
-    └── Child B (ready): ".coderail/plans/zulu/child-b/IDEA.md"' _run_idea_map
+├── ⛭ Last title (forging): ".coderail/plans/alpha/IDEA.md"
+└── ⌥ First title (split): ".coderail/plans/zulu/IDEA.md"
+    ├── ⌥ Child A (split): ".coderail/plans/zulu/child-a/IDEA.md"
+    │   ├── ⛭ One (forging): ".coderail/plans/zulu/child-a/one/IDEA.md"
+    │   └── ⛭ Two (forging): ".coderail/plans/zulu/child-a/two/IDEA.md"
+    └── ✔ Child B (ready): ".coderail/plans/zulu/child-b/IDEA.md"' _run_idea_map
 test_expect "map: JSON fields, ordering and parent relationships" '[
   {
     "path": "alpha",
