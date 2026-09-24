@@ -105,3 +105,37 @@ if ! CODERAIL_INTERNAL_INSTALL=1 \
     printf 'error: Failed to install coderail\n'
     exit 1
 fi
+
+printf 'Coderail installed successfully!\n'
+
+_locate_cr_executable()
+{
+    if ! executable="$(command -v "cr" 2>/dev/null)"; then
+        return 1
+    fi
+
+    while [ -L "$executable" ]; do
+        exec_dir=$(
+            CDPATH= cd -- "$(dirname "$executable")"
+            pwd
+        )
+        link_target=$(readlink "$executable")
+
+        case "$link_target" in
+            /*) executable="$link_target" ;;
+            *) executable="$exec_dir/$link_target" ;;
+        esac
+    done
+
+    printf '%s\n' "$executable"
+}
+
+if ! current_cr_executable=$(_locate_cr_executable); then
+    printf '\n"cr" tool is not located in your PATH\n'
+    printf 'Add %s to your PATH or link it to a directory\nalready in your PATH\n' "$cr_install_dir/bin"
+    printf '\nExample:\n  export PATH="%s/bin:$PATH"\n' "$cr_install_dir"
+fi
+
+if [ "$current_cr_executable" != "$cr_install_dir/bin/cr" ]; then
+    printf '\n"cr" tool in your PATH (%s) does not match the installed location (%s)\n' "$current_cr_executable" "$cr_install_dir/bin/cr"
+fi

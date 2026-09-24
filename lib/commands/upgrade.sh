@@ -157,4 +157,15 @@ EOF
         "$cr_upgrade_tool" upgrade "$@"; then
         exit "$_CR_ERROR_EXIT_CODE"
     fi
+
+    if ! current_cr_executable=$(path_locate_executable "cr"); then
+        message=$(printf "'cr' tool is not located in your PATH\nAdd $_CR_INSTALL_DIR/bin to your PATH or link it to a directory\nalready in your PATH\n")
+        log_warning "$message"
+        exit "$_CR_SUCCESS_EXIT_CODE"
+    fi
+
+    if [ "$current_cr_executable" != "$CODERAIL_INTERNAL_DESTINATION/bin/cr" ]; then
+        message=$(printf "'cr' tool in your PATH (%s) does not match the installed location (%s)\n" "$current_cr_executable" "$CODERAIL_INTERNAL_DESTINATION/bin/cr")
+        log_warning "$message"
+    fi
 }
