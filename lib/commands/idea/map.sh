@@ -9,8 +9,8 @@ Usage:
   Generate tree-like map of ideas, their relationships and statuses.
 
 Options:
-  -h, --help           Show this help message and exit
-      --json           Output the idea map in JSON format
+  -h, --help            Show this help message and exit
+      --json            Output the idea map in JSON format
 EOF
 }
 

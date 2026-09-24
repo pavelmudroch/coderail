@@ -4,8 +4,8 @@ usage()
 {
     cat <<'EOF'
 Usage:
-  cr idea split [options] <idea_path> <child_title> <child_title>
-                [<child_title> ...]
+  cr idea split [options] <idea-path> <child-title> <child-title>
+  [<child-title> ...]
 
   Atomically split an idea into multiple child ideas based on the provided child
   titles. An idea status is changed to 'split'. Each child idea is created with
@@ -15,11 +15,11 @@ Usage:
   At least two child ideas are required.
 
 Options:
-  -h, --help           Show this help message and exit
+  -h, --help            Show this help message and exit
 
 Arguments:
-  <idea_path>          Path of the idea to split
-  <child_title>        Title of the child idea to create (specify one or more)
+  <idea-path>           Path of the idea to split
+  <child-title>         Title of the child idea to create (specify one or more)
 EOF
 }
 

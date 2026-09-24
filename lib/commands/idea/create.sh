@@ -9,12 +9,12 @@ Usage:
   Create a new empty idea file with specified title and optional parent idea.
 
 Options:
-  -h, --help           Show this help message and exit
+  -h, --help            Show this help message and exit
   -p, --parent <parent-idea-path>
-                       The path to the parent idea
+                        The path to the parent idea
 
 Arguments:
-  <idea-title>         The title of the idea to create
+  <idea-title>          The title of the idea to create
 EOF
 }
 

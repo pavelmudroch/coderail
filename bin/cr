@@ -90,31 +90,32 @@ Usage:
   CodeRail CLI tool for agent-based development
 
 Options:
-  -h, --help             Show this help message and exit
-      --version          Show version information and exit
-  -v, --verbose          Enable verbose logging
-  -q, --quiet            Suppress notices and log output
-      --cwd <dir>        Specify the current working directory
-      --no-color         Disable colored output
-      --non-interactive  Disable prompts and interactive output
+  -h, --help            Show this help message and exit
+      --version         Show version information and exit
+  -v, --verbose         Enable verbose logging
+  -q, --quiet           Suppress notices and log output
+      --cwd <dir>       Specify the current working directory
+      --no-color        Disable colored output
+      --non-interactive
+                        Disable prompts and interactive output
 
 Commands:
-  init                 Initialize current directory for CodeRail
-  upgrade              Upgrade this CodeRail installation
-  install              Install CodeRail for specific agent harnesses
-  uninstall            Uninstall CodeRail for specific agent harnesses
-  doctor               Inspect or repair broken CodeRail state
-  idea                 Manage ideas
-  status               Show status of current working directory
-  ticket               Manage tickets
-  loop                 Implement tickets in a loop
-  test                 Run defined tests for files and directories
+  init                  Initialize current directory for CodeRail
+  upgrade               Upgrade this CodeRail installation
+  install               Install CodeRail for specific agent harnesses
+  uninstall             Uninstall CodeRail for specific agent harnesses
+  doctor                Inspect or repair broken CodeRail state
+  idea                  Manage ideas
+  status                Show status of current working directory
+  ticket                Manage tickets
+  loop                  Implement tickets in a loop
+  test                  Run defined tests for files and directories
 
 Environment Variables:
-  NO_COLOR=1           Disable colored output
-  NON_INTERACTIVE=1    Disable prompts and interactive output
+  NO_COLOR=1            Disable colored output
+  NON_INTERACTIVE=1     Disable prompts and interactive output
   LOG_LEVEL=verbose|quiet
-                       Set log level to verbose or quiet
+                        Set log level to verbose or quiet
 EOF
 }
 

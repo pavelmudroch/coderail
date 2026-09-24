@@ -9,10 +9,10 @@ Usage:
   Activate an existing ticket by its ID, path or slug.
 
 Options:
-  -h, --help           Show this help message and exit
+  -h, --help            Show this help message and exit
 
 Arguments:
-  <ticket>             The ID, path or slug of the ticket to activate
+  <ticket>              The ID, path or slug of the ticket to activate
 EOF
 }
 

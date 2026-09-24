@@ -9,17 +9,17 @@ Usage:
   cr test [options] [<file|directory> ...]
 
   Run configured test commands for specified paths or changed files. At least
-  one selector --changed or <file|dir> must be provided.
+  one selector --changed or <file|directory> must be provided.
 
 Options:
-  -h, --help           Show this help message and exit
-  -s, --short          Output only <file> ok/fail for each tested file
-  -c, --changed        Run tests for all changed files. Git must be available
-                       in the current working directory.
+  -h, --help            Show this help message and exit
+  -s, --short           Output only <file> ok/fail for each tested file
+  -c, --changed         Run tests for all changed files. Git must be available
+                        in the current working directory.
 
 Arguments:
-  <file|directory>     File(s) and or directory(ies) to run tests for. Mandatory
-                       unless --changed is specified.
+  <file|directory>      File(s) and or directory(ies) to run tests for.
+                        Mandatory unless --changed is specified.
 
 Map format:
   example:
@@ -37,9 +37,9 @@ Map format:
   exit. Test commands stream stdout and stderr directly to the corresponding
   output streams, including when a command fails, unless --short is specified.
 
-Environment variables:
-  TEST_SHELL        The shell to use for executing test commands. Defaults to
-                    the `sh` if not set, neither configured.
+Environment Variables:
+  TEST_SHELL            The shell to use for executing test commands. Defaults
+                        to the `sh` if not set, neither configured.
 EOF
 }
 

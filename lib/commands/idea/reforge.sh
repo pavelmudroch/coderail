@@ -4,15 +4,15 @@ usage()
 {
     cat <<'EOF'
 Usage:
-  cr idea reforge [options] <idea_path>
+  cr idea reforge [options] <idea-path>
 
   Reforge an idea which has been previously marked as ready.
 
 Options:
-  -h, --help           Show this help message and exit
+  -h, --help            Show this help message and exit
 
 Arguments:
-  <idea_path>          Path of the idea to reforge
+  <idea-path>           Path of the idea to reforge
 EOF
 }
 

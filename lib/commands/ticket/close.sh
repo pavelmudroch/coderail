@@ -9,16 +9,16 @@ Usage:
   Close an existing ticket by its ID, path or slug.
 
 Options:
-  -h, --help           Show this help message and exit
-  --reason <done | duplicate | deferred | dismissed>
-                       The reason for closing the ticket (defaults to "done")
-  --duplicate-of <ticket>
-                       The ticket ID, path or slug that this ticket is a
-                       duplicate of, only valid when --reason is set to
-                       "duplicate"
+  -h, --help            Show this help message and exit
+      --reason <done|duplicate|deferred|dismissed>
+                        The reason for closing the ticket (defaults to "done")
+      --duplicate-of <ticket>
+                        The ticket ID, path or slug that this ticket is a
+                        duplicate of, only valid when --reason is set to
+                        "duplicate"
 
 Arguments:
-  <ticket>             The ID, path or slug of the ticket to close
+  <ticket>              The ID, path or slug of the ticket to close
 EOF
 }
 

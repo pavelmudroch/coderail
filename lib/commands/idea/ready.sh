@@ -4,16 +4,16 @@ usage()
 {
     cat <<'EOF'
 Usage:
-  cr idea ready [options] <idea_path>
+  cr idea ready [options] <idea-path>
 
   Mark an idea as ready. An idea status is changed to 'ready'. Only currently
   forging ideas can be marked as ready.
 
 Options:
-  -h, --help           Show this help message and exit
+  -h, --help            Show this help message and exit
 
 Arguments:
-  <idea_path>          Path of the idea to mark as ready
+  <idea-path>           Path of the idea to mark as ready
 EOF
 }
 

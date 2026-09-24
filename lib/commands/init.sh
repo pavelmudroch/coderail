@@ -9,14 +9,15 @@ Usage:
   Initialize current directory for CodeRail.
 
 Options:
-  -h, --help           Show this help message and exit
+  -h, --help            Show this help message and exit
 
 Arguments:
-  <template>           Optional template(s) to use for initialization. Templates
-                       are stored at coderail install location under templates/.
-                       Each template defines a set of files and directories to
-                       be created during initialization. And optional
-                       initialization script to be run during the setup process.
+  <template>            Optional template(s) to use for initialization.
+                        Templates are stored at coderail install location under
+                        templates/. Each template defines a set of files and
+                        directories to be created during initialization. And
+                        optional initialization script to be run during the
+                        setup process.
 EOF
 }
 

@@ -15,14 +15,15 @@ Usage:
   Manage ideas.
 
 Options:
-  -h, --help           Show this help message and exit
+  -h, --help            Show this help message and exit
 
 Commands:
-  map                  Generate map of ideas and their relationships
-  create               Create a new idea
-  split                Split an idea into multiple child ideas
-  ready                Mark an idea as ready
-  reforge              Reforge an idea which has been previously marked as ready
+  map                   Generate map of ideas and their relationships
+  create                Create a new idea
+  split                 Split an idea into multiple child ideas
+  ready                 Mark an idea as ready
+  reforge               Reforge an idea which has been previously marked as
+                        ready
 EOF
 }
 

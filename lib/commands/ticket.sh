@@ -20,14 +20,14 @@ Usage:
   Manage tickets.
 
 Options:
-  -h, --help           Show this help message and exit
+  -h, --help            Show this help message and exit
 
 Commands:
-  create               Create a new ticket
-  next                 List next available tickets
-  activate             Activate an open ticket
-  close                Close a ticket
-  reopen               Reopen a ticket
+  create                Create a new ticket
+  next                  List next available tickets
+  activate              Activate an open ticket
+  close                 Close a ticket
+  reopen                Reopen a ticket
 EOF
 }
 

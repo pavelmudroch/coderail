@@ -7,17 +7,18 @@ Usage:
   cr upgrade [options]
 
 Options:
-  --list            List all available versions for upgrade; cannot combine
-                    with --canary or --version
-  --version <tag>   Specify the version to upgrade to, if not specified,
-                    upgrade to the latest release; use semantic version
-                    specifier <major>.<minor>.<patch> w/wo a leading "v"
-                    prefix; minor and patch numbers are optional, if omitted
-                    use highest available for the omitted numbers
-  --canary          Upgrade to the canary version
-  --force           Allow overwriting existing edited instruction, or
-                    template files; prompt for confirmation
-  --yes             Automatically confirm the prompt
+  -h, --help            Show this help message and exit
+      --list            List all available versions for upgrade; cannot
+                        combine with --canary or --version
+      --version <tag>   Specify the version to upgrade to, if not specified,
+                        upgrade to the latest release; use semantic version
+                        specifier <major>.<minor>.<patch> w/wo a leading "v"
+                        prefix; minor and patch numbers are optional, if
+                        omitted use highest available for the omitted numbers
+      --canary          Upgrade to the canary version
+      --force           Allow overwriting existing edited instruction, or
+                        template files; prompt for confirmation
+      --yes             Automatically confirm the prompt
 EOF
 }
 
@@ -31,6 +32,15 @@ execute_command()
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            --help=*)
+                log_error "--help does not take an argument"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
             --list)
                 list=1
                 ;;

@@ -4,18 +4,20 @@ usage()
 {
     cat <<'EOF'
 Usage:
-  cr install [options] [<harness> ...]
+  cr uninstall [options] [<harness> ...]
 
-  Install instruction set for the specified harnesses
+  Uninstall instruction set for the specified harnesses, or coderail itself
 
 Options:
   -h, --help            Show this help message and exit
-  -f, --force           Force installation, overwriting user edited files,
+  -f, --force           Force uninstallation, removing user edited files,
                         prompts for confirmation
   -y, --yes             Automatically confirm the prompt
+      --self            Uninstall coderail itself, cannot be combined with
+                        harness
 
 Arguments:
-  <harness>             One or more harnesses to install instruction sets for,
+  <harness>             One or more harnesses to uninstall instruction sets for,
                         currently supported harnesses are:
                         codex | claude | copilot | gemini
 EOF

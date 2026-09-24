@@ -9,9 +9,10 @@ Usage:
   List next available open tickets with satisfied dependencies
 
 Options:
-  -h, --help           Show this help message and exit
+  -h, --help            Show this help message and exit
   -l, --limit <number>
-                       Only list the specified number of tickets (default: all)
+                        Only list the specified number of tickets
+                        (default: all)
 EOF
 }
 
