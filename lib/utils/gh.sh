@@ -64,7 +64,7 @@ _fetch_file()
     case "$cmd_name" in
         curl)
             log_verbose "Using curl to fetch $url"
-            curl -sSL "$url" -o "$file" 2>&1
+            curl -fsSL "$url" -o "$file" 2>&1
             ;;
         wget)
             log_verbose "Using wget to fetch $url"
@@ -83,7 +83,7 @@ _fetch_json()
     case "$cmd_name" in
         curl)
             log_verbose "Using curl to fetch $url"
-            curl -sSL "$url" \
+            curl -fsSL "$url" \
                 -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: $GITHUB_API_VERSION" 2>&1
             ;;
