@@ -25,11 +25,14 @@ _test_public_upgrade_handoff()
     _CR_INSTALL_DIR="$fixture_root/mock"
     _CR_ERROR_EXIT_CODE=1
     _CR_USAGE_EXIT_CODE=2
+    _CR_SUCCESS_EXIT_CODE=0
     coderail_version=0.0.0
     log_error() { :; }
     log_verbose() { :; }
     output() { :; }
+    log_warning() { :; }
     fs_create_temp_dir() { printf '%s\n' "$fixture_root/work"; }
+    path_locate_executable() { printf '%s\n' "$_CR_INSTALL_DIR/bin/cr"; }
     tar()
     {
         mkdir -p "$fixture_root/work/release/bin"
@@ -51,13 +54,19 @@ _test_public_upgrade_handoff()
     expected_capture=$(
         printf '%s\n' arguments upgrade
         for expected_argument do
-            printf '%s\n' "$expected_argument"
+            case "$expected_argument" in
+                --force|--yes) printf '%s\n' "$expected_argument" ;;
+            esac
         done
         printf 'internal=1\nsource=%s\ndestination=%s\norigin=upgrade\n' \
             "$fixture_root/work/release" "$fixture_root/mock"
     )
     [ "$(cat "$capture_file")" = "$expected_capture" ] || exit 1
-    [ "$(cat "$acquisition_file")" = latest ] || exit 1
+    expected_acquisition=latest
+    if [ "${1-}" = "--canary" ]; then
+        expected_acquisition=main
+    fi
+    [ "$(cat "$acquisition_file")" = "$expected_acquisition" ] || exit 1
 )
 
 _test_install_bootstrap_handoff()
@@ -135,6 +144,8 @@ test "public upgrade forwards yes to the extracted target" \
     _test_public_upgrade_handoff --yes
 test "public upgrade forwards force and yes to the extracted target" \
     _test_public_upgrade_handoff --force --yes
+test "public canary upgrade downloads the main branch" \
+    _test_public_upgrade_handoff --canary
 test "bootstrap installation automatically confirms the private target" \
     _test_install_bootstrap_handoff
 

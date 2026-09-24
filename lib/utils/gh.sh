@@ -39,7 +39,7 @@ gh_download_release()
     tag="$1"
     file="$2"
 
-    url="https://api.github.com/repos/$OWNER/$REPO/tarball/$tag"
+    url="https://github.com/$OWNER/$REPO/archive/refs/tags/$tag.tar.gz"
     if ! response="$(_fetch_file "$url" "$file" 2>&1)"; then
         return 1
     fi
@@ -50,7 +50,7 @@ gh_download_branch()
     branch="$1"
     file="$2"
 
-    url="https://api.github.com/repos/$OWNER/$REPO/archive/refs/heads/$branch.tar.gz"
+    url="https://github.com/$OWNER/$REPO/archive/refs/heads/$branch.tar.gz"
     if ! response="$(_fetch_file "$url" "$file" 2>&1)"; then
         return 1
     fi

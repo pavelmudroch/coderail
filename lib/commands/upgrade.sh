@@ -174,8 +174,8 @@ EOF
         exit "$_CR_SUCCESS_EXIT_CODE"
     fi
 
-    if [ "$current_cr_executable" != "$CODERAIL_INTERNAL_DESTINATION/bin/cr" ]; then
-        message=$(printf "'cr' tool in your PATH (%s) does not match the installed location (%s)\n" "$current_cr_executable" "$CODERAIL_INTERNAL_DESTINATION/bin/cr")
+    if [ "$current_cr_executable" != "$_CR_INSTALL_DIR/bin/cr" ]; then
+        message=$(printf "'cr' tool in your PATH (%s) does not match the installed location (%s)\n" "$current_cr_executable" "$_CR_INSTALL_DIR/bin/cr")
         log_warning "$message"
     fi
 }
