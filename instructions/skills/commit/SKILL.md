@@ -29,7 +29,7 @@ Group changes by logical purpose, not by file.
 
 Use one commit per coherent change. Split independent features, fixes, refactors, docs, tests, tooling, cleanup, or other unrelated concerns.
 
-A single file may belong to multiple commits. Split hunks when needed.
+A single file may belong to multiple commits. Split chunks when needed.
 
 Keep related implementation, tests, docs, and configuration together.
 
