@@ -1,7 +1,9 @@
 ---
 title: Extend harness path and manifest contracts
-status: open
+status: closed
 depends-on: 
+reason: done
+duplicate-of: 
 ---
 
 # Extend harness path and manifest contracts
@@ -10,9 +12,9 @@ Provide the shared path scope and strict ownership-manifest handling needed by b
 
 ## Tasks
 
-1. [ ] Add harness path and manifest fixture tests
-2. [ ] Extend shared path validation with harness scopes
-3. [ ] Implement strict private harness manifest parsing and snapshot writing
+1. [x] Add harness path and manifest fixture tests
+2. [x] Extend shared path validation with harness scopes
+3. [x] Implement strict private harness manifest parsing and snapshot writing
 
 ## Task details
 

@@ -30,6 +30,11 @@ _manifest_relative_newline()
     path_manifest_relative "$(printf 'bin/a\nb')"
 }
 
+_harness_relative_tab()
+{
+    path_manifest_relative "$(printf 'skills/build/a\tb')" harness:codex
+}
+
 print_tests_header "Path Utils Tests"
 
 printf 'abc' > "$test_dir/checksum"
@@ -75,6 +80,37 @@ test "manifest target: rejects unsafe root" \
     _expect_silent_failure path_manifest_target "$test_dir/root/../other" "bin/cr"
 test "manifest target: rejects unsafe relative path" \
     _expect_silent_failure path_manifest_target "$test_dir/root" "bin/../cr"
+
+test_expect "harness manifest relative: accepts Codex global file" "AGENTS.md" \
+    path_manifest_relative "AGENTS.md" harness:codex
+test_expect "harness manifest relative: accepts Codex agent" "agents/reviewer.toml" \
+    path_manifest_relative "agents/reviewer.toml" harness:codex
+test_expect "harness manifest relative: accepts skill support file" "skills/build/scripts/run.sh" \
+    path_manifest_relative "skills/build/scripts/run.sh" harness:codex
+test_expect "harness manifest relative: accepts Claude global file" "CLAUDE.md" \
+    path_manifest_relative "CLAUDE.md" harness:claude
+test_expect "harness manifest relative: accepts Copilot agent" "agents/reviewer.agent.md" \
+    path_manifest_relative "agents/reviewer.agent.md" harness:copilot
+test_expect "harness manifest relative: accepts Copilot global file" "copilot-instructions.md" \
+    path_manifest_relative "copilot-instructions.md" harness:copilot
+test_expect "harness manifest relative: accepts Claude agent" "agents/reviewer.md" \
+    path_manifest_relative "agents/reviewer.md" harness:claude
+test_expect "harness manifest relative: accepts Gemini global file" "GEMINI.md" \
+    path_manifest_relative "GEMINI.md" harness:gemini
+test_expect "harness manifest relative: accepts Gemini agent" "agents/reviewer.md" \
+    path_manifest_relative "agents/reviewer.md" harness:gemini
+test_expect "harness manifest target: joins Claude payload" "$test_dir/root/CLAUDE.md" \
+    path_manifest_target "$test_dir/root" "CLAUDE.md" harness:claude
+
+for unsafe_harness_path in '.coderail/harnesses/codex.manifest' 'skills/.hidden/SKILL.md' \
+    'skills/build' 'skills/build/' 'agents/reviewer.md' 'agents/reviewer.agent.md' \
+    'agents/sub/reviewer.toml' 'AGENTS.md/extra'; do
+    test "harness manifest relative: rejects $unsafe_harness_path" \
+        _expect_silent_failure path_manifest_relative "$unsafe_harness_path" harness:codex
+done
+test "harness manifest relative: rejects tab" _expect_silent_failure _harness_relative_tab
+test "harness manifest relative: rejects unknown scope" \
+    _expect_silent_failure path_manifest_relative "AGENTS.md" harness:unknown
 
 print_tests_summary
 

@@ -102,9 +102,10 @@ path_checksum()
 
 path_manifest_relative()
 {
-    [ "$#" -eq 1 ] || return 1
+    [ "$#" -eq 1 ] || [ "$#" -eq 2 ] || return 1
 
     path="$1"
+    scope=${2:-}
     manifest_tab=$(printf '\t')
     manifest_newline='
 '
@@ -114,23 +115,74 @@ path_manifest_relative()
             ;;
     esac
 
-    case "$path" in
-        bin/*|lib/*|instructions/*|templates/*)
+    case "$scope" in
+        '')
+            case "$path" in
+                bin/*|lib/*|instructions/*|templates/*) ;;
+                *) return 1 ;;
+            esac
             ;;
-        *)
-            return 1
+        harness:codex)
+            path_manifest_harness_relative "$path" AGENTS.md .toml || return 1
             ;;
+        harness:claude)
+            path_manifest_harness_relative "$path" CLAUDE.md .md || return 1
+            ;;
+        harness:copilot)
+            path_manifest_harness_relative "$path" copilot-instructions.md .agent.md || return 1
+            ;;
+        harness:gemini)
+            path_manifest_harness_relative "$path" GEMINI.md .md || return 1
+            ;;
+        *) return 1 ;;
     esac
 
     printf '%s\n' "$path"
 }
 
+path_manifest_harness_relative()
+{
+    [ "$#" -eq 3 ] || return 1
+
+    path=$1
+    global_file=$2
+    agent_suffix=$3
+
+    [ "$path" = "$global_file" ] && return 0
+    case "$path" in
+        skills/*)
+            skill_name=${path#skills/}
+            skill_name=${skill_name%%/*}
+            case "$skill_name" in
+                ''|*[!A-Za-z0-9_-]*|[!A-Za-z0-9]*) return 1 ;;
+            esac
+            skill_file=${path#skills/"$skill_name"/}
+            [ "$skill_file" != "$path" ] && [ -n "$skill_file" ] || return 1
+            return 0
+            ;;
+        agents/*)
+            agent_name=${path#agents/}
+            case "$agent_name" in
+                */*|*"$agent_suffix") ;;
+                *) return 1 ;;
+            esac
+            agent_name=${agent_name%"$agent_suffix"}
+            case "$agent_name" in
+                ''|*[!A-Za-z0-9_-]*|[!A-Za-z0-9]*) return 1 ;;
+            esac
+            return 0
+            ;;
+        *) return 1 ;;
+    esac
+}
+
 path_manifest_target()
 {
-    [ "$#" -eq 2 ] || return 1
+    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || return 1
 
     root="$1"
     relative_path="$2"
+    scope=${3:-}
     manifest_tab=$(printf '\t')
     manifest_newline='
 '
@@ -151,7 +203,7 @@ path_manifest_target()
         root=${root%/}
     done
 
-    relative_path=$(path_manifest_relative "$relative_path") || return 1
+    relative_path=$(path_manifest_relative "$relative_path" "$scope") || return 1
     if [ "$root" = / ]; then
         printf '/%s\n' "$relative_path"
     else
