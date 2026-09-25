@@ -1,7 +1,9 @@
 ---
 title: Render harness agent definitions
-status: open
+status: closed
 depends-on: 0001, 0002
+reason: done
+duplicate-of: 
 ---
 
 # Render harness agent definitions
@@ -10,10 +12,10 @@ Complete the private staged payload with every bundled agent, preserving agent M
 
 ## Tasks
 
-1. [ ] Add agent format and failure fixture tests
-2. [ ] Validate agent source metadata and render Markdown agents
-3. [ ] Serialize Codex agents as lossless TOML
-4. [ ] Verify the complete four-harness renderer contract
+1. [x] Add agent format and failure fixture tests
+2. [x] Validate agent source metadata and render Markdown agents
+3. [x] Serialize Codex agents as lossless TOML
+4. [x] Verify the complete four-harness renderer contract
 
 ## Task details
 

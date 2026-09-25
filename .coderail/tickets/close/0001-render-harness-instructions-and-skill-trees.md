@@ -1,7 +1,9 @@
 ---
 title: Render harness instructions and skill trees
-status: open
+status: closed
 depends-on: 
+reason: done
+duplicate-of: 
 ---
 
 # Render harness instructions and skill trees
@@ -10,9 +12,9 @@ Provide the private `harness_render <harness> <bundle-root> <empty-stage-root>` 
 
 ## Tasks
 
-1. [ ] Add focused fixture tests for instruction and skill rendering
-2. [ ] Implement validated, deterministic source traversal and staging
-3. [ ] Render global instructions and complete skill trees
+1. [x] Add focused fixture tests for instruction and skill rendering
+2. [x] Implement validated, deterministic source traversal and staging
+3. [x] Render global instructions and complete skill trees
 
 ## Task details
 

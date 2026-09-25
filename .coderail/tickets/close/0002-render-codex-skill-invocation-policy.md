@@ -1,7 +1,9 @@
 ---
 title: Render Codex skill invocation policy
-status: open
+status: closed
 depends-on: 0001
+reason: done
+duplicate-of: 
 ---
 
 # Render Codex skill invocation policy
@@ -10,8 +12,8 @@ Translate bundled `disable-model-invocation` metadata into Codex skill policy wh
 
 ## Tasks
 
-1. [ ] Add policy and collision fixture tests
-2. [ ] Render Codex front matter and generated policy files
+1. [x] Add policy and collision fixture tests
+2. [x] Render Codex front matter and generated policy files
 
 ## Task details
 
