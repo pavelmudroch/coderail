@@ -1,7 +1,9 @@
 ---
 title: Uninstall managed harness payloads
-status: open
+status: closed
 depends-on: 0004, 0006
+reason: done
+duplicate-of: 
 ---
 
 # Uninstall managed harness payloads
@@ -10,9 +12,9 @@ Add manifest-driven `cr uninstall <harness> ...` so only files still owned by th
 
 ## Tasks
 
-1. [ ] Add uninstall command and ownership fixtures
-2. [ ] Parse uninstall options and prepare manifest-only removal
-3. [ ] Apply protected removal and release ownership
+1. [x] Add uninstall command and ownership fixtures
+2. [x] Parse uninstall options and prepare manifest-only removal
+3. [x] Apply protected removal and release ownership
 
 ## Task details
 

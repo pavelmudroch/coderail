@@ -1,7 +1,9 @@
 ---
 title: Install new harness payloads safely
-status: open
+status: closed
 depends-on: 0003, 0004
+reason: done
+duplicate-of: 
 ---
 
 # Install new harness payloads safely
@@ -10,9 +12,9 @@ Implement the first-install path from a complete rendered tree into one selected
 
 ## Tasks
 
-1. [ ] Add first-install command and lifecycle fixtures
-2. [ ] Parse install options and validate selected homes
-3. [ ] Stage, preflight, and apply a fresh harness installation
+1. [x] Add first-install command and lifecycle fixtures
+2. [x] Parse install options and validate selected homes
+3. [x] Stage, preflight, and apply a fresh harness installation
 
 ## Task details
 

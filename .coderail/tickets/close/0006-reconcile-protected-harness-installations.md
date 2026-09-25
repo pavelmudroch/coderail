@@ -1,7 +1,9 @@
 ---
 title: Reconcile protected harness installations
-status: open
+status: closed
 depends-on: 0005
+reason: done
+duplicate-of: 
 ---
 
 # Reconcile protected harness installations
@@ -10,9 +12,9 @@ Make repeated installation refresh owned files, release obsolete ownership, and 
 
 ## Tasks
 
-1. [ ] Add refresh, obsolete-file, and confirmation fixtures
-2. [ ] Plan current and obsolete managed paths from the manifest
-3. [ ] Resolve edit decisions and apply protected reconciliation
+1. [x] Add refresh, obsolete-file, and confirmation fixtures
+2. [x] Plan current and obsolete managed paths from the manifest
+3. [x] Resolve edit decisions and apply protected reconciliation
 
 ## Task details
 

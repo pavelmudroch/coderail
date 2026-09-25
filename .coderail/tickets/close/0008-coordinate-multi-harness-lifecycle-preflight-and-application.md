@@ -1,7 +1,9 @@
 ---
 title: Coordinate multi-harness lifecycle preflight and application
-status: open
+status: closed
 depends-on: 0005, 0006, 0007
+reason: done
+duplicate-of: 
 ---
 
 # Coordinate multi-harness lifecycle preflight and application
@@ -10,9 +12,9 @@ Complete the shared lifecycle contract for multi-harness requests: prepare every
 
 ## Tasks
 
-1. [ ] Add cross-harness and fault-injection fixtures
-2. [ ] Coordinate global staging, preflight, and decisions
-3. [ ] Recheck prepared actions and report partial application
+1. [x] Add cross-harness and fault-injection fixtures
+2. [x] Coordinate global staging, preflight, and decisions
+3. [x] Recheck prepared actions and report partial application
 
 ## Task details
 

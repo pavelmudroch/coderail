@@ -341,6 +341,7 @@ harness_render()
     find "$_harness_render_skills" -print | LC_ALL=C sort | while IFS= read -r _harness_render_directory || \
         [ -n "$_harness_render_directory" ]; do
         [ "$_harness_render_directory" = "$_harness_render_skills" ] && continue
+        [ "$_harness_render_directory" = "$_harness_render_skills/.system" ] && continue
         [ "$(dirname "$_harness_render_directory")" = "$_harness_render_skills" ] || continue
         printf '%s\n' "$_harness_render_directory"
     done > "$_harness_render_stage/.skills" || return 1
