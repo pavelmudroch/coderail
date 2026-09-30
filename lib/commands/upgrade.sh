@@ -10,11 +10,13 @@ Options:
   -h, --help            Show this help message and exit
       --list            List all available versions for upgrade; cannot
                         combine with --canary or --version
-      --version <tag>   Specify the version to upgrade to, if not specified,
+      --version <version>
+                        Specify the version to upgrade to, if not specified,
                         upgrade to the latest release; use semantic version
                         specifier <major>.<minor>.<patch> w/wo a leading "v"
-                        prefix; minor and patch numbers are optional, if
-                        omitted use highest available for the omitted numbers
+                        prefix; selects stable releases; minor and patch
+                        numbers are optional; omitted numbers use the highest
+                        available matching version
       --canary          Upgrade to the canary version
       --force           Allow overwriting existing edited instruction, or
                         template files; prompt for confirmation
@@ -55,6 +57,11 @@ execute_command()
                 ;;
             --version=*)
                 version="${1#*=}"
+                if [ -z "$version" ]; then
+                    log_error "Missing argument for --version"
+                    usage >&2
+                    exit "$_CR_USAGE_EXIT_CODE"
+                fi
                 ;;
             --canary)
                 canary=1
@@ -123,11 +130,14 @@ EOF
         fi
     else
         version="${version:-latest}"
-        version="${version#v}"
+        if ! resolved_tag=$(gh_resolve_release_tag "$version"); then
+            log_error "Failed to resolve release version: $version"
+            exit "$_CR_ERROR_EXIT_CODE"
+        fi
 
-        log_verbose "Downloading release version $version..."
-        if ! gh_download_release "$version" "$target_file"; then
-            log_error "Failed to download release $version"
+        log_verbose "Downloading release version $resolved_tag..."
+        if ! gh_download_release "$resolved_tag" "$target_file"; then
+            log_error "Failed to download release $resolved_tag"
             exit "$_CR_ERROR_EXIT_CODE"
         fi
     fi

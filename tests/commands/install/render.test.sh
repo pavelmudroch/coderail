@@ -76,13 +76,14 @@ _test_harness_output()
     [ ! -e "$fixture_root/stage/skills/absent/agents/openai.yaml" ] || exit 1
     grep -Fqx 'nested $example' "$fixture_root/stage/skills/example/nested/guide.md" || exit 1
     [ -f "$fixture_root/stage/skills/empty/SKILL.md" ] || exit 1
-    printf '%s\n' 'name = "Agent '\''quote'\'' \\ slash"' \
-        'description = "Line\nquote \" slash \\ tab\t"' \
-        'developer_instructions = """body $example \"\"\"\t\\ end\n"""' \
-        > "$fixture_root/expected-quoted.toml"
+    {
+        printf '%s\n' 'name = "Agent '\''quote'\'' \ slash"'
+        printf 'description = "Line\nquote " slash \\ tab\t"\n'
+        printf 'developer_instructions = """\nbody $example """\t\\ end\n\n"""\n'
+    } > "$fixture_root/expected-quoted.toml"
     cmp "$fixture_root/expected-quoted.toml" "$fixture_root/stage/agents/quoted.toml" || exit 1
     printf '%s\n' 'name = "plain"' 'description = "Plain agent"' \
-        'developer_instructions = """no final newline $example"""' \
+        'developer_instructions = """' 'no final newline $example' '"""' \
         > "$fixture_root/expected-plain.toml"
     cmp "$fixture_root/expected-plain.toml" "$fixture_root/stage/agents/plain.toml" || exit 1
 
@@ -275,4 +276,7 @@ test 'rejects invalid skill metadata and special entries' _test_rejects_invalid_
 test 'rejects invalid agent metadata, names, and links' _test_rejects_invalid_agents
 test 'reports staging write failures' _test_staging_write_failure
 print_tests_summary
-some_tests_failed && exit 1
+
+if some_tests_failed; then
+    exit 1
+fi

@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generic agent skills for forging ideas, writing specifications, creating and
   implementing tickets, research, questions, coding, and commits.
 - Self-updating installation through `install.sh` and `cr upgrade`.
+- `cr install` and `cr uninstall` for managing instructions, skills, and custom
+  agents for `codex`, `claude`, `copilot`, and `gemini`, with ownership records,
+  preservation of edited files, and `--force` / `--yes` controls.
+- Verbose logging for installation, uninstallation, and upgrades, including
+  staged files, ownership records, and planned file changes.
 
 ### Changed
 
@@ -27,11 +32,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its current command surface.
 - Global options now include `--no-color` and `--non-interactive`; combined
   short logging options are supported.
+- Harness instruction sets are rendered for each harness; rerunning `cr install`
+  refreshes managed files and removes obsolete ones. After `cr upgrade`, rerun
+  `cr install` to refresh installed harness instructions.
+
+### Fixed
+
+- `cr upgrade` resolves major, major.minor, and exact version selectors to
+  published stable release tags and preserves tag prefixes. Release pagination
+  preserves tag boundaries.
+- Argument parsing for `cr install` and `cr uninstall`, including options mixed
+  with harness names and the `--` end-of-options separator.
+- Codex custom agent TOML rendering.
+- Release and canary archive URLs used by `cr upgrade`, and HTTP error handling
+  when fetching from GitHub.
+- Missing or mismatched `cr` entries on `PATH` are reported after installation.
 
 ### Removed
 
 - `cr clean`, `cr work`, and the v1 implementations of `cr install` and
-  `cr uninstall`; their placeholder CLI commands remain planned.
+  `cr uninstall`; harness installation and uninstallation use the new lifecycle.
 - Ticket subcommands `clean`, `deactivate`, `loop`, and `validate`.
 - The legacy `INSTALL` script, legacy test layout under `test/`, and the
   former harness-specific skill set.

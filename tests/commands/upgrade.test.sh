@@ -19,7 +19,9 @@ _test_public_upgrade_handoff()
     printf '%s\n' \
         'gh_download_release() { printf "%s\\n" "$1" > "$acquisition_file"; : > "$2"; }' \
         'gh_download_branch() { printf "%s\\n" "$1" > "$acquisition_file"; : > "$2"; }' \
-        'gh_get_release_tags() { :; }' > "$fixture_root/mock/lib/utils/gh.sh"
+        'gh_get_release_tags() { :; }' \
+        'gh_resolve_release_tag() { [ "$1" = "${expected_selector:-latest}" ] || return 1; case "$1" in latest) printf "%s\\n" latest ;; *) printf "%s\\n" v1.10.11 ;; esac; }' \
+        > "$fixture_root/mock/lib/utils/gh.sh"
 
     . "$PROJECT_ROOT/lib/commands/upgrade.sh"
     _CR_INSTALL_DIR="$fixture_root/mock"
@@ -63,10 +65,45 @@ _test_public_upgrade_handoff()
     )
     [ "$(cat "$capture_file")" = "$expected_capture" ] || exit 1
     expected_acquisition=latest
+    if [ -n "${expected_selector:-}" ]; then
+        expected_acquisition=v1.10.11
+    fi
     if [ "${1-}" = "--canary" ]; then
         expected_acquisition=main
     fi
     [ "$(cat "$acquisition_file")" = "$expected_acquisition" ] || exit 1
+)
+
+_test_public_upgrade_version_handoff()
+(
+    expected_selector=$1
+    _test_public_upgrade_handoff --version "$1"
+)
+
+_test_public_upgrade_resolution_failure()
+(
+    fixture_root=$(mktemp -d) || exit 1
+    trap 'rm -rf "$fixture_root"' 0 HUP INT TERM
+    mkdir -p "$fixture_root/mock/lib/utils" "$fixture_root/work"
+    printf '%s\n' \
+        'gh_resolve_release_tag() { return 1; }' \
+        'gh_download_release() { : > "$fixture_root/downloaded"; }' \
+        > "$fixture_root/mock/lib/utils/gh.sh"
+    . "$PROJECT_ROOT/lib/commands/upgrade.sh"
+    _CR_INSTALL_DIR="$fixture_root/mock"
+    _CR_ERROR_EXIT_CODE=1
+    _CR_USAGE_EXIT_CODE=2
+    log_error() { printf '%s\n' "$*" >&2; }
+    fs_create_temp_dir() { printf '%s\n' "$fixture_root/work"; }
+
+    if (execute_command --version 3) 2> "$fixture_root/error"; then
+        exit 1
+    else
+        status=$?
+    fi
+    [ "$status" -eq 1 ] || exit 1
+    [ ! -e "$fixture_root/downloaded" ] || exit 1
+    [ "$(cat "$fixture_root/error")" = 'Failed to resolve release version: 3' ]
 )
 
 _test_install_bootstrap_handoff()
@@ -146,6 +183,14 @@ test "public upgrade forwards force and yes to the extracted target" \
     _test_public_upgrade_handoff --force --yes
 test "public canary upgrade downloads the main branch" \
     _test_public_upgrade_handoff --canary
+test "public upgrade resolves a major selector before downloading" \
+    _test_public_upgrade_version_handoff 1
+test "public upgrade resolves a minor selector before downloading" \
+    _test_public_upgrade_version_handoff v1.10
+test "public upgrade resolves an exact selector before downloading" \
+    _test_public_upgrade_version_handoff 1.10.11
+test "public upgrade stops before downloading when resolution fails" \
+    _test_public_upgrade_resolution_failure
 test "bootstrap installation automatically confirms the private target" \
     _test_install_bootstrap_handoff
 

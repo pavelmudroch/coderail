@@ -38,12 +38,15 @@ CodeRail is under development. The following commands are implemented:
 
 | Command | Purpose |
 | --- | --- |
+| `cr upgrade` | Upgrade this CodeRail installation. |
+| `cr install` | Install instructions, skills, and agents for selected harnesses. |
+| `cr uninstall` | Remove managed instruction sets for selected harnesses. |
 | `cr init` | Initialize a project for CodeRail. |
 | `cr idea` | Create, organize, and track ideas. |
 | `cr ticket` | Manage implementation tickets and their dependencies. |
 | `cr test` | Run configured test commands for selected paths or changed files. |
 
-The `install`, `uninstall`, `doctor`, `status`, and `loop` commands are planned.
+The `doctor`, `status`, and `loop` commands are planned.
 They appear in `cr --help` but are not available yet.
 
 ## Installation
@@ -67,6 +70,78 @@ Verify the installation:
 cr --version
 ```
 
+### Install harness instructions
+
+Install CodeRail's global instructions, skills, and custom agents for one or
+more harnesses:
+
+```sh
+cr install codex
+cr install claude copilot gemini
+```
+
+Supported harnesses are `codex`, `claude`, `copilot`, and `gemini`. Files are
+rendered for each harness and installed into its configured home directory
+(see [Project files and configuration](#project-files-and-configuration)).
+Harness names are required; `default_harness` is not used by `install` or
+`uninstall`. Neither command requires an initialized project.
+
+CodeRail records ownership of installed files. Rerun `cr install` to refresh
+unchanged managed files and remove obsolete ones. Edited files are preserved
+by default. Use `--force` (`-f`) to prompt before replacing or removing edited
+files, and add `--yes` (`-y`) to approve those changes automatically. Existing
+files outside CodeRail's ownership are rejected as collisions, even with
+`--force`; move them before retrying.
+
+### Upgrade CodeRail
+
+Upgrade the current installation or inspect the available releases:
+
+```sh
+cr upgrade
+cr upgrade --list
+cr upgrade --canary
+```
+
+The default target is the moving `latest` tag. `--version <version>` accepts
+`<major>`, `<major>.<minor>`, or `<major>.<minor>.<patch>`, with an optional `v`
+prefix. Partial versions select the highest matching stable version; prerelease
+and build suffixes are excluded. For example, `cr upgrade --version 1.3` selects
+the highest available `1.3.x` release. `--canary` downloads the current `main`
+branch. `--list` cannot be combined with `--version` or `--canary`, and
+`--version` cannot be combined with `--canary`.
+
+Upgrades replace managed program files while preserving edited instructions
+and templates in the CodeRail installation by default. Use `--force` to prompt
+before replacing or deleting those edited files, or `--force --yes` to approve
+automatically. After upgrading, rerun `cr install <harness> ...` to refresh the
+instruction sets in your harness homes.
+
+Replacing a v1 installation requires confirmation and creates a backup archive
+beside the installation directory. `--yes` approves that migration automatically.
+
+### Uninstall harness instructions
+
+Remove CodeRail's managed instruction sets from selected harnesses:
+
+```sh
+cr uninstall codex
+cr uninstall claude copilot gemini
+```
+
+Uninstallation removes unchanged managed files and preserves edited files,
+releasing them from CodeRail's ownership. Use `--force` (`-f`) to prompt before
+removing edited files, or `--force --yes` to approve automatically. A harness
+without an ownership record reports that no managed installation was found.
+`cr uninstall --self` is reserved and currently unavailable.
+
+Add the global `--verbose` option to `install`, `uninstall`, or `upgrade` for
+details about staging, ownership records, and planned file changes:
+
+```sh
+cr --verbose install codex
+```
+
 ## Quick start
 
 From your project's root directory, initialize CodeRail:
@@ -77,7 +152,8 @@ cr init
 
 ### Work with an agent (preferred)
 
-Open the project in your coding-agent harness with CodeRail's skills available.
+Run `cr install <harness>` to make CodeRail's skills available, then open the
+project in your coding-agent harness.
 Use the harness's skill invocation mechanism to select each skill and provide
 the context below. Skill invocations happen in the harness; `cr` commands run in
 the terminal, either by you or by the agent.
