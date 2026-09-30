@@ -28,38 +28,125 @@ execute_command()
     uninstall_force=0
     uninstall_yes=0
     uninstall_names=
+    uninstall_codex=0
+    uninstall_claude=0
+    uninstall_copilot=0
+    uninstall_gemini=0
     while [ "$#" -gt 0 ]; do
         case "$1" in
-            -h|--help) usage; exit "$_CR_SUCCESS_EXIT_CODE" ;;
-            --help=*) log_error "--help does not take an argument"; usage >&2; exit "$_CR_USAGE_EXIT_CODE" ;;
-            -f|--force) uninstall_force=1 ;;
-            -y|--yes) uninstall_yes=1 ;;
-            --self) log_error "--self is reserved for Coderail program removal"; usage >&2; exit "$_CR_USAGE_EXIT_CODE" ;;
-            --) shift; break ;;
-            -*) log_error "Unknown option: $1"; usage >&2; exit "$_CR_USAGE_EXIT_CODE" ;;
-            *) break ;;
+            -h|--help)
+                usage
+                exit "$_CR_SUCCESS_EXIT_CODE"
+                ;;
+            --help=*)
+                log_error "--help does not take an argument"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
+            -f|--force)
+                uninstall_force=1
+                ;;
+            -y|--yes)
+                uninstall_yes=1
+                ;;
+            --self)
+                log_error "--self is reserved for Coderail program removal"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -*)
+                log_error "Unknown option: $1"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
+            codex)
+                [ "$uninstall_codex" -eq 0 ] && uninstall_names="$uninstall_names codex"
+                uninstall_codex=1
+                ;;
+            claude)
+                [ "$uninstall_claude" -eq 0 ] && uninstall_names="$uninstall_names claude"
+                uninstall_claude=1
+                ;;
+            copilot)
+                [ "$uninstall_copilot" -eq 0 ] && uninstall_names="$uninstall_names copilot"
+                uninstall_copilot=1
+                ;;
+            gemini)
+                [ "$uninstall_gemini" -eq 0 ] && uninstall_names="$uninstall_names gemini"
+                uninstall_gemini=1
+                ;;
+            *)
+                log_error "Unknown harness: $1"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
         esac
         shift
     done
     while [ "$#" -gt 0 ]; do
-        _is_supported_harness "$1" || { log_error "Unsupported harness: $1"; usage >&2; exit "$_CR_USAGE_EXIT_CODE"; }
-        case " $uninstall_names " in *" $1 "*) ;; *) uninstall_names="$uninstall_names $1" ;; esac
+        case "$1" in
+            codex)
+                [ "$uninstall_codex" -eq 0 ] && uninstall_names="$uninstall_names codex"
+                uninstall_codex=1
+                ;;
+            claude)
+                [ "$uninstall_claude" -eq 0 ] && uninstall_names="$uninstall_names claude"
+                uninstall_claude=1
+                ;;
+            copilot)
+                [ "$uninstall_copilot" -eq 0 ] && uninstall_names="$uninstall_names copilot"
+                uninstall_copilot=1
+                ;;
+            gemini)
+                [ "$uninstall_gemini" -eq 0 ] && uninstall_names="$uninstall_names gemini"
+                uninstall_gemini=1
+                ;;
+            *)
+                log_error "Unknown harness: $1"
+                usage >&2
+                exit "$_CR_USAGE_EXIT_CODE"
+                ;;
+        esac
         shift
     done
-    [ -n "$uninstall_names" ] || { log_error "At least one harness is required"; usage >&2; exit "$_CR_USAGE_EXIT_CODE"; }
+    uninstall_names="${uninstall_names#"${uninstall_names%%[![:space:]]*}"}"
+
+    [ -n "$uninstall_names" ] || {
+        log_error "At least one harness is required"
+        usage >&2
+        exit "$_CR_USAGE_EXIT_CODE"
+    }
 
     . "$_CR_INSTALL_DIR/lib/commands/install/harness_lifecycle.sh"
-    uninstall_work=$(fs_create_temp_dir) || { log_error "Failed to create uninstallation workspace"; exit "$_CR_ERROR_EXIT_CODE"; }
+    uninstall_work=$(fs_create_temp_dir) || {
+        log_error "Failed to create uninstallation workspace"
+        exit "$_CR_ERROR_EXIT_CODE"
+    }
     uninstall_index=0
     for uninstall_harness in $uninstall_names; do
         case "$uninstall_harness" in
-            codex) uninstall_home=$codex_home ;;
-            claude) uninstall_home=$claude_home ;;
-            copilot) uninstall_home=$copilot_home ;;
-            gemini) uninstall_home=$gemini_home ;;
+            codex)
+                uninstall_home=$codex_home
+                ;;
+            claude)
+                uninstall_home=$claude_home
+                ;;
+            copilot)
+                uninstall_home=$copilot_home
+                ;;
+            gemini)
+                uninstall_home=$gemini_home
+                ;;
         esac
         uninstall_plan=$uninstall_work/$uninstall_index
-        mkdir "$uninstall_plan" || { log_error "Failed to prepare $uninstall_harness uninstallation"; exit "$_CR_ERROR_EXIT_CODE"; }
+        mkdir "$uninstall_plan" || {
+            log_error "Failed to prepare $uninstall_harness uninstallation"
+            exit "$_CR_ERROR_EXIT_CODE"
+        }
         if ! harness_uninstall_prepare "$uninstall_harness" "$uninstall_home" "$uninstall_plan" \
             "$uninstall_force" "$uninstall_yes"; then
             log_error "Failed to prepare $uninstall_harness uninstallation"
