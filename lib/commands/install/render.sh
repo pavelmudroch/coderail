@@ -245,30 +245,6 @@ _harness_render_agent_markdown()
         "$_harness_render_agent_source" > "$_harness_render_agent_destination"
 }
 
-_harness_render_toml_string()
-{
-    od -An -v -tu1 "$1" | while read -r _harness_render_toml_line || \
-        [ -n "$_harness_render_toml_line" ]; do
-        for _harness_render_toml_byte in $_harness_render_toml_line; do
-            case "$_harness_render_toml_byte" in
-                0) return 1 ;;
-                8) printf '\\b' ;;
-                9) printf '\\t' ;;
-                10) printf '\\n' ;;
-                12) printf '\\f' ;;
-                13) printf '\\r' ;;
-                34) printf '\\\"' ;;
-                92) printf '\\\\' ;;
-                [1-7]|1[1-9]|2[0-9]|3[0-1]|127) printf '\\u%04x' "$_harness_render_toml_byte" ;;
-                *)
-                    _harness_render_toml_octal=$(printf '%03o' "$_harness_render_toml_byte") || return 1
-                    printf "\\$_harness_render_toml_octal"
-                    ;;
-            esac
-        done
-    done
-}
-
 _harness_render_agent_toml()
 {
     _harness_render_agent_source=$1
@@ -280,14 +256,14 @@ _harness_render_agent_toml()
         "$_harness_render_agent_source" > "$_harness_render_agent_body" || return 1
     {
         printf 'name = "'
-        _harness_render_toml_string "$_harness_render_agent_values/name" || exit 1
+        cat "$_harness_render_agent_values/name" || exit 1
         printf '"\n'
         printf 'description = "'
-        _harness_render_toml_string "$_harness_render_agent_values/description" || exit 1
+        cat "$_harness_render_agent_values/description" || exit 1
         printf '"\n'
-        printf 'developer_instructions = """'
-        _harness_render_toml_string "$_harness_render_agent_body" || exit 1
-        printf '"""\n'
+        printf 'developer_instructions = """\n'
+        cat "$_harness_render_agent_body" || exit 1
+        printf '\n"""\n'
     } > "$_harness_render_agent_destination"
 }
 
