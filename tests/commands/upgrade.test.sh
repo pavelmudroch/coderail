@@ -54,9 +54,9 @@ _test_public_upgrade_handoff()
     expected_capture=$(
         printf '%s\n' arguments upgrade
         for expected_argument do
-            case "$expected_argument" in
-                --force|--yes) printf '%s\n' "$expected_argument" ;;
-            esac
+            if [ "$expected_argument" = '--force' ] || [ "$expected_argument" = '--yes' ]; then
+                printf '%s\n' "$expected_argument"
+            fi
         done
         printf 'internal=1\nsource=%s\ndestination=%s\norigin=upgrade\n' \
             "$fixture_root/work/release" "$fixture_root/mock"
