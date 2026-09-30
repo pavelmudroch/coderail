@@ -10,3 +10,5 @@ For coding work, interpret general instructions as follows:
 * "Existing work" includes dirty worktrees and unknown changes.
 * "Unused or obsolete" includes imports, variables, functions, types, and code made dead by your changes.
 * Don't remove pre-existing dead code unless directly requested or necessary for the requested change.
+
+To validate changes, run `cr test --changed` or `cr test <path-to-file-or-directory> ...` for specific files.
