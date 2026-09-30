@@ -21,55 +21,17 @@ _internal_install_real_directory()
     )
 }
 
-# Write an absolute lexical path with all existing components resolved.  The
-# destination itself may be absent for a first installation, but a link or a
-# non-directory in its existing ancestry is never accepted.
 _internal_install_destination_root()
 {
-    _internal_install_raw_destination=$1
-    case "$_internal_install_raw_destination" in
+    case "$1" in
         '') return 1 ;;
-        /*) _internal_install_absolute_destination=$_internal_install_raw_destination ;;
+        /*) _internal_install_absolute_destination=$1 ;;
         *)
             _internal_install_cwd=$(pwd -P 2>/dev/null) || return 1
-            _internal_install_absolute_destination=$_internal_install_cwd/$_internal_install_raw_destination
+            _internal_install_absolute_destination=$_internal_install_cwd/$1
             ;;
     esac
-
-    while [ "$_internal_install_absolute_destination" != / ] && \
-        [ "${_internal_install_absolute_destination%/}" != "$_internal_install_absolute_destination" ]; do
-        _internal_install_absolute_destination=${_internal_install_absolute_destination%/}
-    done
-
-    case "$_internal_install_absolute_destination" in
-        *"$_internal_install_tab"*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;;
-    esac
-    _internal_install_newline='
-'
-    case "$_internal_install_absolute_destination" in
-        *"$_internal_install_newline"*) return 1 ;;
-    esac
-
-    _internal_install_probe=$_internal_install_absolute_destination
-    _internal_install_missing=
-    while [ ! -e "$_internal_install_probe" ] && [ ! -L "$_internal_install_probe" ]; do
-        _internal_install_component=${_internal_install_probe##*/}
-        if [ -n "$_internal_install_missing" ]; then
-            _internal_install_missing=$_internal_install_component/$_internal_install_missing
-        else
-            _internal_install_missing=$_internal_install_component
-        fi
-        _internal_install_parent=$(dirname "$_internal_install_probe") || return 1
-        [ "$_internal_install_parent" != "$_internal_install_probe" ] || return 1
-        _internal_install_probe=$_internal_install_parent
-    done
-
-    _internal_install_parent=$(_internal_install_real_directory "$_internal_install_probe") || return 1
-    if [ -n "$_internal_install_missing" ]; then
-        printf '%s/%s\n' "$_internal_install_parent" "$_internal_install_missing"
-    else
-        printf '%s\n' "$_internal_install_parent"
-    fi
+    path_destination_root "$_internal_install_absolute_destination"
 }
 
 _internal_install_path_status()
@@ -103,40 +65,6 @@ _internal_install_status_matches()
     _internal_install_actual=$(_internal_install_path_status "$1") || return 1
     [ "$_internal_install_actual" = "$2" ]
 }
-
-_internal_install_safe_parent()
-{
-    _internal_install_parent=$(dirname "$1") || return 1
-    while :; do
-        if [ -L "$_internal_install_parent" ]; then
-            return 1
-        fi
-        if [ -e "$_internal_install_parent" ]; then
-            [ -d "$_internal_install_parent" ] || return 1
-        fi
-        [ "$_internal_install_parent" = "$_internal_install_destination" ] && return 0
-        [ "$_internal_install_parent" != / ] || return 0
-        _internal_install_parent=$(dirname "$_internal_install_parent") || return 1
-    done
-}
-
-_internal_install_ensure_directory()
-(
-    # A subshell gives each recursive level its own POSIX-shell variables.
-    # Without local variables, a recursive call would otherwise replace the
-    # child pathname with its parent before the final mkdir.
-    _internal_install_directory=$1
-    [ "$_internal_install_directory" = / ] && exit 0
-    [ ! -L "$_internal_install_directory" ] || exit 1
-    if [ -e "$_internal_install_directory" ]; then
-        [ -d "$_internal_install_directory" ]
-        exit
-    fi
-    _internal_install_parent=$(dirname "$_internal_install_directory") || exit 1
-    _internal_install_ensure_directory "$_internal_install_parent" || exit 1
-    mkdir "$_internal_install_directory" 2>/dev/null || exit 1
-    [ -d "$_internal_install_directory" ] && [ ! -L "$_internal_install_directory" ]
-)
 
 _internal_install_lookup()
 {
@@ -250,7 +178,7 @@ _internal_install_collect_collision()
     _internal_install_error "Unmanaged collision: $1 (move it before retrying)"
 }
 
-_internal_install_confirm()
+_internal_install_confirm_with_message()
 {
     _internal_install_question=$1
     if [ "$_internal_install_yes" -eq 1 ]; then
@@ -262,8 +190,14 @@ _internal_install_confirm()
         _internal_install_confirm_status=$?
     fi
     [ "$_internal_install_confirm_status" -eq 1 ] && return 1
-    _internal_install_error "Cannot continue without confirmation; rerun interactively or with --force --yes"
+    _internal_install_error "$2"
     return 2
+}
+
+_internal_install_confirm()
+{
+    _internal_install_confirm_with_message "$1" \
+        "Cannot continue without confirmation; rerun interactively or with --force --yes"
 }
 
 _internal_install_v1_marker_exists()
@@ -297,17 +231,8 @@ _internal_install_v1_backup_path()
 
 _internal_install_confirm_v1_migration()
 {
-    if [ "$_internal_install_yes" -eq 1 ]; then
-        return 0
-    fi
-    if log_confirm "$1"; then
-        return 0
-    else
-        _internal_install_v1_confirmation_status=$?
-    fi
-    [ "$_internal_install_v1_confirmation_status" -eq 1 ] && return 1
-    _internal_install_error "Cannot continue without confirmation; rerun interactively or with --yes"
-    return 2
+    _internal_install_confirm_with_message "$1" \
+        "Cannot continue without confirmation; rerun interactively or with --yes"
 }
 
 _internal_install_replace_v1()
@@ -487,24 +412,21 @@ _internal_install_validate_plan_parents()
         case "$_internal_install_action" in
             create|update|remove|release)
                 _internal_install_target=$(path_manifest_target "$_internal_install_destination" "$_internal_install_relative") || return 1
-                if ! _internal_install_safe_parent "$_internal_install_target"; then
+                if ! path_safe_parent "$_internal_install_target" "$_internal_install_destination"; then
                     _internal_install_error "Unsafe destination parent for $_internal_install_relative"
                 fi
                 ;;
         esac
     done < "$_internal_install_work/plan"
-    if ! _internal_install_safe_parent "$_internal_install_manifest"; then
+    if ! path_safe_parent "$_internal_install_manifest" "$_internal_install_destination"; then
         _internal_install_error "Unsafe destination parent for .coderail/install.manifest"
     fi
     [ "$_internal_install_failed" -eq 0 ]
 }
 
-_internal_install_state_set()
+_internal_install_state_without_path()
 {
     _internal_install_state_path=$1
-    _internal_install_state_kind=$2
-    _internal_install_state_checksum=$3
-    _internal_install_state_length=$4
     : > "$_internal_install_work/state.next" || return 1
     while IFS="$_internal_install_tab" read -r _internal_install_record_path _internal_install_record_kind \
         _internal_install_record_checksum _internal_install_record_length; do
@@ -512,6 +434,14 @@ _internal_install_state_set()
         printf '%s\t%s\t%s\t%s\n' "$_internal_install_record_path" "$_internal_install_record_kind" \
             "$_internal_install_record_checksum" "$_internal_install_record_length" >> "$_internal_install_work/state.next" || return 1
     done < "$_internal_install_work/state"
+}
+
+_internal_install_state_set()
+{
+    _internal_install_state_kind=$2
+    _internal_install_state_checksum=$3
+    _internal_install_state_length=$4
+    _internal_install_state_without_path "$1" || return 1
     printf '%s\t%s\t%s\t%s\n' "$_internal_install_state_path" "$_internal_install_state_kind" \
         "$_internal_install_state_checksum" "$_internal_install_state_length" >> "$_internal_install_work/state.next" || return 1
     LC_ALL=C sort -t "$_internal_install_tab" -k1,1 "$_internal_install_work/state.next" > "$_internal_install_work/state.sorted" || return 1
@@ -520,14 +450,7 @@ _internal_install_state_set()
 
 _internal_install_state_remove()
 {
-    _internal_install_state_path=$1
-    : > "$_internal_install_work/state.next" || return 1
-    while IFS="$_internal_install_tab" read -r _internal_install_record_path _internal_install_record_kind \
-        _internal_install_record_checksum _internal_install_record_length; do
-        [ "$_internal_install_record_path" = "$_internal_install_state_path" ] && continue
-        printf '%s\t%s\t%s\t%s\n' "$_internal_install_record_path" "$_internal_install_record_kind" \
-            "$_internal_install_record_checksum" "$_internal_install_record_length" >> "$_internal_install_work/state.next" || return 1
-    done < "$_internal_install_work/state"
+    _internal_install_state_without_path "$1" || return 1
     mv -f "$_internal_install_work/state.next" "$_internal_install_work/state" || return 1
 }
 
@@ -543,7 +466,7 @@ _internal_install_manifest_matches_expected()
 _internal_install_publish_manifest()
 {
     _internal_install_manifest_matches_expected || return 1
-    _internal_install_ensure_directory "$(dirname "$_internal_install_manifest")" || return 1
+    path_ensure_directory "$(dirname "$_internal_install_manifest")" || return 1
     _internal_install_manifest_matches_expected || return 1
     _internal_install_manifest_temp=$(mktemp "$(dirname "$_internal_install_manifest")/.install.manifest.XXXXXX" 2>/dev/null) || return 1
     {
@@ -586,8 +509,8 @@ _internal_install_copy()
         ! _internal_install_status_matches "$_internal_install_copy_target" "$_internal_install_copy_expected"; then
         return 1
     fi
-    _internal_install_safe_parent "$_internal_install_copy_target" || return 1
-    _internal_install_ensure_directory "$(dirname "$_internal_install_copy_target")" || return 1
+    path_safe_parent "$_internal_install_copy_target" "$_internal_install_destination" || return 1
+    path_ensure_directory "$(dirname "$_internal_install_copy_target")" || return 1
     if [ "$_internal_install_copy_expected" != any ] && \
         ! _internal_install_status_matches "$_internal_install_copy_target" "$_internal_install_copy_expected"; then
         return 1
@@ -617,7 +540,7 @@ _internal_install_remove()
         ! _internal_install_status_matches "$_internal_install_remove_target" "$_internal_install_remove_expected"; then
         return 1
     fi
-    _internal_install_safe_parent "$_internal_install_remove_target" || return 1
+    path_safe_parent "$_internal_install_remove_target" "$_internal_install_destination" || return 1
     if [ -L "$_internal_install_remove_target" ] || [ -f "$_internal_install_remove_target" ]; then
         rm -f "$_internal_install_remove_target" 2>/dev/null
         return
@@ -722,7 +645,7 @@ _internal_install_apply_plan()
                 output "preserved: $_internal_install_relative"
                 ;;
             release)
-                if ! _internal_install_safe_parent "$_internal_install_target" || \
+                if ! path_safe_parent "$_internal_install_target" "$_internal_install_destination" || \
                     ! _internal_install_status_matches "$_internal_install_target" "$_internal_install_expected"; then
                     _internal_install_stop_action "$_internal_install_relative" \
                         "Failed: $_internal_install_relative changed after preflight"

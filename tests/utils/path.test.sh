@@ -30,6 +30,11 @@ _manifest_relative_newline()
     path_manifest_relative "$(printf 'bin/a\nb')"
 }
 
+_harness_relative_tab()
+{
+    path_manifest_relative "$(printf 'skills/build/a\tb')" harness:codex
+}
+
 print_tests_header "Path Utils Tests"
 
 printf 'abc' > "$test_dir/checksum"
@@ -75,6 +80,58 @@ test "manifest target: rejects unsafe root" \
     _expect_silent_failure path_manifest_target "$test_dir/root/../other" "bin/cr"
 test "manifest target: rejects unsafe relative path" \
     _expect_silent_failure path_manifest_target "$test_dir/root" "bin/../cr"
+
+mkdir "$test_dir/real-root"
+ln -s "$test_dir/real-root" "$test_dir/root-link"
+real_root=$(CDPATH= cd -P "$test_dir/real-root" && pwd)
+test_expect "destination root: resolves missing components" "$real_root/new/child" \
+    path_destination_root "$test_dir/real-root/new/child/"
+test "destination root: rejects relative path" \
+    _expect_silent_failure path_destination_root "real-root/new"
+test "destination root: rejects link ancestor" \
+    _expect_silent_failure path_destination_root "$test_dir/root-link/new"
+test "destination root: rejects file ancestor" \
+    _expect_silent_failure path_destination_root "$test_dir/checksum/new"
+
+test "safe parent: accepts absent directories below root" \
+    path_safe_parent "$test_dir/real-root/new/child" "$test_dir/real-root"
+test "safe parent: rejects link ancestor" \
+    _expect_silent_failure path_safe_parent "$test_dir/root-link/child" "$test_dir"
+test "ensure directory: creates nested directories" \
+    path_ensure_directory "$test_dir/real-root/new/child"
+test "ensure directory: rejects link ancestor" \
+    _expect_silent_failure path_ensure_directory "$test_dir/root-link/child"
+
+test_expect "harness manifest relative: accepts Codex global file" "AGENTS.md" \
+    path_manifest_relative "AGENTS.md" harness:codex
+test_expect "harness manifest relative: accepts Codex agent" "agents/reviewer.toml" \
+    path_manifest_relative "agents/reviewer.toml" harness:codex
+test_expect "harness manifest relative: accepts skill support file" "skills/build/scripts/run.sh" \
+    path_manifest_relative "skills/build/scripts/run.sh" harness:codex
+test_expect "harness manifest relative: accepts Claude global file" "CLAUDE.md" \
+    path_manifest_relative "CLAUDE.md" harness:claude
+test_expect "harness manifest relative: accepts Copilot agent" "agents/reviewer.agent.md" \
+    path_manifest_relative "agents/reviewer.agent.md" harness:copilot
+test_expect "harness manifest relative: accepts Copilot global file" "copilot-instructions.md" \
+    path_manifest_relative "copilot-instructions.md" harness:copilot
+test_expect "harness manifest relative: accepts Claude agent" "agents/reviewer.md" \
+    path_manifest_relative "agents/reviewer.md" harness:claude
+test_expect "harness manifest relative: accepts Gemini global file" "GEMINI.md" \
+    path_manifest_relative "GEMINI.md" harness:gemini
+test_expect "harness manifest relative: accepts Gemini agent" "agents/reviewer.md" \
+    path_manifest_relative "agents/reviewer.md" harness:gemini
+test_expect "harness manifest target: joins Claude payload" "$test_dir/root/CLAUDE.md" \
+    path_manifest_target "$test_dir/root" "CLAUDE.md" harness:claude
+
+for unsafe_harness_path in '.coderail/harnesses/codex.manifest' 'skills/.hidden/SKILL.md' \
+    'skills/build' 'skills/build/' 'agents/reviewer.md' 'agents/reviewer.agent.md' \
+    'agents/sub/reviewer.toml' 'AGENTS.md/extra'; do
+    test "harness manifest relative: rejects $unsafe_harness_path" \
+        _expect_silent_failure path_manifest_relative "$unsafe_harness_path" harness:codex
+done
+test "harness manifest relative: rejects tab" _expect_silent_failure _harness_relative_tab
+test "harness manifest relative: rejects unknown scope" \
+    _expect_silent_failure path_manifest_relative "AGENTS.md" harness:unknown
 
 print_tests_summary
 
