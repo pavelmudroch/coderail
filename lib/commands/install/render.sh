@@ -327,6 +327,7 @@ harness_render()
     done < "$_harness_render_stage/.skills"
     _harness_render_agents_valid "$_harness_render_agents" \
         "$_harness_render_stage/.agent-values" || return 1
+    log_verbose "Rendering $_harness_render_harness instructions: $(wc -l < "$_harness_render_stage/.skills" | tr -d ' ') skills, $(find "$_harness_render_agents" -type f | wc -l | tr -d ' ') agents"
 
     _harness_render_copy_file "$_harness_render_global_source" \
         "$_harness_render_stage/$_harness_render_global" "$_harness_render_prefix" \

@@ -128,6 +128,7 @@ execute_command()
     }
     uninstall_index=0
     for uninstall_harness in $uninstall_names; do
+        log_verbose "Preparing uninstallation for $uninstall_harness"
         case "$uninstall_harness" in
             codex)
                 uninstall_home=$codex_home
@@ -166,6 +167,7 @@ execute_command()
     fi
     uninstall_index=0
     for uninstall_harness in $uninstall_names; do
+        log_verbose "Uninstalling $uninstall_harness"
         uninstall_plan=$uninstall_work/$uninstall_index
         if [ "$(sed -n '1p' "$uninstall_plan/plan")" = absent ]; then
             output "No managed installation found for $uninstall_harness."

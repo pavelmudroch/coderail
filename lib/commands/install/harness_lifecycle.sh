@@ -399,6 +399,7 @@ harness_install_prepare()
     _harness_install_stage=$_harness_install_work/stage
     _harness_install_stage_inventory "$_harness_install_stage" "$_harness_install_harness" \
         "$_harness_install_work/inventory" || return 1
+    log_verbose "Staged $(wc -l < "$_harness_install_work/inventory" | tr -d ' ') $_harness_install_harness files for $_harness_install_home"
     if harness_manifest_read "$_harness_install_home" "$_harness_install_harness" \
         "$_harness_install_work/prior" >/dev/null 2>&1; then
         _harness_install_manifest_status=0
@@ -406,6 +407,11 @@ harness_install_prepare()
         _harness_install_manifest_status=$?
     fi
     case "$_harness_install_manifest_status" in 0|2) ;; *) return 1 ;; esac
+    if [ "$_harness_install_manifest_status" -eq 0 ]; then
+        log_verbose "Found existing $_harness_install_harness ownership manifest"
+    else
+        log_verbose "No existing $_harness_install_harness ownership manifest"
+    fi
     [ "$_harness_install_manifest_status" -eq 0 ] || : > "$_harness_install_work/prior" || return 1
     : > "$_harness_install_work/actions" || return 1
     : > "$_harness_install_work/records" || return 1
@@ -480,6 +486,7 @@ EOF
     LC_ALL=C sort -t "$_harness_manifest_tab" -k2,2 "$_harness_install_work/actions" > "$_harness_install_work/actions.sorted" || return 1
     mv "$_harness_install_work/actions.sorted" "$_harness_install_work/actions" || return 1
     printf '%s\n%s\n' "$_harness_install_harness" "$_harness_install_home" > "$_harness_install_work/plan" || return 1
+    log_verbose "Prepared $_harness_install_harness installation plan: $(wc -l < "$_harness_install_work/actions" | tr -d ' ') file decisions"
 }
 
 harness_install_apply()
@@ -643,9 +650,12 @@ harness_uninstall_prepare()
     fi
     case "$_harness_uninstall_manifest_status" in
         0) ;;
-        2) printf '%s\n%s\n' absent "$_harness_uninstall_harness" > "$_harness_uninstall_work/plan" || return 1; return 0 ;;
+        2) printf '%s\n%s\n' absent "$_harness_uninstall_harness" > "$_harness_uninstall_work/plan" || return 1
+            log_verbose "No $_harness_uninstall_harness ownership manifest in $_harness_uninstall_home"
+            return 0 ;;
         *) return 1 ;;
     esac
+    log_verbose "Found $_harness_uninstall_harness ownership manifest in $_harness_uninstall_home"
     : > "$_harness_uninstall_work/actions" || return 1
     while IFS="$_harness_manifest_tab" read -r _harness_uninstall_relative _harness_uninstall_sum _harness_uninstall_length; do
         _harness_uninstall_target=$(path_manifest_target "$_harness_uninstall_home" \
@@ -667,6 +677,7 @@ harness_uninstall_prepare()
             "$_harness_uninstall_state" >> "$_harness_uninstall_work/actions" || return 1
     done < "$_harness_uninstall_work/prior"
     printf '%s\n%s\n' "$_harness_uninstall_harness" "$_harness_uninstall_home" > "$_harness_uninstall_work/plan" || return 1
+    log_verbose "Prepared $_harness_uninstall_harness removal plan: $(wc -l < "$_harness_uninstall_work/actions" | tr -d ' ') file decisions"
 }
 
 harness_uninstall_apply()

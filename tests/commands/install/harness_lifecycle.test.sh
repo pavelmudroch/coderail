@@ -14,6 +14,11 @@ log_error()
     :
 }
 
+log_verbose()
+{
+    :
+}
+
 test_dir=$(mktemp -d)
 trap 'rm -rf "$test_dir"' 0 HUP INT TERM
 

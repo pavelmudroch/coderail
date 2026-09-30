@@ -693,6 +693,7 @@ _internal_install()
         log_error "Internal installation source and destination must not overlap"
         return 1
     fi
+    log_verbose "Installing from $_internal_install_source into $_internal_install_destination"
 
     _internal_install_work=$(mktemp -d "${TMPDIR:-/tmp}/coderail-internal.XXXXXX" 2>/dev/null) || {
         log_error "Failed to prepare internal installation"
@@ -707,16 +708,19 @@ _internal_install()
         log_error "Internal installation payload is invalid"
         return 1
     fi
+    log_verbose "Validated $(wc -l < "$_internal_install_work/incoming" | tr -d ' ') incoming files"
     _internal_install_v1_backup=
     if _internal_install_v1_marker_exists; then
         _internal_install_replace_v1 || return 1
     fi
     if _internal_install_read_manifest "$_internal_install_manifest"; then
+        log_verbose "Found existing installation manifest at $_internal_install_manifest"
         _internal_install_manifest_expected=$(_internal_install_path_status "$_internal_install_manifest") || {
             _internal_install_report_v1_backup
             return 1
         }
     else
+        log_verbose "No valid installation manifest at $_internal_install_manifest"
         : > "$_internal_install_work/prior" || {
             _internal_install_report_v1_backup
             return 1
@@ -740,6 +744,7 @@ _internal_install()
         _internal_install_report_v1_backup
         return 1
     }
+    log_verbose "Prepared internal installation plan: $(wc -l < "$_internal_install_work/plan" | tr -d ' ') file decisions"
     _internal_install_validate_plan_parents || {
         _internal_install_report_v1_backup
         return 1

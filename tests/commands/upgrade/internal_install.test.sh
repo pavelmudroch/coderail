@@ -7,6 +7,11 @@ PROJECT_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
 
 . "$PROJECT_ROOT/tests/suite.sh"
 
+log_verbose()
+{
+    :
+}
+
 _make_source()
 {
     fixture_root=$1

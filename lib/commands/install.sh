@@ -122,6 +122,7 @@ execute_command()
     }
     install_index=0
     for install_harness in $install_names; do
+        log_verbose "Preparing installation for $install_harness"
         case "$install_harness" in
             codex)
                 install_home=$codex_home
@@ -160,6 +161,7 @@ execute_command()
     fi
     install_index=0
     for install_harness in $install_names; do
+        log_verbose "Applying installation for $install_harness"
         if ! harness_install_apply "$install_work/$install_index"; then
             log_error "Failed to install $install_harness"
             exit "$_CR_ERROR_EXIT_CODE"
