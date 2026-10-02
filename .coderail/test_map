@@ -2,3 +2,6 @@
 # Lines starting with '#' are comments
 [lib/${path}/${file}.sh]
 [ -f ./tests/${path}/${file}.test.sh ] && ./tests/${path}/${file}.test.sh || :
+
+[connectors/${path}/${file}.sh]
+[ -f ./tests/connectors/${path}/${file}.test.sh ] && ./tests/connectors/${path}/${file}.test.sh || :
