@@ -10,7 +10,8 @@ A bundled Codex connector satisfies the public contract, provides the existing C
 ## Understanding
 
 - Codex is the first connector because its behavior can be tested directly.
-- `connectors/codex/` currently contains only shebangs in `prompt.sh`, `install_global_instruction.sh`, `install_skill.sh`, and `install_sub_agent.sh`. Keep the three `install_*` operation files, add `default_home.sh`, and rename `prompt.sh` to `prompt_and_wait.sh` when implementing the connector.
+- Keep `install_global_instruction.sh`, `install_skill.sh`, `install_sub_agent.sh`, and `prompt_and_wait.sh` under `connectors/codex/`. Provide parsed `connector.conf` metadata with `contract_version=1.0.0`, `default_home=$HOME/.codex`, and `default_command=codex`; no separate default-home operation or version-marker file belongs to the revised contract.
+- Core resolves the metadata home default with explicit leading `$HOME` substitution when needed and applies configured or environment overrides. Core passes the final command to `prompt_and_wait.sh`; the operation uses that command without maintaining a separate default. Metadata is not sourced or evaluated as shell code.
 - The connector takes over Codex-specific paths, configuration, and rendering choices that core currently handles.
 - Existing Codex-generated files remain governed by per-harness manifest ownership, safe path handling, and confirmation behavior.
 

@@ -81,12 +81,6 @@ execute_command()
         shift
     done
 
-    if [ "${CODERAIL_INTERNAL_INSTALL:-}" = "1" ]; then
-        . "$_CR_INSTALL_DIR/lib/commands/upgrade/internal_install.sh"
-        _internal_install "$force" "$yes"
-        return $?
-    fi
-
     . "$_CR_INSTALL_DIR/lib/utils/gh.sh"
 
     if [ "$list" -eq 1 ]; then
@@ -163,23 +157,10 @@ EOF
     cr_upgrade_tool="$cr_source_dir/bin/cr"
 
     log_verbose "Upgrading coderail..."
-    set --
-    if [ "$force" -eq 1 ]; then
-        set -- "$@" --force
-    fi
-    if [ "$yes" -eq 1 ]; then
-        set -- "$@" --yes
-    fi
-    if ! CODERAIL_INTERNAL_INSTALL=1 \
-        CODERAIL_INTERNAL_SOURCE="$cr_source_dir" \
-        CODERAIL_INTERNAL_DESTINATION="$_CR_INSTALL_DIR" \
-        CODERAIL_INTERNAL_ORIGIN=upgrade \
-        "$cr_upgrade_tool" upgrade "$@"; then
-        exit "$_CR_ERROR_EXIT_CODE"
-    fi
+    # call the upgrade tool from the extracted archive
 
     if ! current_cr_executable=$(path_locate_executable "cr"); then
-        message=$(printf "'cr' tool is not located in your PATH\nAdd $_CR_INSTALL_DIR/bin to your PATH or link it to a directory\nalready in your PATH\n")
+        message=$(printf "'cr' tool is not located in your PATH\nAdd $_CR_INSTALL_DIR/bin to your PATH or link it to a directory already in your PATH\n")
         log_warning "$message"
         exit "$_CR_SUCCESS_EXIT_CODE"
     fi
