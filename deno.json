@@ -1,0 +1,37 @@
+{
+    "exclude": [
+        "./assets",
+        "./bin"
+    ],
+    "fmt": {
+        "bracePosition": "sameLine",
+        "include": [
+            "./src/**/*.ts",
+            "./tests/**/*.ts"
+        ],
+        "indentWidth": 4,
+        "lineWidth": 120,
+        "newLineKind": "lf",
+        "semiColons": true,
+        "singleQuote": true,
+        "useTabs": false
+    },
+    "lint": {
+        "include": [
+            "./src/**/*.ts",
+            "./tests/**/*.ts"
+        ],
+        "rules": {
+            "include": [
+                "explicit-function-return-type",
+                "no-explicit-any",
+                "no-unused-vars",
+                "no-shadow-restricted-names",
+                "no-sparse-arrays"
+            ],
+            "tags": [
+                "recommended"
+            ]
+        }
+    }
+}
