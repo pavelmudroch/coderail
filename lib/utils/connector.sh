@@ -1,30 +1,111 @@
 #!/usr/bin/env sh
 
+connector_get_default_home()
+{
+    connector="$1"
+    eval "default_home=\${$(echo "$connector" | tr '[:lower:]' '[:upper:]')_HOME}"
+    if [ -n "$default_home" ]; then
+        printf '%s\n' "$default_home"
+        return 0
+    fi
+
+    if [ -f "$_CR_INSTALL_DIR/connectors/$connector/connector.conf" ]; then
+        default_home=$(awk -F= '
+            function trim(value) {
+                sub(/^[[:space:]]+/, "", value)
+                sub(/[[:space:]]+$/, "", value)
+                return value
+            }
+            /^#/ { next }
+            /^[[:space:]]*$/ { next }
+            {
+                key = trim($1)
+                value = trim($2)
+                if (key == "default_home") {
+                    print value
+                    exit
+                }
+            }
+        ' "$_CR_INSTALL_DIR/connectors/$connector/connector.conf")
+        if [ -n "$default_home" ]; then
+            printf '%s\n' "$default_home"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+connector_get_default_command()
+{
+    connector="$1"
+    eval "default_command=\${$(echo "$connector" | tr '[:lower:]' '[:upper:]')_COMMAND}"
+    if [ -n "$default_command" ]; then
+        printf '%s\n' "$default_command"
+        return 0
+    fi
+
+    if [ -f "$_CR_INSTALL_DIR/connectors/$connector/connector.conf" ]; then
+        default_command=$(awk -F= '
+            function trim(value) {
+                sub(/^[[:space:]]+/, "", value)
+                sub(/[[:space:]]+$/, "", value)
+                return value
+            }
+            /^#/ { next }
+            /^[[:space:]]*$/ { next }
+            {
+                key = trim($1)
+                value = trim($2)
+                if (key == "default_command") {
+                    print value
+                    exit
+                }
+            }
+        ' "$_CR_INSTALL_DIR/connectors/$connector/connector.conf")
+        if [ -n "$default_command" ]; then
+            printf '%s\n' "$default_command"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 connector_install_skill()
 {
-    skill_directory="$1"
-    temp_home="$2"
-    # installs a skill for the connector
-    # prints out all installed files, each on a new line
-    :
+    connector="$1"
+    skill_directory="$2"
+    temp_home="$3"
+    (
+        connector_script="$_CR_INSTALL_DIR/connectors/$connector/install_skill.sh"
+        set -- "$skill_directory" "$temp_home"
+        . "$connector_script"
+    )
 }
 
 connector_install_sub_agent()
 {
-    sub_agent_file="$1"
-    temp_home="$2"
-    # installs a sub agent for the connector
-    # prints out all installed files, each on a new line
-    :
+    connector="$1"
+    sub_agent_file="$2"
+    temp_home="$3"
+    (
+        connector_script="$_CR_INSTALL_DIR/connectors/$connector/install_sub_agent.sh"
+        set -- "$sub_agent_file" "$temp_home"
+        . "$connector_script"
+    )
 }
 
 connector_install_global_instruction()
 {
-    global_instruction_file="$1"
-    temp_home="$2"
-    # installs a global instruction for the connector
-    # prints out all installed files, each on a new line
-    :
+    connector="$1"
+    global_instruction_file="$2"
+    temp_home="$3"
+    (
+        connector_script="$_CR_INSTALL_DIR/connectors/$connector/install_global_instruction.sh"
+        set -- "$global_instruction_file" "$temp_home"
+        . "$connector_script"
+    )
 }
 
 connector_load_available()
@@ -41,6 +122,12 @@ connector_load_available()
             printf '%s\n' "$connector_directory"
         fi
     done
+}
+
+connector_is_available()
+{
+    connector="$1"
+    _connector_is_possible_connector_dir "$_CR_INSTALL_DIR/connectors/$connector"
 }
 
 _connector_is_possible_connector_dir()
