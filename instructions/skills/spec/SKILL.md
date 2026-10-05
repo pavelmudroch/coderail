@@ -106,10 +106,6 @@ Record inferred facts that affect implementation without requiring user decision
 
 Record additional implementation context.
 
-## Ticket Plan
-
-Record tickets created from this specification, if any.
-
 </spec-template>
 
 ## Readiness

@@ -197,6 +197,7 @@ _parse_config_file()
                 fi
                 test_shell="$value"
                 ;;
+            # TODO: maybe drop command and home configuration completely ??
             *_command)
                 # parse key for <connector>_command
                 ;;

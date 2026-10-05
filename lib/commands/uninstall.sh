@@ -2,7 +2,16 @@
 
 usage()
 {
-    cat <<'EOF'
+    available_harnesses=$(connector_load_available | awk '
+        NF {
+            harness = $0
+            sub(/^.*\//, "", harness)
+            if (count++) printf " | "
+            printf "%s", harness
+        }
+    ')
+
+    cat <<EOF
 Usage:
   cr uninstall [options] [<harness> ...]
 
@@ -19,7 +28,7 @@ Options:
 Arguments:
   <harness>             One or more harnesses to uninstall instruction sets for,
                         currently supported harnesses are:
-                        codex | claude | copilot | gemini
+                        $available_harnesses
 EOF
 }
 
