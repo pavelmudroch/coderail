@@ -1,16 +1,16 @@
-function main(): number {
-	Deno.addSignalListener("SIGINT", () => {
-		// clean up resources before exiting
-	});
+function main(): void {
+    Deno.addSignalListener('SIGINT', () => {
+        // clean up resources before exiting
+    });
 
-	try {
-		// main logic goes here
-	} catch (error) {
-		// handle error here
-	}
+    try {
+        // main logic goes here
+    } catch (error) {
+        return;
+    }
 
-	return 0;
+    Deno.exitCode = 0;
+    return;
 }
 
-const exitCode = main();
-Deno.exit(exitCode);
+Deno.exit();

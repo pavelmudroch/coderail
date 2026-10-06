@@ -1,0 +1,5 @@
+# This is CodeRail test map file
+# Lines starting with '#' are comments
+
+[src/${path}/${file}.ts]
+./tools/tester.sh ./src/${path}/${file}.ts ./tests/${path}/${file}.test.ts

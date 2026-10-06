@@ -1,4 +1,5 @@
 {
 	"deno.enable": true,
-	"markdown.validate.enabled": true
+	"markdown.validate.enabled": true,
+	"editor.defaultFormatter": "denoland.vscode-deno"
 }
