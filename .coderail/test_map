@@ -12,5 +12,5 @@ deno fmt "./src/${path}/${file}.ts"
 [tests/${path}/${file}.test.ts]
 deno lint --fix "./tests/${path}/${file}.test.ts"
 deno fmt "./tests/${path}/${file}.test.ts"
-deno test --coverage --coverage-raw-data-only "./tests/${path}/${file}.test.ts" && deno coverage; rm -rf ./coverage
+deno test --coverage --coverage-raw-data-only "./tests/${path}/${file}.test.ts" && deno coverage --detailed; code=$?; rm -rf ./coverage; exit $code
 [ -f "./src/${path}/${file}.ts" ] && deno run -A ./tools/mutate.ts "./src/${path}/${file}.ts" "./tests/${path}/${file}.test.ts"

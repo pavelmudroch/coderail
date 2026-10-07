@@ -17,7 +17,8 @@
         "singleQuote": true,
         "useTabs": false,
         "sortNamedImports": "caseInsensitive",
-        "sortNamedExports": "caseInsensitive"
+        "sortNamedExports": "caseInsensitive",
+        "nextControlFlowPosition": "nextLine"
     },
     "imports": {
         "@mutasaurus/mutasaurus": "jsr:@mutasaurus/mutasaurus@^0.1.5",

@@ -15,6 +15,7 @@ const mutasaurus = new Mutasaurus({
     sourceFiles: [sourceFile],
     testFiles: [testFile],
     silent: true,
+    exhaustiveMode: true,
 });
 console.log('Running mutation tests...');
 const result = await mutasaurus.run();
