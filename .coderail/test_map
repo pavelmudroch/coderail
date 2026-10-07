@@ -1,5 +1,8 @@
 # This is CodeRail test map file
 # Lines starting with '#' are comments
+[src/${file}.ts]
+deno lint --fix "./src/${file}.ts"
+deno fmt "./src/${file}.ts"
 
 [src/${path}/${file}.ts]
 ./tools/tester.sh ./src/${path}/${file}.ts ./tests/${path}/${file}.test.ts
