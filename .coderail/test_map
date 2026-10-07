@@ -1,0 +1,16 @@
+# This is CodeRail test map file
+# Lines starting with '#' are comments
+[src/${file}.ts]
+deno lint --fix "./src/${file}.ts"
+deno fmt "./src/${file}.ts"
+
+[src/${path}/${file}.ts]
+deno lint --fix "./src/${path}/${file}.ts"
+deno fmt "./src/${path}/${file}.ts"
+[ -f "./tests/${path}/${file}.test.ts" ] && deno test "./tests/${path}/${file}.test.ts"
+
+[tests/${path}/${file}.test.ts]
+deno lint --fix "./tests/${path}/${file}.test.ts"
+deno fmt "./tests/${path}/${file}.test.ts"
+deno test --coverage --coverage-raw-data-only "./tests/${path}/${file}.test.ts" && deno coverage; rm -rf ./coverage
+[ -f "./src/${path}/${file}.ts" ] && deno run -A ./tools/mutate.ts "./src/${path}/${file}.ts" "./tests/${path}/${file}.test.ts"
