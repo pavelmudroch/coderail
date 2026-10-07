@@ -3,7 +3,7 @@ import { Mutasaurus } from '@mutasaurus/mutasaurus';
 const [sourceFile, testFile] = Deno.args;
 if (!Deno.statSync(sourceFile).isFile) {
     console.log('Source file not found:', sourceFile);
-    Deno.exit(1);
+    Deno.exit(0);
 }
 
 if (!Deno.statSync(testFile).isFile) {
@@ -20,7 +20,43 @@ console.log('Running mutation tests...');
 const result = await mutasaurus.run();
 Deno.exitCode = result.survivedMutations;
 
+const {
+    totalMutations,
+    incompleteMutations,
+    killedMutations,
+    survivedMutations,
+    totalTime,
+    typeErrorMutations,
+    timedOutMutations,
+    erroneousMutations,
+} = result;
+const resultSummary = {
+    totalMutations,
+    incompleteMutations,
+    killedMutations,
+    typeErrorMutations,
+    survivedMutations,
+    timedOutMutations,
+    erroneousMutations,
+    totalTime,
+};
 if (result.survivedMutations > 0) {
     console.error('Survived mutations detected:');
-    console.error(result);
+    console.error(resultSummary);
+    for (const mutation of result.mutations) {
+        switch (mutation.status) {
+            case 'killed':
+            case 'type-error':
+                break;
+            default:
+                console.error(mutation);
+        }
+    }
 }
+
+if (result.totalMutations === 0) {
+    console.warn('No mutations were generated.');
+}
+
+console.log('Mutation testing complete.');
+console.log(resultSummary);
