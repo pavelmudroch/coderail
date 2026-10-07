@@ -1,0 +1,4 @@
+temp/
+coverage/
+.mutasaurus/
+.agents/

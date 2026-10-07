@@ -1,0 +1,58 @@
+{
+    "exclude": [
+        "./assets",
+        "./bin"
+    ],
+    "fmt": {
+        "bracePosition": "sameLine",
+        "include": [
+            "./src/**/*.ts",
+            "./tests/**/*.ts",
+            "./tools/**/*.ts"
+        ],
+        "indentWidth": 4,
+        "lineWidth": 100,
+        "newLineKind": "lf",
+        "semiColons": true,
+        "singleQuote": true,
+        "useTabs": false,
+        "sortNamedImports": "caseInsensitive",
+        "sortNamedExports": "caseInsensitive"
+    },
+    "imports": {
+        "@mutasaurus/mutasaurus": "jsr:@mutasaurus/mutasaurus@^0.1.5",
+        "@std/expect": "jsr:@std/expect@^1.0.20",
+        "@std/path": "jsr:@std/path@^1.1.6",
+        "@path": "./src/path.ts",
+        "@fs": "./src/fs.ts",
+        "oxc-parser": "npm:oxc-parser@^0.153.0"
+    },
+    "lint": {
+        "include": [
+            "./src/**/*.ts",
+            "./tests/**/*.ts",
+            "./tools/**/*.ts"
+        ],
+        "rules": {
+            "include": [
+                "explicit-function-return-type",
+                "no-explicit-any",
+                "no-unused-vars",
+                "no-shadow-restricted-names",
+                "no-sparse-arrays",
+                "no-non-null-asserted-optional-chain",
+                "no-non-null-assertion"
+            ],
+            "tags": [
+                "recommended"
+            ]
+        }
+    },
+    "coverage": {
+        "thresholds": {
+            "branches": 100,
+            "functions": 100,
+            "lines": 100
+        }
+    }
+}
