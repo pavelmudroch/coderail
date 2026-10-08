@@ -347,7 +347,8 @@ x=false`;
             try {
                 await read(text);
                 throw new Error('Expected syntax failure');
-            } catch (error) {
+            }
+            catch (error) {
                 expect(error).toBeInstanceOf(SyntaxError);
                 expect((error as Error).message).toContain(`line ${line}`);
                 expect((error as Error).message).toContain(`column ${column}`);

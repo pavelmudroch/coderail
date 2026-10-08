@@ -19,45 +19,62 @@ const mutasaurus = new Mutasaurus({
 });
 console.log('Running mutation tests...');
 const result = await mutasaurus.run();
+inspectResult(result);
 Deno.exitCode = result.survivedMutations;
 
-const {
-    totalMutations,
-    incompleteMutations,
-    killedMutations,
-    survivedMutations,
-    totalTime,
-    typeErrorMutations,
-    timedOutMutations,
-    erroneousMutations,
-} = result;
-const resultSummary = {
-    totalMutations,
-    incompleteMutations,
-    killedMutations,
-    typeErrorMutations,
-    survivedMutations,
-    timedOutMutations,
-    erroneousMutations,
-    totalTime,
-};
-if (result.survivedMutations > 0) {
-    console.error('Survived mutations detected:');
-    console.error(resultSummary);
-    for (const mutation of result.mutations) {
-        switch (mutation.status) {
-            case 'killed':
-            case 'type-error':
-                break;
-            default:
-                console.error(mutation);
+function inspectResult(result: Awaited<ReturnType<typeof mutasaurus.run>>): void {
+    const {
+        totalMutations,
+        incompleteMutations,
+        killedMutations,
+        survivedMutations,
+        totalTime,
+        typeErrorMutations,
+        timedOutMutations,
+        erroneousMutations,
+    } = result;
+    const resultSummary = {
+        totalMutations,
+        incompleteMutations,
+        killedMutations,
+        typeErrorMutations,
+        survivedMutations,
+        timedOutMutations,
+        erroneousMutations,
+        totalTime,
+    };
+
+    if (result.survivedMutations > 0) {
+        console.error('Survived mutations detected:');
+        for (const mutation of result.mutations) {
+            if (mutation.status !== 'survived') {
+                continue;
+            }
+
+            const path = mutation.original.path;
+            const operator = mutation.operator;
+            const originalLines = mutation.original.content.split('\n');
+            const mutatedLines = mutation.mutation.split('\n');
+            for (let i = 0; i < originalLines.length; i++) {
+                const originalLine = originalLines[i];
+                const mutatedLine = mutatedLines[i];
+                if (originalLine !== mutatedLine) {
+                    console.log(`File: "${path}" at line ${i + 1}`);
+                    console.log(`Operator: ${operator}`);
+                    console.log(`Original line: ${originalLine}`);
+                    console.log(`Mutated line:  ${mutatedLine}`);
+                    break;
+                }
+            }
         }
+        console.error(resultSummary);
+        return;
     }
-}
 
-if (result.totalMutations === 0) {
-    console.warn('No mutations were generated.');
-}
+    if (result.totalMutations === 0) {
+        console.warn('No mutations were generated.');
+    }
 
-console.log('Mutation testing complete.');
-console.log(resultSummary);
+    console.log('Mutation testing complete.');
+    console.log(resultSummary);
+}

@@ -7,7 +7,7 @@ deno fmt "./src/${file}.ts"
 [src/${path}/${file}.ts]
 deno lint --fix "./src/${path}/${file}.ts"
 deno fmt "./src/${path}/${file}.ts"
-[ -f "./tests/${path}/${file}.test.ts" ] && deno test "./tests/${path}/${file}.test.ts"
+[ -f "./tests/${path}/${file}.test.ts" ] && (deno test --coverage --coverage-raw-data-only "./tests/${path}/${file}.test.ts" && deno coverage --detailed; code=$?; rm -rf ./coverage; exit $code)
 
 [tests/${path}/${file}.test.ts]
 deno lint --fix "./tests/${path}/${file}.test.ts"
