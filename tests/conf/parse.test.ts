@@ -26,9 +26,13 @@ Deno.test('Conf::parse grammar', async (test) => {
             await read(String.raw`0 = null
 A = true
 a = false
+Z = true
+z = false
 _name2 = "#é😀"
 escapes = "\"\\\/\b\f\n\r\t\u0000\u0041\uabcd\uABCD\uD83D\uDE00\uD800"
+hexBounds = "\u000f\u000F"
 empty = ""
+space = " "
  # comment
  tab = 1 # comment
 `),
@@ -36,9 +40,13 @@ empty = ""
             '0': null,
             A: true,
             a: false,
+            Z: true,
+            z: false,
             _name2: '#é😀',
             escapes: '"\\/\b\f\n\r\t\0A\uabcd\uABCD😀\ud800',
+            hexBounds: '\u000f\u000f',
             empty: '',
+            space: ' ',
             tab: 1,
         });
         for (const text of ['', ' \t', '# comment', '\n\r\n#end']) {
@@ -342,6 +350,7 @@ x=false`;
                 ['a="\\u12x4"', 1, 8],
                 ['a="x', 1, 5],
                 ['a=[\n1', 2, 2],
+                ['a=[\n', 1, 4],
             ] as const
         ) {
             try {
