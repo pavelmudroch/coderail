@@ -1,6 +1,9 @@
 import { Mutasaurus } from '@mutasaurus/mutasaurus';
+import { dirname, join } from '@std/path';
 
 const [sourceFile, testFile] = Deno.args;
+const exhaustiveMode = enableExhaustiveMode(testFile);
+
 if (!Deno.statSync(sourceFile).isFile) {
     console.log('Source file not found:', sourceFile);
     Deno.exit(0);
@@ -15,12 +18,22 @@ const mutasaurus = new Mutasaurus({
     sourceFiles: [sourceFile],
     testFiles: [testFile],
     silent: true,
-    exhaustiveMode: true,
+    exhaustiveMode: exhaustiveMode,
 });
 console.log('Running mutation tests...');
 const result = await mutasaurus.run();
 inspectResult(result);
 Deno.exitCode = result.survivedMutations;
+
+function enableExhaustiveMode(testFile: string): boolean {
+    const testDir = dirname(testFile);
+    try {
+        return Deno.statSync(join(testDir, '.exhaustive')).isFile;
+    }
+    catch {
+        return false;
+    }
+}
 
 function inspectResult(result: Awaited<ReturnType<typeof mutasaurus.run>>): void {
     const {
