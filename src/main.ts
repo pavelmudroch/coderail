@@ -1,16 +1,17 @@
-function main(): void {
-    Deno.addSignalListener('SIGINT', () => {
-        // clean up resources before exiting
+import { Conf } from '@conf';
+
+async function bootstrap(): Promise<void> {
+    // TODO: locate correct repo root
+    const repositoryRoot = Deno.cwd();
+
+    using globalConfigurationFile = await Conf.getGlobalConfigurationFile();
+    using localConfigurationFile = await Conf.getLocalConfigurationFile(repositoryRoot);
+    const environmentVariables = Deno.env;
+    const commandLineArguments = [...Deno.args];
+    await Conf.load({
+        globalConfigurationFile,
+        localConfigurationFile,
+        environmentVariables,
+        commandLineArguments,
     });
-
-    try {
-        // main logic goes here
-    } catch (error) {
-        return;
-    }
-
-    Deno.exitCode = 0;
-    return;
 }
-
-Deno.exit();

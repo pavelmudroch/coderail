@@ -18,7 +18,7 @@
         "useTabs": false,
         "sortNamedImports": "caseInsensitive",
         "sortNamedExports": "caseInsensitive",
-        "nextControlFlowPosition": "nextLine"
+        "nextControlFlowPosition": "sameLine"
     },
     "imports": {
         "@mutasaurus/mutasaurus": "jsr:@mutasaurus/mutasaurus@^0.1.5",
@@ -26,6 +26,8 @@
         "@std/path": "jsr:@std/path@^1.1.6",
         "@path": "./src/path.ts",
         "@fs": "./src/fs.ts",
+        "@conf": "./src/conf.ts",
+        "@utils": "./src/utils.ts",
         "oxc-parser": "npm:oxc-parser@^0.153.0"
     },
     "lint": {

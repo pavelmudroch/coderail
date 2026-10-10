@@ -28,6 +28,7 @@ function define(target: ParseResult, key: string, value: ParseResult[string]): v
     });
 }
 
+// TODO: include meta data at parsed result, fail on fatal error, collect non fatal
 export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResult> {
     const result: ParseResult = {};
     let target = result;
@@ -73,8 +74,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
                 const objects = member as ParseResult[];
                 if (final) objects.push({});
                 parent = objects[objects.length - 1];
-            }
-            else {
+            } else {
                 if (member === null || typeof member !== 'object' || (final && element)) {
                     fail('Incompatible namespace');
                 }
@@ -130,11 +130,9 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
                             if (digit(character)) code = character.charCodeAt(0) - 48;
                             else if (character >= 'a' && character <= 'f') {
                                 code = character.charCodeAt(0) - 87;
-                            }
-                            else if (character >= 'A' && character <= 'F') {
+                            } else if (character >= 'A' && character <= 'F') {
                                 code = character.charCodeAt(0) - 55;
-                            }
-                            else fail('Invalid Unicode escape');
+                            } else fail('Invalid Unicode escape');
                             hex = hex * 16 + code;
                         }
                         decoded += String.fromCharCode(hex);
@@ -143,8 +141,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
                     default:
                         fail('Unsupported or unfinished escape');
                 }
-            }
-            else {
+            } else {
                 if (character.charCodeAt(0) < 32) fail('Raw string control');
                 decoded += character;
             }
@@ -176,29 +173,22 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
                 if (state === 'start' && character === '-') state = 'sign';
                 else if ((state === 'start' || state === 'sign') && digit(character)) {
                     state = character === '0' ? 'zero' : 'integer';
-                }
-                else if ((state === 'integer' || state === 'separator') && digit(character)) {
+                } else if ((state === 'integer' || state === 'separator') && digit(character)) {
                     state = 'integer';
-                }
-                else if ((state === 'zero' || state === 'integer') && character === '.') {
+                } else if ((state === 'zero' || state === 'integer') && character === '.') {
                     state = 'point';
-                }
-                else if (state === 'integer' && character === '_') {
+                } else if (state === 'integer' && character === '_') {
                     state = 'separator';
-                }
-                else if (
+                } else if (
                     (state === 'point' || state === 'fraction' || state === 'fractionSeparator') &&
                     digit(character)
                 ) {
                     state = 'fraction';
-                }
-                else if (state === 'fraction' && character === '_') {
+                } else if (state === 'fraction' && character === '_') {
                     state = 'fractionSeparator';
-                }
-                else fail('Invalid number');
+                } else fail('Invalid number');
                 if (character !== '_') token += character;
-            }
-            else {
+            } else {
                 if (character !== literal[token.length]) fail('Invalid literal');
                 token += character;
             }
@@ -222,8 +212,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
             const frame = arrays[arrays.length - 1];
             frame.values.push(parsed);
             frame.needsComma = true;
-        }
-        else {
+        } else {
             value = parsed;
             complete = true;
         }
@@ -238,8 +227,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
         if (arrays.length === 0) {
             if (cursor === text.length || text[cursor] === '#') {
                 // Comments still obey physical line-ending rules.
-            }
-            else if (text[cursor] === '[') {
+            } else if (text[cursor] === '[') {
                 cursor++;
                 const element = text[cursor] === '[';
                 if (element) cursor++;
@@ -257,8 +245,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
                     cursor++;
                 }
                 header = { path, element };
-            }
-            else {
+            } else {
                 key = name();
                 whitespace();
                 if (text[cursor] !== '=') fail('Expected assignment');
@@ -280,23 +267,19 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
             if (frame && character === ']') {
                 arrays.pop();
                 accept(frame.values);
-            }
-            else if (frame && frame.needsComma) {
+            } else if (frame && frame.needsComma) {
                 if (character !== ',') fail('Expected comma');
                 frame.needsComma = false;
-            }
-            else if (character === '[') {
+            } else if (character === '[') {
                 arrays.push({ values: [], needsComma: false });
-            }
-            else {
+            } else {
                 accept(scalar());
                 cursor--;
             }
         }
         if (header) {
             namespace(header.path, header.element);
-        }
-        else if (key !== undefined && arrays.length === 0) {
+        } else if (key !== undefined && arrays.length === 0) {
             if (!complete) fail('Expected value');
             if (Object.hasOwn(target, key)) fail('Duplicate assignment');
             define(target, key, value);
@@ -317,8 +300,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
         let decoded: string;
         try {
             decoded = decoder.decode(bytes);
-        }
-        catch {
+        } catch {
             throw new SyntaxError(`Invalid UTF-8 at line ${lineNumber + 1}`);
         }
         scan(decoded);
@@ -361,12 +343,10 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParseResu
         }
         if (length > 0) flush(false);
         if (arrays.length > 0) fail('Unfinished array');
-    }
-    catch (error) {
+    } catch (error) {
         try {
             reader.releaseLock();
-        }
-        catch {
+        } catch {
             // Preserve the parsing or read failure if cleanup also fails.
         }
         throw error;
