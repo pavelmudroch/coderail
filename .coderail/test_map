@@ -7,10 +7,10 @@ deno fmt "./src/${file}.ts"
 [src/${path}/${file}.ts]
 deno lint --fix "./src/${path}/${file}.ts"
 deno fmt "./src/${path}/${file}.ts"
-[ -f "./tests/${path}/${file}.test.ts" ] && deno test "./tests/${path}/${file}.test.ts"
+[ ! -f "./tests/${path}/${file}.test.ts" ] && exit 0 || (deno test -A --coverage --coverage-raw-data-only "./tests/${path}/${file}.test.ts" && deno coverage --detailed --include="./src/${path}/${file}.ts"; code=$?; rm -rf ./coverage; exit $code)
 
 [tests/${path}/${file}.test.ts]
 deno lint --fix "./tests/${path}/${file}.test.ts"
 deno fmt "./tests/${path}/${file}.test.ts"
-deno test --coverage --coverage-raw-data-only "./tests/${path}/${file}.test.ts" && deno coverage; rm -rf ./coverage
-[ -f "./src/${path}/${file}.ts" ] && deno run -A ./tools/mutate.ts "./src/${path}/${file}.ts" "./tests/${path}/${file}.test.ts"
+deno test -A --coverage --coverage-raw-data-only "./tests/${path}/${file}.test.ts" && deno coverage --detailed --include="./src/${path}/${file}.ts"; code=$?; rm -rf ./coverage; exit $code
+deno run -A ./tools/mutate.ts "./tests/${path}/${file}.test.ts" "./src/${path}/${file}"
