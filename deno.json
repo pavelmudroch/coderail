@@ -55,5 +55,8 @@
             "functions": 100,
             "lines": 100
         }
+    },
+    "compilerOptions": {
+        "noUncheckedIndexedAccess": true
     }
 }

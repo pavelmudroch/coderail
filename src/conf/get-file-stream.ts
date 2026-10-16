@@ -1,7 +1,15 @@
-export async function getFileStream(path: string): Promise<ReadableStream<Uint8Array> | null> {
+export interface ConfFileStream extends Disposable {
+    path: string;
+    stream: ReadableStream<Uint8Array>;
+}
+
+export async function getFileStream(path: string): Promise<ConfFileStream | null> {
     try {
         const file = await Deno.open(path);
-        return file.readable;
+        const stream = file.readable;
+        const dispose = () => stream.cancel();
+
+        return { path, stream, [Symbol.dispose]: dispose };
     } catch (error) {
         if (error instanceof Deno.errors.NotFound) {
             return null;

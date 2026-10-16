@@ -12,13 +12,48 @@ function stream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
     });
 }
 
-function read(text: string): Promise<ParseResult> {
-    return parse(stream([encoder.encode(text)]));
+async function read(text: string): Promise<ParseResult> {
+    return (await parse(stream([encoder.encode(text)]))).toObject();
 }
 
 async function invalid(text: string): Promise<void> {
     await expect(read(text), text).rejects.toBeInstanceOf(SyntaxError);
 }
+
+Deno.test('Conf::parse converts snake_case keys and preserves source metadata', async () => {
+    const parsed = await parse(stream([encoder.encode(
+        'default_harness="codex"\n[server_options.http_client]\nrequest_timeout=30\n[[build_rules]]\nfile_pattern="*.ts"',
+    )]));
+    expect(parsed.toObject()).toEqual({
+        defaultHarness: 'codex',
+        serverOptions: { httpClient: { requestTimeout: 30 } },
+        buildRules: [{ filePattern: '*.ts' }],
+    });
+    expect(parsed.getMeta('defaultHarness')).toEqual({
+        key: 'default_harness',
+        line: 1,
+        column: 17,
+        type: 'string',
+    });
+    expect(parsed.getMeta('serverOptions.httpClient.requestTimeout')).toEqual({
+        key: 'server_options.http_client.request_timeout',
+        line: 3,
+        column: 17,
+        type: 'number',
+    });
+    expect(parsed.getMeta(['buildRules', 0, 'filePattern'], 'key')).toEqual({
+        key: 'build_rules.0.file_pattern',
+        line: 5,
+        column: 1,
+        type: 'string',
+    });
+    expect(parsed.getMeta('server_options.http_client.request_timeout'))
+        .toEqual(parsed.getMeta('serverOptions.httpClient.requestTimeout'));
+    expect(await read('alreadyCamel=1\n_name2=2\n__proto__=3\nmany_word_key=4'))
+        .toEqual({ alreadyCamel: 1, _name2: 2, ['__proto__']: 3, manyWordKey: 4 });
+    await invalid('some_key=1\nsomeKey=2');
+    await invalid('[some_key]\n[someKey]');
+});
 
 Deno.test('Conf::parse grammar', async (test) => {
     await test.step('Scalars, names, escapes and comments', async () => {
@@ -26,9 +61,13 @@ Deno.test('Conf::parse grammar', async (test) => {
             await read(String.raw`0 = null
 A = true
 a = false
+Z = true
+z = false
 _name2 = "#é😀"
 escapes = "\"\\\/\b\f\n\r\t\u0000\u0041\uabcd\uABCD\uD83D\uDE00\uD800"
+hexBounds = "\u000f\u000F"
 empty = ""
+space = " "
  # comment
  tab = 1 # comment
 `),
@@ -36,9 +75,13 @@ empty = ""
             '0': null,
             A: true,
             a: false,
+            Z: true,
+            z: false,
             _name2: '#é😀',
             escapes: '"\\/\b\f\n\r\t\0A\uabcd\uABCD😀\ud800',
+            hexBounds: '\u000f\u000f',
             empty: '',
+            space: ' ',
             tab: 1,
         });
         for (const text of ['', ' \t', '# comment', '\n\r\n#end']) {
@@ -302,9 +345,10 @@ list=[true,[null,12.3], # ]
 x=false`;
         const bytes = encoder.encode(text.replaceAll('\n', '\r\n'));
         const expected = await read(text);
-        expect(await parse(stream(Array.from(bytes, (byte) => Uint8Array.of(byte))))).toEqual(
-            expected,
-        );
+        expect((await parse(stream(Array.from(bytes, (byte) => Uint8Array.of(byte))))).toObject())
+            .toEqual(
+                expected,
+            );
         for (let split = 0; split <= bytes.length; split++) {
             const input = stream([
                 new Uint8Array(),
@@ -313,11 +357,11 @@ x=false`;
                 bytes.slice(split),
                 new Uint8Array(),
             ]);
-            expect(await parse(input)).toEqual(expected);
+            expect((await parse(input)).toObject()).toEqual(expected);
             expect(input.locked).toBe(false);
         }
-        expect(await parse(stream([]))).toEqual({});
-        expect(await parse(stream([new Uint8Array()]))).toEqual({});
+        expect((await parse(stream([]))).toObject()).toEqual({});
+        expect((await parse(stream([new Uint8Array()]))).toObject()).toEqual({});
         for (const suffix of ['', '\n', '\r\n']) {
             expect(await read(`a=1${suffix}`)).toEqual({ a: 1 });
         }
@@ -342,6 +386,7 @@ x=false`;
                 ['a="\\u12x4"', 1, 8],
                 ['a="x', 1, 5],
                 ['a=[\n1', 2, 2],
+                ['a=[\n', 1, 4],
             ] as const
         ) {
             try {
@@ -397,6 +442,256 @@ x=false`;
                 },
             } as unknown as ReadableStream<Uint8Array>;
             await expect(parse(fake)).rejects.toBe(original ?? cleanup);
+        }
+    });
+});
+
+Deno.test('Conf::parse metadata helper', async (test) => {
+    await test.step('Value/key locations, scalar types and nested bracket arrays', async () => {
+        const parsed = await parse(stream([encoder.encode(
+            '\tname = "😀\\n" # comment\r\nlist = [\r\n  null, [true,],\r\n]\r\nempty=[]\nflag=false\nn=1_000',
+        )]));
+        expect(parsed.toObject()).toEqual({
+            name: '😀\n',
+            list: [null, [true]],
+            empty: [],
+            flag: false,
+            n: 1000,
+        });
+        for (
+            const [path, line, column, type] of [
+                ['name', 1, 9, 'string'],
+                ['list', 2, 8, 'array'],
+                ['list.0', 3, 3, 'null'],
+                ['list.1', 3, 9, 'array'],
+                ['list.1.0', 3, 10, 'boolean'],
+                ['empty', 5, 7, 'array'],
+                ['flag', 6, 6, 'boolean'],
+                ['n', 7, 3, 'number'],
+            ] as const
+        ) {
+            expect(parsed.getMeta(path)).toEqual({ key: path, line, column, type });
+            expect(parsed.getMeta(path, 'value')).toEqual(parsed.getMeta(path));
+        }
+        expect(parsed.getMeta('name', 'key')).toEqual({
+            key: 'name',
+            line: 1,
+            column: 2,
+            type: 'string',
+        });
+        const path: readonly (string | number)[] = ['list', 1, 0];
+        expect(parsed.getMeta(path)).toEqual(parsed.getMeta('list.1.0'));
+        expect(parsed.getMeta('list.0', 'key')).toBeUndefined();
+    });
+
+    await test.step('Array closure preserves opening locations and trailing-text diagnostics', async () => {
+        const parsed = await parse(stream([encoder.encode('values = [[], [1, 2],\n  [3],\n]')]));
+        expect(parsed.toObject()).toEqual({ values: [[], [1, 2], [3]] });
+        expect(parsed.getMeta('values')).toEqual({
+            key: 'values',
+            line: 1,
+            column: 10,
+            type: 'array',
+        });
+        expect(parsed.getMeta('values.0')).toEqual({
+            key: 'values.0',
+            line: 1,
+            column: 11,
+            type: 'array',
+        });
+        expect(parsed.getMeta('values.1')).toEqual({
+            key: 'values.1',
+            line: 1,
+            column: 15,
+            type: 'array',
+        });
+        expect(parsed.getMeta('values.2')).toEqual({
+            key: 'values.2',
+            line: 2,
+            column: 3,
+            type: 'array',
+        });
+        for (
+            const [text, line, column] of [
+                ['values = [[], [1, 2]] @', 1, 23],
+                ['values = [\n  [3],\n] @', 3, 3],
+            ] as const
+        ) {
+            await expect(read(text)).rejects.toThrow(
+                `Unexpected trailing text at line ${line}, column ${column}`,
+            );
+        }
+    });
+
+    await test.step('Explicit and implicit namespaces and zero-based object-array elements', async () => {
+        const parsed = await parse(stream([encoder.encode(
+            '[a.b]\nx=1\n[a]\n[[a.items]]\nid=2\n[[a.items]]\n[a.items.detail]\nbase="url"',
+        )]));
+        expect(parsed.getMeta('a')).toEqual({ key: 'a', line: 3, column: 1, type: 'object' });
+        expect(parsed.getMeta('a', 'key')).toEqual({
+            key: 'a',
+            line: 3,
+            column: 2,
+            type: 'object',
+        });
+        expect(parsed.getMeta('a.b')).toEqual({ key: 'a.b', line: 1, column: 1, type: 'object' });
+        expect(parsed.getMeta('a.b', 'key')).toEqual({
+            key: 'a.b',
+            line: 1,
+            column: 4,
+            type: 'object',
+        });
+        expect(parsed.getMeta('a.items')).toEqual({
+            key: 'a.items',
+            line: 4,
+            column: 1,
+            type: 'array',
+        });
+        expect(parsed.getMeta('a.items', 'key')).toEqual({
+            key: 'a.items',
+            line: 4,
+            column: 5,
+            type: 'array',
+        });
+        expect(parsed.getMeta('a.items.0')).toEqual({
+            key: 'a.items.0',
+            line: 4,
+            column: 1,
+            type: 'object',
+        });
+        expect(parsed.getMeta('a.items.1')).toEqual({
+            key: 'a.items.1',
+            line: 6,
+            column: 1,
+            type: 'object',
+        });
+        expect(parsed.getMeta('a.items.1', 'key')).toBeUndefined();
+        expect(parsed.getMeta(['a', 'items', 1, 'detail', 'base']))
+            .toEqual({ key: 'a.items.1.detail.base', line: 8, column: 6, type: 'string' });
+        expect(parsed.getMeta('a.items.1.detail.base', 'key'))
+            .toEqual({ key: 'a.items.1.detail.base', line: 8, column: 1, type: 'string' });
+        expect(parsed.getMeta('a.items.1.id')).toBeUndefined();
+        const implicit = await parse(stream([encoder.encode('[a.b]')]));
+        expect(implicit.getMeta('a')).toEqual({ key: 'a', line: 1, column: 2, type: 'object' });
+        expect(implicit.getMeta('a', 'key')).toEqual(implicit.getMeta('a'));
+    });
+
+    await test.step('Missing and invalid paths, numeric object keys and prototype names', async () => {
+        const parsed = await parse(stream([encoder.encode(
+            'a=[1]\n[nums]\n03=true\n3=false\n__proto__="safe"',
+        )]));
+        for (
+            const path of [
+                '',
+                '.',
+                'missing',
+                'a.',
+                'a..0',
+                'a.03',
+                'a.-1',
+                'a.3x',
+                'a.0.thing',
+                'a.1',
+                'constructor',
+                'nums.toString',
+                [],
+                ['a', -1],
+                ['a', 0.5],
+                ['a', NaN],
+                ['a', Infinity],
+                ['a', 2 ** 53],
+            ]
+        ) {
+            expect(parsed.getMeta(path)).toBeUndefined();
+            expect(parsed.getMeta(path, 'key')).toBeUndefined();
+        }
+        expect(parsed.getMeta('nums.03')).toEqual({
+            key: 'nums.03',
+            line: 3,
+            column: 4,
+            type: 'boolean',
+        });
+        expect(parsed.getMeta(['nums', 3])).toEqual(parsed.getMeta('nums.3'));
+        expect(parsed.getMeta('nums.__proto__')).toEqual({
+            key: 'nums.__proto__',
+            line: 5,
+            column: 11,
+            type: 'string',
+        });
+        const empty = await parse(stream([]));
+        expect(empty.toObject()).toEqual({});
+        expect(empty.getMeta([])).toBeUndefined();
+    });
+
+    await test.step('Every resolved value has a token, header or implicit namespace location', async () => {
+        const parsed = await parse(stream([encoder.encode(
+            '[implicit.child]\nvalue=1\n[[elements]]\n[ elements.detail ]\nempty=[]',
+        )]));
+        for (
+            const [path, line, column, type] of [
+                ['implicit', 1, 2, 'object'],
+                ['implicit.child', 1, 1, 'object'],
+                ['implicit.child.value', 2, 7, 'number'],
+                ['elements', 3, 1, 'array'],
+                ['elements.0', 3, 1, 'object'],
+                ['elements.0.detail', 4, 1, 'object'],
+                ['elements.0.detail.empty', 5, 7, 'array'],
+            ] as const
+        ) {
+            expect(parsed.getMeta(path)).toEqual({ key: path, line, column, type });
+        }
+        expect(parsed.getMeta('elements.0.detail', 'key'))
+            .toEqual({ key: 'elements.0.detail', line: 4, column: 12, type: 'object' });
+        expect(parsed.getMeta('elements.0.missing')).toBeUndefined();
+    });
+
+    await test.step('Returned objects and metadata cannot mutate the original parse', async () => {
+        const parsed = await parse(stream([encoder.encode('a=[1,[2]]\n[[b]]\nx=3')]));
+        const object = parsed.toObject();
+        const original = parsed.toObject();
+        const a = object.a as (number | number[])[];
+        a.reverse();
+        expect(Array.isArray(object.b)).toBe(true);
+        if (typeof (object.b as ParseResult[])[0] === 'object') {
+            // deno-lint-ignore no-non-null-assertion -- condition ensures the object exists
+            (object.b as ParseResult[])[0]!.x = 99;
+        }
+        object.extra = true;
+        const meta = parsed.getMeta('b.0.x');
+        if (meta === undefined) throw new Error('Expected metadata');
+        meta.line = 99;
+        expect(parsed.toObject()).toEqual(original);
+        expect(parsed.getMeta('b.0.x')).toEqual({
+            key: 'b.0.x',
+            line: 3,
+            column: 3,
+            type: 'number',
+        });
+        const { toObject, getMeta } = parsed;
+        expect(toObject()).toEqual(original);
+        expect(getMeta('a.0')).toEqual({ key: 'a.0', line: 1, column: 4, type: 'number' });
+    });
+
+    await test.step('Metadata is independent of UTF-8 chunks and physical line endings', async () => {
+        const text = 's="é😀"\na=[\n1,[false],\n]\n[[group]]\nx=-1_2.3';
+        const expected = await parse(stream([encoder.encode(text)]));
+        for (const ending of ['\n', '\r\n']) {
+            const bytes = encoder.encode(text.replaceAll('\n', ending));
+            const inputs = [Array.from(bytes, (byte) => Uint8Array.of(byte))];
+            for (let split = 0; split <= bytes.length; split++) {
+                inputs.push([bytes.slice(0, split), bytes.slice(split)]);
+            }
+            for (const chunks of inputs) {
+                const actual = await parse(stream(chunks));
+                expect(actual.toObject()).toEqual(expected.toObject());
+                for (
+                    const path of ['s', 'a', 'a.0', 'a.1', 'a.1.0', 'group', 'group.0', 'group.0.x']
+                ) {
+                    for (const part of ['key', 'value'] as const) {
+                        expect(actual.getMeta(path, part)).toEqual(expected.getMeta(path, part));
+                    }
+                }
+            }
         }
     });
 });
