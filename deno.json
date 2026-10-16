@@ -26,6 +26,12 @@
         "@std/path": "jsr:@std/path@^1.1.6",
         "@path": "./src/path.ts",
         "@fs": "./src/fs.ts",
+        "@conf": "./src/conf.ts",
+        "@log": "./src/log.ts",
+        "@cli": "./src/cli.ts",
+        "@commands": "./src/commands.ts",
+        "@runtime": "./src/runtime.ts",
+        "@utils": "./src/utils.ts",
         "oxc-parser": "npm:oxc-parser@^0.153.0"
     },
     "lint": {
@@ -43,6 +49,9 @@
                 "no-sparse-arrays",
                 "no-non-null-asserted-optional-chain",
                 "no-non-null-assertion"
+            ],
+            "exclude": [
+                "no-fallthrough"
             ],
             "tags": [
                 "recommended"
