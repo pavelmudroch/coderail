@@ -1,13 +1,9 @@
 import { expect } from '@std/expect';
-import {
-    type GlobalArguments,
-    type ParsedArguments,
-    parseGlobalArguments,
-} from '../../src/cli/parse.ts';
+import { Commands, type GlobalArguments, type ParsedArguments } from '@commands';
 import { UsageError } from '../../src/cli/usage-error.ts';
 
-function parse(args: readonly string[]): ParsedArguments {
-    return parseGlobalArguments(args);
+function parse(args: readonly string[]): ParsedArguments<GlobalArguments> {
+    return Commands.cr().parseArguments(args);
 }
 
 function defaults(): GlobalArguments {
@@ -26,7 +22,7 @@ function defaults(): GlobalArguments {
 function expectUsageError(args: readonly string[], message: string): void {
     try {
         parse(args);
-        throw new Error('Expected parseGlobalArguments to throw.');
+        throw new Error('Expected parseArguments to throw.');
     } catch (error) {
         expect(error).toBeInstanceOf(UsageError);
         expect((error as Error).message).toBe(message);
@@ -34,8 +30,36 @@ function expectUsageError(args: readonly string[], message: string): void {
     }
 }
 
-Deno.test('Cli::parseGlobalArguments parses global options and commands', () => {
-    expect(parse([])).toEqual({ global: defaults(), rest: [] });
+Deno.test('Cr handles global help and exposes root usage', () => {
+    const command = Commands.cr();
+    expect(command.shouldHandleHelp(command.parseArguments([]))).toBe(false);
+    for (const help of ['-h', '--help']) {
+        expect(command.shouldHandleHelp(command.parseArguments([help]))).toBe(true);
+        expect(command.shouldHandleHelp(command.parseArguments(['command', help]))).toBe(false);
+    }
+    expect(command.getUsage()).toContain('cr [options] <command>');
+});
+
+Deno.test('Cr runs without a repository or child command', async () => {
+    const command = Commands.cr();
+    const parsedArguments = command.parseArguments([]);
+    expect(command.requiresRepository).toBe(false);
+    expect(command.getSubcommand(parsedArguments)).toBeUndefined();
+    await expect(command.run({
+        context: { currentWorkingDirectory: '/project', installRoot: '/install' },
+        configuration: {
+            logLevel: 'normal',
+            noColor: false,
+            nonInteractive: false,
+            verify: [],
+        },
+        parsedArguments,
+        signal: new AbortController().signal,
+    })).resolves.toBeUndefined();
+});
+
+Deno.test('Cr::parseArguments parses global options and commands', () => {
+    expect(parse([])).toEqual({ args: defaults(), rest: [] });
 
     expect(parse([
         '--version',
@@ -47,7 +71,7 @@ Deno.test('Cli::parseGlobalArguments parses global options and commands', () => 
         'status',
         'argument',
     ])).toEqual({
-        global: {
+        args: {
             command: 'status',
             cwd: 'project',
             help: false,
@@ -61,7 +85,7 @@ Deno.test('Cli::parseGlobalArguments parses global options and commands', () => 
     });
 
     expect(parse(['--help', '--quiet', 'command'])).toEqual({
-        global: {
+        args: {
             ...defaults(),
             help: true,
         },
@@ -69,57 +93,57 @@ Deno.test('Cli::parseGlobalArguments parses global options and commands', () => 
     });
 
     expect(parse(['--cwd=project', 'status'])).toEqual({
-        global: { ...defaults(), command: 'status', cwd: 'project' },
+        args: { ...defaults(), command: 'status', cwd: 'project' },
         rest: [],
     });
 
     const cwdOptionWithoutValue = new String('--cwd=');
     cwdOptionWithoutValue.split = () => [];
     expect(parse([cwdOptionWithoutValue as unknown as string])).toEqual({
-        global: { ...defaults(), cwd: './' },
+        args: { ...defaults(), cwd: './' },
         rest: [],
     });
 });
 
-Deno.test('Cli::parseGlobalArguments stops at global help and forwards command help', () => {
+Deno.test('Cr::parseArguments stops at global help and forwards command help', () => {
     for (const help of ['-h', '--help']) {
         expect(parse([help, '--unknown', 'command'])).toEqual({
-            global: { ...defaults(), help: true },
+            args: { ...defaults(), help: true },
             rest: [],
         });
 
         expect(parse(['command', help, 'argument'])).toEqual({
-            global: { ...defaults(), command: 'command' },
+            args: { ...defaults(), command: 'command' },
             rest: [help, 'argument'],
         });
     }
 });
 
-Deno.test('Cli::parseGlobalArguments preserves command arguments and post-command options', () => {
+Deno.test('Cr::parseArguments preserves command arguments and post-command options', () => {
     expect(parse(['command', '--unknown', '-x', '-', 'argument'])).toEqual({
-        global: { ...defaults(), command: 'command' },
+        args: { ...defaults(), command: 'command' },
         rest: ['--unknown', '-x', '-', 'argument'],
     });
 
     expect(parse(['command', '-xy', 'argument'])).toEqual({
-        global: { ...defaults(), command: 'command' },
+        args: { ...defaults(), command: 'command' },
         rest: ['-x', '-y', 'argument'],
     });
 
     expect(parse(['command', '--', '--help', '-v', 'argument'])).toEqual({
-        global: { ...defaults(), command: 'command' },
+        args: { ...defaults(), command: 'command' },
         rest: ['--', '--help', '-v', 'argument'],
     });
 
     expect(parse([undefined as unknown as string, 'command'])).toEqual({
-        global: { ...defaults(), command: 'command' },
+        args: { ...defaults(), command: 'command' },
         rest: [],
     });
 });
 
-Deno.test('Cli::parseGlobalArguments expands grouped short options', () => {
+Deno.test('Cr::parseArguments expands grouped short options', () => {
     expect(parse(['-vh', 'command'])).toEqual({
-        global: {
+        args: {
             ...defaults(),
             help: true,
             verbose: true,
@@ -131,7 +155,7 @@ Deno.test('Cli::parseGlobalArguments expands grouped short options', () => {
     expectUsageError(['-vx', 'command'], 'Unknown option "-x".');
 });
 
-Deno.test('Cli::parseGlobalArguments rejects invalid global option values', () => {
+Deno.test('Cr::parseArguments rejects invalid global option values', () => {
     for (
         const [args, message] of [
             [['--help=value'], 'Option "--help" does not take a value.'],
@@ -148,7 +172,7 @@ Deno.test('Cli::parseGlobalArguments rejects invalid global option values', () =
     }
 });
 
-Deno.test('Cli::parseGlobalArguments rejects unknown options before the command', () => {
+Deno.test('Cr::parseArguments rejects unknown options before the command', () => {
     for (
         const [args, message] of [
             [['--unknown', 'command'], 'Unknown option "--unknown".'],
@@ -160,7 +184,7 @@ Deno.test('Cli::parseGlobalArguments rejects unknown options before the command'
     }
 });
 
-Deno.test('Cli::parseGlobalArguments rejects verbose and quiet together', () => {
+Deno.test('Cr::parseArguments rejects verbose and quiet together', () => {
     for (
         const [args, message] of [
             [

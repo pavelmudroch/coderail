@@ -1,4 +1,4 @@
-import type { GlobalArguments } from '@cli';
+import type { Command, GlobalArguments } from '@commands';
 
 export type RuntimeContext = {
     currentWorkingDirectory: string;
@@ -8,7 +8,7 @@ export type RuntimeContext = {
 
 export function createContext(
     _global: GlobalArguments,
-    _command: { requiresRepository: boolean },
+    _command: Pick<Command, 'requiresInit'>,
 ): Promise<RuntimeContext> {
     throw new Error('Not implemented');
 }

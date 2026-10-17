@@ -1,13 +1,23 @@
 import { expect } from '@std/expect';
-import type { GlobalArguments } from '@cli';
+import { Cli } from '@cli';
+import { type Command, Commands, type GlobalArguments } from '@commands';
 import { Conf } from '@conf';
 import { Log } from '@log';
 import { Runtime } from '@runtime';
-import type { Command } from '../../src/commands/get-command.ts';
-import { rootCommand } from '../../src/commands/root-command.ts';
-import { run } from '../../src/commands/run.ts';
-import { UsageError } from '../../src/cli/usage-error.ts';
-import { CODERAIL_VERSION } from '../../src/version.ts';
+
+let runId = 0;
+
+async function run(args: readonly string[]): Promise<void> {
+    const originalArgs = [...Deno.args];
+    Deno.args.splice(0, Deno.args.length, ...args);
+    Deno.exitCode = 0;
+    try {
+        // A unique URL reruns the entry point for each invocation.
+        await import(new URL(`../src/main.ts?test=${++runId}`, import.meta.url).href);
+    } finally {
+        Deno.args.splice(0, Deno.args.length, ...originalArgs);
+    }
+}
 
 type Fixture = Disposable & {
     events: string[];
@@ -15,6 +25,9 @@ type Fixture = Disposable & {
     globals: GlobalArguments[];
     executions: Parameters<Command['run']>[0][];
     controller: AbortController;
+    errors: unknown[][];
+    warnings: unknown[][];
+    usage: unknown[][];
 };
 
 function setupCommands(): Fixture {
@@ -23,20 +36,31 @@ function setupCommands(): Fixture {
     const globals: GlobalArguments[] = [];
     const executions: Parameters<Command['run']>[0][] = [];
     const controller = new AbortController();
+    const errors: unknown[][] = [];
+    const warnings: unknown[][] = [];
+    const usage: unknown[][] = [];
+    const rootCommand = Commands.cr();
     const original = {
-        getSubcommand: rootCommand.getSubcommand,
+        cr: Commands.cr,
+        registerSignalHandlers: Runtime.registerSignalHandlers,
+        cleanup: Runtime.cleanup,
         createContext: Runtime.createContext,
         loadConfiguration: Conf.loadConfiguration,
         configureLogging: Log.configureLogging,
         output: Log.output,
+        error: Log.error,
+        warn: Log.warn,
+        info: Log.info,
+        trace: Log.trace,
+        exitCode: Deno.exitCode,
     };
     const create: Command = {
         requiresRepository: true,
         parseArguments(args): ReturnType<Command['parseArguments']> {
             events.push('parse:create');
-            return { arguments: { help: args[0] === '--help' }, rest: [...args] };
+            return { args: { help: args[0] === '--help' }, rest: [...args] };
         },
-        shouldHandleHelp: (parsedArguments) => parsedArguments.arguments.help === true,
+        shouldHandleHelp: (parsedArguments) => parsedArguments.args.help === true,
         getUsage: () => 'Create usage',
         getSubcommand: () => undefined,
         run(context): Promise<void> {
@@ -50,17 +74,17 @@ function setupCommands(): Fixture {
         parseArguments(args): ReturnType<Command['parseArguments']> {
             events.push('parse:ticket');
             return {
-                arguments: { command: args[0], help: args[0] === '--help' },
+                args: { command: args[0], help: args[0] === '--help' },
                 rest: args.slice(1),
             };
         },
-        shouldHandleHelp: (parsedArguments) => parsedArguments.arguments.help === true,
+        shouldHandleHelp: (parsedArguments) => parsedArguments.args.help === true,
         getUsage: () => 'Ticket usage',
         getSubcommand(parsedArguments): Command {
-            if (parsedArguments.arguments.command === 'create') {
+            if (parsedArguments.args.command === 'create') {
                 return create;
             }
-            throw new UsageError('Expected create subcommand.', { usage: ticket.getUsage });
+            Cli.raiseUsageError('Expected create subcommand.', ticket);
         },
         run(): Promise<void> {
             throw new Error('Grouping commands must not execute');
@@ -68,10 +92,19 @@ function setupCommands(): Fixture {
     };
 
     rootCommand.getSubcommand = (parsedArguments) => {
-        if (parsedArguments.arguments.command === 'ticket') {
+        if (parsedArguments.args.command === 'ticket') {
             return ticket;
         }
-        return original.getSubcommand(parsedArguments);
+        Cli.raiseUsageError('Expected ticket command.', rootCommand);
+    };
+    Commands.cr = () => rootCommand;
+    Runtime.registerSignalHandlers = () => ({
+        signal: controller.signal,
+        [Symbol.dispose](): void {},
+    });
+    Runtime.cleanup = () => {
+        events.push('cleanup');
+        return Promise.resolve();
     };
     Runtime.createContext = (global, command) => {
         events.push('context');
@@ -99,6 +132,16 @@ function setupCommands(): Fixture {
     Log.output = (...messages) => {
         output.push(messages);
     };
+    Log.error = (...messages) => {
+        errors.push(messages);
+    };
+    Log.warn = (...messages) => {
+        warnings.push(messages);
+    };
+    Log.info = (...messages) => {
+        usage.push(messages);
+    };
+    Log.trace = () => {};
 
     return {
         events,
@@ -106,21 +149,31 @@ function setupCommands(): Fixture {
         globals,
         executions,
         controller,
+        errors,
+        warnings,
+        usage,
         [Symbol.dispose](): void {
-            rootCommand.getSubcommand = original.getSubcommand;
+            Commands.cr = original.cr;
+            Runtime.registerSignalHandlers = original.registerSignalHandlers;
+            Runtime.cleanup = original.cleanup;
             Runtime.createContext = original.createContext;
             Conf.loadConfiguration = original.loadConfiguration;
             Log.configureLogging = original.configureLogging;
             Log.output = original.output;
+            Log.error = original.error;
+            Log.warn = original.warn;
+            Log.info = original.info;
+            Log.trace = original.trace;
+            Deno.exitCode = original.exitCode;
         },
     };
 }
 
-Deno.test('Commands::run shows help at each level without runtime setup', async () => {
+Deno.test('main shows help at each level without runtime setup', async () => {
     using fixture = setupCommands();
     for (
         const [args, usage, events] of [
-            [['--help'], rootCommand.getUsage(), []],
+            [['--help'], Commands.cr().getUsage(), []],
             [['ticket', '--help'], 'Ticket usage', ['parse:ticket']],
             [
                 ['ticket', 'create', '--help'],
@@ -131,31 +184,33 @@ Deno.test('Commands::run shows help at each level without runtime setup', async 
     ) {
         fixture.events.length = 0;
         fixture.output.length = 0;
-        await run(args, fixture.controller.signal);
+        await run(args);
         expect(fixture.output).toEqual([[usage]]);
-        expect(fixture.events).toEqual(events);
+        expect(fixture.events).toEqual([...events, 'cleanup']);
         expect(fixture.executions).toEqual([]);
+        expect(fixture.errors).toEqual([]);
+        expect(Deno.exitCode).toBe(0);
     }
 });
 
-Deno.test('Commands::run preserves early version handling and help precedence', async () => {
+Deno.test('main preserves early version handling and help precedence', async () => {
     using fixture = setupCommands();
-    await run(['ticket', 'create', '--version'], fixture.controller.signal);
-    expect(fixture.output).toEqual([[`cr version: ${CODERAIL_VERSION}`]]);
-    expect(fixture.events).toEqual([]);
+    await run(['ticket', 'create', '--version']);
+    expect(fixture.output).toEqual([[`Coderail version ${Cli.version}`]]);
+    expect(fixture.events).toEqual(['cleanup']);
 
     fixture.output.length = 0;
-    await run(['--version', '--help'], fixture.controller.signal);
-    expect(fixture.output).toEqual([[rootCommand.getUsage()]]);
-    expect(fixture.events).toEqual([]);
+    fixture.events.length = 0;
+    await run(['--version', '--help']);
+    expect(fixture.output).toEqual([[Commands.cr().getUsage()]]);
+    expect(fixture.events).toEqual(['cleanup']);
+    expect(fixture.errors).toEqual([]);
+    expect(Deno.exitCode).toBe(0);
 });
 
-Deno.test('Commands::run executes only the leaf and preserves globals and literal arguments', async () => {
+Deno.test('main executes only the leaf and preserves globals and literal arguments', async () => {
     using fixture = setupCommands();
-    await run(
-        ['--cwd', 'project', 'ticket', 'create', '-v', '--', '--help'],
-        fixture.controller.signal,
-    );
+    await run(['--cwd', 'project', 'ticket', 'create', '-v', '--', '--help']);
 
     expect(fixture.events).toEqual([
         'parse:ticket',
@@ -164,32 +219,48 @@ Deno.test('Commands::run executes only the leaf and preserves globals and litera
         'configuration',
         'logging',
         'run:create',
+        'cleanup',
     ]);
     expect(fixture.output).toEqual([]);
     expect(fixture.globals[0]).toMatchObject({ cwd: 'project', verbose: true });
     expect(fixture.executions).toHaveLength(1);
     expect(fixture.executions[0]?.parsedArguments).toEqual({
-        arguments: { help: false },
+        args: { help: false },
         rest: ['--', '--help'],
     });
     expect(fixture.executions[0]?.signal).toBe(fixture.controller.signal);
     expect(fixture.executions[0]?.context.repositoryRoot).toBe('/project');
     expect(fixture.executions[0]?.configuration.logLevel).toBe('normal');
+    expect(fixture.errors).toEqual([]);
+    expect(Deno.exitCode).toBe(0);
 });
 
-Deno.test('Commands::run reports missing and unknown children before runtime setup', async () => {
+Deno.test('main reports missing and unknown children before runtime setup', async () => {
     using fixture = setupCommands();
     for (const args of [[], ['unknown'], ['ticket'], ['ticket', 'unknown']]) {
-        await expect(run(args, fixture.controller.signal)).rejects.toBeInstanceOf(UsageError);
+        fixture.errors.length = 0;
+        fixture.usage.length = 0;
+        fixture.events.length = 0;
+        await run(args);
+        expect(fixture.errors).toHaveLength(1);
+        expect(Cli.isUsageError(fixture.errors[0]?.[0])).toBe(true);
+        expect(fixture.usage).toEqual([
+            [args[0] === 'ticket' ? 'Ticket usage' : Commands.cr().getUsage()],
+        ]);
+        expect(Deno.exitCode).toBe(2);
+        expect(fixture.events.at(-1)).toBe('cleanup');
     }
     expect(fixture.globals).toEqual([]);
     expect(fixture.executions).toEqual([]);
 });
 
-Deno.test('Commands::run does not execute when aborted', async () => {
+Deno.test('main does not execute when aborted', async () => {
     using fixture = setupCommands();
     const reason = new Error('Cancelled');
     fixture.controller.abort(reason);
-    await expect(run(['ticket', 'create'], fixture.controller.signal)).rejects.toBe(reason);
+    await run(['ticket', 'create']);
     expect(fixture.executions).toEqual([]);
+    expect(fixture.warnings).toEqual([['Operation was aborted']]);
+    expect(fixture.errors).toEqual([]);
+    expect(fixture.events.at(-1)).toBe('cleanup');
 });

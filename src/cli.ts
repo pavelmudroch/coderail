@@ -1,21 +1,12 @@
-import { type GlobalArguments, type ParsedArguments, parseGlobalArguments } from './cli/parse.ts';
-import { getUsage, shouldHandleHelp, shouldHandleVersion } from './cli/help.ts';
 import { UsageError } from './cli/usage-error.ts';
-
-export type { GlobalArguments, ParsedArguments };
+import type { Command } from '@commands';
+import { CODERAIL_VERSION } from './cli/version.ts';
 
 export interface Cli {
     /**
-     * Parses the provided command line arguments and returns the parsed result.
-     * @param args The command line arguments to parse.
-     * @returns The parsed arguments.
+     * Current version of the CLI.
      */
-    parseGlobalArguments(args: readonly string[]): ParsedArguments;
-    /**
-     * Returns the usage information for the CLI.
-     * @returns The usage string.
-     */
-    getUsage(): string;
+    readonly version: string;
     /**
      * Determines if the provided error is a usage error.
      * @param error The error to check.
@@ -23,23 +14,18 @@ export interface Cli {
      */
     isUsageError(error: unknown): error is UsageError;
     /**
-     * Determines if the provided global arguments indicate that the version information should be displayed.
-     * @param global The global arguments to check.
-     * @returns True if the version information should be displayed, false otherwise.
+     * Raises a usage error with the provided message and command context.
+     * @param message The error message to display.
+     * @param command The command context in which the error occurred.
+     * @throws UsageError Always throws a UsageError.
      */
-    shouldHandleHelp(global: GlobalArguments): boolean;
-    /**
-     * Determines if the provided global arguments indicate that the version information should be displayed.
-     * @param global The global arguments to check.
-     * @returns True if the version information should be displayed, false otherwise.
-     */
-    shouldHandleVersion(global: GlobalArguments): boolean;
+    raiseUsageError(message: string, command: Command): never;
 }
 
 export const Cli: Cli = {
-    parseGlobalArguments,
-    getUsage,
+    version: CODERAIL_VERSION,
     isUsageError: (error) => error instanceof UsageError,
-    shouldHandleHelp,
-    shouldHandleVersion,
+    raiseUsageError: (message: string, command: Command): never => {
+        throw new UsageError(message, { usage: command.getUsage.bind(command) });
+    },
 };

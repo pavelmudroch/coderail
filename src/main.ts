@@ -1,13 +1,51 @@
 import { Cli } from '@cli';
-import { Commands } from '@commands';
+import { type Command, Commands, type ParsedArguments } from '@commands';
 import { Log } from '@log';
 import { Runtime } from '@runtime';
+import { Conf } from '@conf';
 
 async function main(): Promise<void> {
     using signalHandlers = Runtime.registerSignalHandlers();
 
     try {
-        await Commands.run(Deno.args, signalHandlers.signal);
+        const globalCommand = Commands.cr();
+        const globalArguments = globalCommand.parseArguments(Deno.args);
+
+        let command: Command = globalCommand;
+        let parsedArguments: ParsedArguments = globalArguments;
+
+        while (true) {
+            if (command.shouldHandleHelp(parsedArguments)) {
+                Log.output(command.getUsage());
+                return;
+            }
+
+            if (command === globalCommand && globalArguments.args.version) {
+                Log.output(`Coderail version ${Cli.version}`);
+                return;
+            }
+
+            const subCommand = command.getSubcommand(parsedArguments);
+            if (subCommand === undefined) {
+                break;
+            }
+
+            command = subCommand;
+            parsedArguments = command.parseArguments(parsedArguments.rest);
+        }
+
+        const context = await Runtime.createContext(globalArguments.args, command);
+        const configuration = await Conf.loadConfiguration(context, globalArguments.args);
+
+        Log.configureLogging(configuration);
+        signalHandlers.signal.throwIfAborted();
+
+        await command.run({
+            context,
+            configuration,
+            parsedArguments,
+            signal: signalHandlers.signal,
+        });
     } catch (error) {
         reportFailure(error, signalHandlers.signal);
     } finally {
@@ -31,6 +69,7 @@ function reportFailure(error: unknown, signal: AbortSignal): void {
         Log.warn('Operation was aborted');
         return;
     }
+
     Log.error(error);
     Log.trace(error);
 }

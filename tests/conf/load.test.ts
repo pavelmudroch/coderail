@@ -1,7 +1,7 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 import { loadConfiguration } from '../../src/conf/load.ts';
-import type { GlobalArguments } from '@cli';
+import type { GlobalArguments } from '@commands';
 
 const configurationEnvironmentVariables = [
     'DEFAULT_HARNESS',

@@ -1,7 +1,7 @@
 import { createContext, type RuntimeContext } from './runtime/context.ts';
 import { registerSignalHandlers, type SignalHandlers } from './runtime/signals.ts';
 import { cleanup } from './runtime/cleanup.ts';
-import type { GlobalArguments } from '@cli';
+import { Command, GlobalArguments } from '@commands';
 
 export type { RuntimeContext };
 
@@ -18,7 +18,7 @@ export interface Runtime {
      */
     createContext(
         global: GlobalArguments,
-        command: { requiresRepository: boolean },
+        command: Pick<Command, 'requiresInit'>,
     ): Promise<RuntimeContext>;
     /**
      * Perform cleanup tasks for the runtime environment.

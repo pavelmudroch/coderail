@@ -4,7 +4,7 @@ import { getGlobalConfigurationFile } from './conf/get-global-configuration-file
 import { getLocalConfigurationFile } from './conf/get-local-configuration-file.ts';
 import { parse, type ParsedConf } from './conf/parse.ts';
 import { ConfFileStream } from './conf/get-file-stream.ts';
-import type { GlobalArguments } from '@cli';
+import type { GlobalArguments } from '@commands';
 import type { RuntimeContext } from '@runtime';
 
 export type { Configuration };
