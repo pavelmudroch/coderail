@@ -262,5 +262,6 @@ Deno.test('main does not execute when aborted', async () => {
     expect(fixture.executions).toEqual([]);
     expect(fixture.warnings).toEqual([['Operation was aborted']]);
     expect(fixture.errors).toEqual([]);
+    expect(Deno.exitCode).toBe(3);
     expect(fixture.events.at(-1)).toBe('cleanup');
 });

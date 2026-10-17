@@ -61,13 +61,14 @@ function reportFailure(error: unknown, signal: AbortSignal): void {
         return;
     }
 
-    if (Deno.exitCode === 0) {
-        Deno.exitCode = 1;
-    }
-
     if (signal.aborted) {
+        Deno.exitCode = 3;
         Log.warn('Operation was aborted');
         return;
+    }
+
+    if (Deno.exitCode === 0) {
+        Deno.exitCode = 1;
     }
 
     Log.error(error);
