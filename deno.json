@@ -48,7 +48,8 @@
                 "no-shadow-restricted-names",
                 "no-sparse-arrays",
                 "no-non-null-asserted-optional-chain",
-                "no-non-null-assertion"
+                "no-non-null-assertion",
+                "no-sloppy-imports"
             ],
             "exclude": [
                 "no-fallthrough"
