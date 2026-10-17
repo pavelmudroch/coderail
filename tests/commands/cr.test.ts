@@ -40,10 +40,10 @@ Deno.test('Cr handles global help and exposes root usage', () => {
     expect(command.getUsage()).toContain('cr [options] <command>');
 });
 
-Deno.test('Cr runs without a repository or child command', async () => {
+Deno.test('Cr runs without initialization or a child command', async () => {
     const command = Commands.cr();
     const parsedArguments = command.parseArguments([]);
-    expect(command.requiresRepository).toBe(false);
+    expect(command.requiresInit).toBe(false);
     expect(command.getSubcommand(parsedArguments)).toBeUndefined();
     await expect(command.run({
         context: { currentWorkingDirectory: '/project', installRoot: '/install' },

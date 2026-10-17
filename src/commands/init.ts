@@ -4,11 +4,11 @@ import { RunContext } from './helpers/command.ts';
 export class Init implements Command {
     readonly requiresInit = false;
 
-    parseArguments(args: readonly string[]): ParsedArguments {
+    parseArguments(_args: readonly string[]): ParsedArguments {
         return { args: {}, rest: [] };
     }
 
-    shouldHandleHelp(parsedArguments: ParsedArguments): boolean {
+    shouldHandleHelp(_parsedArguments: ParsedArguments): boolean {
         return false;
     }
 
@@ -20,7 +20,7 @@ export class Init implements Command {
         return undefined;
     }
 
-    run(context: RunContext): Promise<void> {
+    run(_context: RunContext): Promise<void> {
         return Promise.resolve();
     }
 }

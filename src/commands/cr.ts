@@ -102,7 +102,7 @@ export class Cr implements Command<GlobalArguments> {
         return undefined;
     }
 
-    run(context: RunContext<GlobalArguments>): Promise<void> {
+    run(_context: RunContext<GlobalArguments>): Promise<void> {
         return Promise.resolve();
     }
 

@@ -55,7 +55,7 @@ function setupCommands(): Fixture {
         exitCode: Deno.exitCode,
     };
     const create: Command = {
-        requiresRepository: true,
+        requiresInit: true,
         parseArguments(args): ReturnType<Command['parseArguments']> {
             events.push('parse:create');
             return { args: { help: args[0] === '--help' }, rest: [...args] };
@@ -70,7 +70,7 @@ function setupCommands(): Fixture {
         },
     };
     const ticket: Command = {
-        requiresRepository: false,
+        requiresInit: false,
         parseArguments(args): ReturnType<Command['parseArguments']> {
             events.push('parse:ticket');
             return {
