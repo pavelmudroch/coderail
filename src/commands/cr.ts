@@ -8,6 +8,7 @@ import { Idea } from './idea.ts';
 import { Verify } from './verify.ts';
 import { Doctor } from './doctor.ts';
 import { Loop } from './loop.ts';
+import { Template } from './template.ts';
 import { Cli } from '@cli';
 
 type CommandName = string;
@@ -33,6 +34,7 @@ const COMMAND = {
     VERIFY: 'verify',
     DOCTOR: 'doctor',
     LOOP: 'loop',
+    TEMPLATE: 'template',
 };
 
 export class Cr implements Command<GlobalArguments> {
@@ -73,6 +75,7 @@ export class Cr implements Command<GlobalArguments> {
             '  verify               Verify files by project configuration.',
             '  doctor               Diagnose and fix issues in the project.',
             '  loop                 Run autonomous ticket implementation.',
+            '  template             Template management.',
         ];
         return usageLines.join('\n');
     }
@@ -97,6 +100,8 @@ export class Cr implements Command<GlobalArguments> {
                 return new Doctor();
             case COMMAND.LOOP:
                 return new Loop();
+            case COMMAND.TEMPLATE:
+                return new Template();
         }
 
         return undefined;

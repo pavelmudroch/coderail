@@ -1,6 +1,7 @@
 import { expect } from '@std/expect';
 import { Commands, type GlobalArguments, type ParsedArguments } from '@commands';
 import { UsageError } from '../../src/cli/usage-error.ts';
+import { Template } from '../../src/commands/template.ts';
 
 function parse(args: readonly string[]): ParsedArguments<GlobalArguments> {
     return Commands.cr().parseArguments(args);
@@ -18,6 +19,11 @@ function defaults(): GlobalArguments {
         quiet: false,
     };
 }
+
+Deno.test('Cr resolves the template subcommand', () => {
+    const command = Commands.cr();
+    expect(command.getSubcommand(command.parseArguments(['template']))).toBeInstanceOf(Template);
+});
 
 function expectUsageError(args: readonly string[], message: string): void {
     try {
