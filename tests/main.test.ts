@@ -46,7 +46,7 @@ function setupCommands(): Fixture {
         cleanup: Runtime.cleanup,
         createContext: Runtime.createContext,
         loadConfiguration: Conf.loadConfiguration,
-        configureLogging: Log.configureLogging,
+        level: Log.level,
         output: Log.output,
         error: Log.error,
         warn: Log.warn,
@@ -65,6 +65,7 @@ function setupCommands(): Fixture {
         getSubcommand: () => undefined,
         run(context): Promise<void> {
             events.push('run:create');
+            expect(Log.level).toBe(context.configuration.logLevel);
             executions.push(context);
             return Promise.resolve();
         },
@@ -108,6 +109,7 @@ function setupCommands(): Fixture {
     };
     Runtime.createContext = (global, command) => {
         events.push('context');
+        expect(Log.level).toBe(global.verbose ? 'verbose' : global.quiet ? 'quiet' : 'normal');
         globals.push(global);
         expect(command).toBe(create);
         return Promise.resolve({
@@ -125,9 +127,6 @@ function setupCommands(): Fixture {
             nonInteractive: false,
             verify: [],
         });
-    };
-    Log.configureLogging = () => {
-        events.push('logging');
     };
     Log.output = (...messages) => {
         output.push(messages);
@@ -158,7 +157,7 @@ function setupCommands(): Fixture {
             Runtime.cleanup = original.cleanup;
             Runtime.createContext = original.createContext;
             Conf.loadConfiguration = original.loadConfiguration;
-            Log.configureLogging = original.configureLogging;
+            Log.level = original.level;
             Log.output = original.output;
             Log.error = original.error;
             Log.warn = original.warn;
@@ -217,7 +216,6 @@ Deno.test('main executes only the leaf and preserves globals and literal argumen
         'parse:create',
         'context',
         'configuration',
-        'logging',
         'run:create',
         'cleanup',
     ]);
@@ -231,6 +229,7 @@ Deno.test('main executes only the leaf and preserves globals and literal argumen
     expect(fixture.executions[0]?.signal).toBe(fixture.controller.signal);
     expect(fixture.executions[0]?.context.repositoryRoot).toBe('/project');
     expect(fixture.executions[0]?.configuration.logLevel).toBe('normal');
+    expect(Log.level).toBe('normal');
     expect(fixture.errors).toEqual([]);
     expect(Deno.exitCode).toBe(0);
 });
