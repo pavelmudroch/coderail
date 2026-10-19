@@ -1,4 +1,9 @@
-import { context, LiveUI, registerLiveUiItem, unregisterLiveUiItem } from './helpers/context.ts';
+import {
+    context,
+    type LiveUI,
+    registerLiveUiItem,
+    unregisterLiveUiItem,
+} from './helpers/context.ts';
 import { clear, erase } from './helpers/ansi.ts';
 
 export interface Progress extends Disposable {

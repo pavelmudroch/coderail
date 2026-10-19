@@ -1,5 +1,5 @@
 import { clear, dim, erase, magenta } from './helpers/ansi.ts';
-import { LiveUI, registerLiveUiItem, unregisterLiveUiItem } from './helpers/context.ts';
+import { type LiveUI, registerLiveUiItem, unregisterLiveUiItem } from './helpers/context.ts';
 import { context } from './helpers/context.ts';
 
 export interface Spinner extends Disposable {

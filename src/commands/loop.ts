@@ -1,5 +1,5 @@
-import { Command, ParsedArguments } from '@commands';
-import { RunContext } from './helpers/command.ts';
+import type { Command, ParsedArguments } from '@commands';
+import type { RunContext } from './helpers/command.ts';
 
 export class Loop implements Command {
     readonly requiresInit = false;
