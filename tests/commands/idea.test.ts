@@ -1,4 +1,5 @@
 import { expect } from '@std/expect';
+import { join } from '@std/path';
 import { Commands } from '@commands';
 import { UsageError } from '../../src/cli/usage-error.ts';
 import { Idea } from '../../src/commands/idea.ts';
@@ -9,13 +10,27 @@ import { Ready } from '../../src/commands/idea/ready.ts';
 import { Reforge } from '../../src/commands/idea/reforge.ts';
 import { runStub } from './idea/helpers.ts';
 
-Deno.test('Idea execution is a placeholder', async () => {
-    await runStub(new Idea());
-});
+for (const Command of [Idea, Map]) {
+    Deno.test(`${Command.name} creates the plans directory and preserves existing contents`, async () => {
+        const root = await Deno.makeTempDir();
+        const plans = join(root, '.coderail', 'plans');
+        try {
+            const command = new Command();
+            await runStub(command, root);
+            expect((await Deno.stat(plans)).isDirectory).toBe(true);
+            const existing = join(plans, 'existing');
+            await Deno.writeTextFile(existing, 'preserved');
+            await runStub(command, root);
+            expect(await Deno.readTextFile(existing)).toBe('preserved');
+        } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    });
+}
 
 Deno.test('Idea handles parent help and stops before child arguments', () => {
     const command = new Idea();
-    expect(command.requiresInit).toBe(false);
+    expect(command.requiresInit).toBe(true);
     expect(command.parseArguments([])).toEqual({ args: { help: false }, rest: [] });
     expect(command.parseArguments(new Array<string>(1))).toEqual({
         args: { help: false },
@@ -40,7 +55,7 @@ Deno.test('Idea handles parent help and stops before child arguments', () => {
         args: { help: false, command: 'create' },
         rest: ['--help'],
     });
-    expect(command.getUsage()).toContain('cr idea [options] <command>');
+    expect(command.getUsage()).toContain('cr idea [--help] <command>');
 });
 
 Deno.test('Idea reports missing commands, unknown commands, and invalid parent options', () => {
@@ -86,7 +101,7 @@ for (
         expect(child).toBeInstanceOf(Child);
         const childArguments = child.parseArguments(parentArguments.rest);
         expect(child.shouldHandleHelp(childArguments)).toBe(true);
-        expect(child.getUsage()).toContain(`cr idea ${name} [options]`);
+        expect(child.getUsage()).toContain(`cr idea ${name} [--help]`);
         expect(child.getSubcommand(childArguments)).toBeUndefined();
     });
 }

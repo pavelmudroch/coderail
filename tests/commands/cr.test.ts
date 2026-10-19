@@ -2,6 +2,15 @@ import { expect } from '@std/expect';
 import { Commands, type GlobalArguments, type ParsedArguments } from '@commands';
 import { UsageError } from '../../src/cli/usage-error.ts';
 import { Template } from '../../src/commands/template.ts';
+import { Init } from '../../src/commands/init.ts';
+import { Install } from '../../src/commands/install.ts';
+import { Uninstall } from '../../src/commands/uninstall.ts';
+import { Upgrade } from '../../src/commands/upgrade.ts';
+import { Ticket } from '../../src/commands/ticket.ts';
+import { Idea } from '../../src/commands/idea.ts';
+import { Verify } from '../../src/commands/verify.ts';
+import { Doctor } from '../../src/commands/doctor.ts';
+import { Loop } from '../../src/commands/loop.ts';
 
 function parse(args: readonly string[]): ParsedArguments<GlobalArguments> {
     return Commands.cr().parseArguments(args);
@@ -20,10 +29,25 @@ function defaults(): GlobalArguments {
     };
 }
 
-Deno.test('Cr resolves the template subcommand', () => {
-    const command = Commands.cr();
-    expect(command.getSubcommand(command.parseArguments(['template']))).toBeInstanceOf(Template);
-});
+for (
+    const [name, Child] of [
+        ['init', Init],
+        ['install', Install],
+        ['uninstall', Uninstall],
+        ['upgrade', Upgrade],
+        ['ticket', Ticket],
+        ['idea', Idea],
+        ['verify', Verify],
+        ['doctor', Doctor],
+        ['loop', Loop],
+        ['template', Template],
+    ] as const
+) {
+    Deno.test(`Cr resolves the ${name} subcommand`, () => {
+        const command = Commands.cr();
+        expect(command.getSubcommand(command.parseArguments([name]))).toBeInstanceOf(Child);
+    });
+}
 
 function expectUsageError(args: readonly string[], message: string): void {
     try {
@@ -43,7 +67,10 @@ Deno.test('Cr handles global help and exposes root usage', () => {
         expect(command.shouldHandleHelp(command.parseArguments([help]))).toBe(true);
         expect(command.shouldHandleHelp(command.parseArguments(['command', help]))).toBe(false);
     }
-    expect(command.getUsage()).toContain('cr [options] <command>');
+    expect(command.getUsage()).toContain(
+        'cr [--help] [--version] [--verbose | --quiet] [--cwd <path>] [--no-color]\n' +
+            '     [--non-interactive] <command>',
+    );
 });
 
 Deno.test('Cr runs without initialization or a child command', async () => {

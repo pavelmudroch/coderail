@@ -76,7 +76,7 @@ Deno.test('Init handles help and rejects invalid options', () => {
         const parsed = command.parseArguments(['template', help, '--unknown']);
         expect(command.shouldHandleHelp(parsed)).toBe(true);
     }
-    expect(command.getUsage()).toContain('cr init [options] [<template> ...]');
+    expect(command.getUsage()).toContain('cr init [--help] [<template> ...]');
     for (const option of ['--unknown', '-x', '--help=value']) {
         expect(() => command.parseArguments([option])).toThrow(UsageError);
     }
