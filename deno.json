@@ -49,7 +49,8 @@
                 "no-sparse-arrays",
                 "no-non-null-asserted-optional-chain",
                 "no-non-null-assertion",
-                "no-sloppy-imports"
+                "no-sloppy-imports",
+                "verbatim-module-syntax"
             ],
             "exclude": [
                 "no-fallthrough"
