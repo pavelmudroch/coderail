@@ -1,6 +1,6 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
-import { loadConfiguration } from '../../src/conf/load.ts';
+import { loadConfiguration } from '../../src/conf/load-configuration.ts';
 import type { GlobalArguments } from '@commands';
 
 const configurationEnvironmentVariables = [

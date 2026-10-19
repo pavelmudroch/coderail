@@ -1,7 +1,7 @@
 import type { Configuration } from './configuration.ts';
 import { getGlobalConfigurationFile } from './get-global-configuration-file.ts';
 import { getLocalConfigurationFile } from './get-local-configuration-file.ts';
-import { parse, ParsedConf } from './parse.ts';
+import { parse, type ParsedConf } from './parse.ts';
 import type { ConfFileStream } from './get-file-stream.ts';
 import type { GlobalArguments } from '@commands';
 import type { RuntimeContext } from '@runtime';
