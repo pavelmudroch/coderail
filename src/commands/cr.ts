@@ -51,7 +51,8 @@ export class Cr implements Command<GlobalArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr [options] <command>',
+            '  cr [--help] [--version] [--verbose | --quiet] [--cwd <path>] [--no-color]',
+            '     [--non-interactive] <command>',
             '',
             '  Coderail command-line interface for agent based development.',
             '',

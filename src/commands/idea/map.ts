@@ -24,7 +24,7 @@ export class Map implements Command<MapArguments> {
     getUsage(): string {
         return [
             'Usage:',
-            '  cr idea map [options]',
+            '  cr idea map [--help] [--json]',
             '',
             '  Map an idea to a specific context or agent.',
             '',

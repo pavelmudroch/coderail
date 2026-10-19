@@ -50,7 +50,7 @@ export class Idea implements Command<IdeaArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr idea [options] <command>',
+            '  cr idea [--help] <command>',
             '',
             '  The idea command provides management for building ideas with agent.',
             '',

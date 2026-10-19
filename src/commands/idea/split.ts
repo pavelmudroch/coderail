@@ -31,7 +31,7 @@ export class Split implements Command<SplitArguments> {
     getUsage(): string {
         return [
             'Usage:',
-            '  cr idea split [options] <idea_path> <child_title> <child_title>',
+            '  cr idea split [--help] <idea_path> <child_title> <child_title>',
             '                [<child_title> ...]',
             '',
             '  Split an existing idea into multiple child ideas.',

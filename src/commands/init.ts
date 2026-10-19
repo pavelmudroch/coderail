@@ -46,7 +46,7 @@ export class Init implements Command<InitArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr init [options] [<template> ...]',
+            '  cr init [--help] [<template> ...]',
             '',
             '  The initialization command sets up the necessary configuration for Coderail.',
             '  Optionally allows installation of templates during initialization.',

@@ -23,7 +23,7 @@ export class Reforge implements Command<ReforgeArguments> {
     getUsage(): string {
         return [
             'Usage:',
-            '  cr idea reforge [options] <idea_path>',
+            '  cr idea reforge [--help] <idea_path>',
             '',
             '  Reforge an existing idea. Not applicable to a split idea.',
             '',

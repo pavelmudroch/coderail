@@ -23,7 +23,7 @@ export class Ready implements Command<ReadyArguments> {
     getUsage(): string {
         return [
             'Usage:',
-            '  cr idea ready [options] <idea_path>',
+            '  cr idea ready [--help] <idea_path>',
             '',
             '  Mark an idea as ready for further processing.',
             '',
