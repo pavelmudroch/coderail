@@ -1,4 +1,5 @@
-./temp/
-./coverage/
-./.mutasaurus/
-./.agents/
+./temp
+./coverage
+./.mutasaurus
+./.agents
+./.codex
