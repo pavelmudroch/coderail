@@ -11,6 +11,12 @@ async function main(): Promise<void> {
         const globalCommand = Commands.cr();
         const globalArguments = globalCommand.parseArguments(Deno.args);
 
+        Log.level = globalArguments.args.verbose
+            ? 'verbose'
+            : globalArguments.args.quiet
+            ? 'quiet'
+            : 'normal';
+
         let command: Command = globalCommand;
         let parsedArguments: ParsedArguments = globalArguments;
 
@@ -37,7 +43,7 @@ async function main(): Promise<void> {
         const context = await Runtime.createContext(globalArguments.args, command);
         const configuration = await Conf.loadConfiguration(context, globalArguments.args);
 
-        Log.configureLogging(configuration);
+        Log.level = configuration.logLevel;
         signalHandlers.signal.throwIfAborted();
 
         await command.run({

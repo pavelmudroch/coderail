@@ -6,14 +6,11 @@ import { info } from './log/info.ts';
 import { warn } from './log/warn.ts';
 import { error } from './log/error.ts';
 import { output } from './log/output.ts';
-import { configureLogging } from './log/configure.ts';
-import type { Configuration } from '@conf';
 
 export type { Progress };
 export type { Spinner };
 
 export interface Log {
-    configureLogging(configuration: Configuration): void;
     /**
      * A settable current log level. (default: `'normal'`)
      */
@@ -71,7 +68,6 @@ export interface Log {
 }
 
 export const Log: Log = {
-    configureLogging,
     get level() {
         return context.logLevel;
     },
