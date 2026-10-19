@@ -6,6 +6,7 @@ import { Create } from './idea/create.ts';
 import { Split } from './idea/split.ts';
 import { Ready } from './idea/ready.ts';
 import { Reforge } from './idea/reforge.ts';
+import { ensurePlansDir } from './idea/utils/ensure-plans-dir.ts';
 
 type IdeaArguments = {
     help: boolean;
@@ -13,7 +14,7 @@ type IdeaArguments = {
 };
 
 export class Idea implements Command<IdeaArguments> {
-    readonly requiresInit = false;
+    readonly requiresInit = true;
 
     parseArguments(originalArgs: readonly string[]): ParsedArguments<IdeaArguments> {
         const args: IdeaArguments = { help: false };
@@ -89,7 +90,7 @@ export class Idea implements Command<IdeaArguments> {
         }
     }
 
-    run(_context: RunContext<IdeaArguments>): Promise<void> {
-        return Promise.resolve();
+    run(context: RunContext<IdeaArguments>): Promise<void> {
+        return ensurePlansDir(context.context.currentWorkingDirectory);
     }
 }

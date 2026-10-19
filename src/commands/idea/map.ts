@@ -1,6 +1,7 @@
 import type { Command, ParsedArguments } from '@commands';
 import type { RunContext } from '../helpers/command.ts';
 import { parseArguments, validateArguments } from './utils/parse-arguments.ts';
+import { ensurePlansDir } from './utils/ensure-plans-dir.ts';
 
 type MapArguments = {
     help: boolean;
@@ -37,8 +38,7 @@ export class Map implements Command<MapArguments> {
         return undefined;
     }
 
-    // Execution will be implemented separately from help and dispatch.
-    run(_context: RunContext<MapArguments>): Promise<void> {
-        return Promise.resolve();
+    async run(_context: RunContext<MapArguments>): Promise<void> {
+        await ensurePlansDir(_context.context.currentWorkingDirectory);
     }
 }
