@@ -1,8 +1,9 @@
-import { Command, ParsedArguments } from '@commands';
-import { RunContext } from './helpers/command.ts';
+import type { Command, ParsedArguments } from '@commands';
+import type { RunContext } from './helpers/command.ts';
 import { Fs } from '@fs';
 import { join } from '@std/path';
 import { Cli } from '@cli';
+import { Log } from '@log';
 
 type InitArguments = {
     help: boolean;
@@ -61,28 +62,53 @@ export class Init implements Command<InitArguments> {
     }
 
     async run({ context, parsedArguments }: RunContext<InitArguments>): Promise<void> {
+        Log.notice(`Ensuring directory ".coderail" exists.`);
         const directoryPath = join(context.currentWorkingDirectory, '.coderail');
+        await Fs.makeDirectory(directoryPath);
+
         const filePath = join(directoryPath, 'coderail.conf');
         try {
-            await Deno.lstat(filePath);
+            const fileInfo = await Deno.lstat(filePath);
+            if (!fileInfo.isFile && !fileInfo.isSymlink) {
+                throw new Error(`Expected "${filePath}" to be a file or a symlink.`);
+            }
+            Log.notice(`Found existing configuration file at "${filePath}".`);
         } catch (error) {
             if (!(error instanceof Deno.errors.NotFound)) {
                 throw error;
             }
-            await Fs.makeDirectory(directoryPath);
-            await Fs.write(
-                filePath,
-                new ReadableStream({
-                    start(controller): void {
-                        controller.close();
-                    },
-                }),
-            );
+            await Fs.write(filePath, defaultConfigContent());
+            Log.notice(`Created new configuration file at "${filePath}".`);
         }
         for (const template of parsedArguments.args.templates) {
             await installTemplate(template);
         }
     }
+}
+
+function defaultConfigContent(): ReadableStream<Uint8Array> {
+    const configContentLines = [
+        '# Coderail configuration file, lines starting with "#" are comments.',
+        '# Example:',
+        '# default_harness = codex',
+        '',
+        '# Add your verification configuration here.',
+        '# Example:',
+        '# [[verify]]',
+        '# pattern = src/${path:**}/${file:*}.ts',
+        '# commands = [',
+        '#   ["command", "argument_1", "argument_2"]',
+        '# ]',
+    ];
+    const encoder = new TextEncoder();
+    return new ReadableStream({
+        start(controller): void {
+            for (const line of configContentLines) {
+                controller.enqueue(encoder.encode(line + '\n'));
+            }
+            controller.close();
+        },
+    });
 }
 
 function installTemplate(_template: string): Promise<void> {
