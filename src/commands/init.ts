@@ -64,7 +64,7 @@ export class Init implements Command<InitArguments> {
         return undefined;
     }
 
-    async run({ context, parsedArguments }: RunContext<InitArguments>): Promise<void> {
+    async run({ context: context, parsedArguments }: RunContext<InitArguments>): Promise<void> {
         Log.notice(`Ensuring directory ".coderail" exists.`);
         const directoryPath = join(context.currentWorkingDirectory, '.coderail');
         await Fs.makeDirectory(directoryPath);
