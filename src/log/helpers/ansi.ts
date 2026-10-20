@@ -9,6 +9,7 @@ const ANSI = {
     yellow: '\x1b[93m',
     orange: '\x1b[33m',
     red: '\x1b[31m',
+    gray: '\x1b[90m',
     el: '\x1b[0K',
     ed: '\x1b[0J',
     cup: '\x1b[A',
@@ -75,7 +76,7 @@ export function gray(value: string): string {
         return value;
     }
 
-    return `${ANSI.dim}${value}${ANSI.reset}`;
+    return `${ANSI.gray}${value}${ANSI.reset}`;
 }
 
 export function red(value: string): string {

@@ -6,9 +6,61 @@ import { info } from './log/info.ts';
 import { warn } from './log/warn.ts';
 import { error } from './log/error.ts';
 import { output } from './log/output.ts';
+import { cyan, dim, gray, green, magenta, orange, red, yellow } from './log/helpers/ansi.ts';
 
 export type { Progress };
 export type { Spinner };
+
+export interface Color {
+    /**
+     * Colors the given text in cyan.
+     * @param text The text to colorize.
+     * @returns The text colored in cyan.
+     */
+    cyan(text: string): string;
+    /**
+     * Colors the given text in red.
+     * @param text The text to colorize.
+     * @returns The text colored in red.
+     */
+    red(text: string): string;
+    /**
+     * Colors the given text in green.
+     * @param text The text to colorize.
+     * @returns The text colored in green.
+     */
+    green(text: string): string;
+    /**
+     * Colors the given text in yellow.
+     * @param text The text to colorize.
+     * @returns The text colored in yellow.
+     */
+    yellow(text: string): string;
+    /**
+     * Colors the given text in magenta.
+     * @param text The text to colorize.
+     * @returns The text colored in magenta.
+     */
+    magenta(text: string): string;
+    /**
+     * Colors the given text in gray.
+     * @param text The text to colorize.
+     * @returns The text colored in gray.
+     */
+    gray(text: string): string;
+    /**
+     * Colors the given text in orange.
+     * @param text The text to colorize.
+     * @returns The text colored in orange.
+     */
+    orange(text: string): string;
+    /**
+     * Colors the given text in dim.
+     * @param text The text to colorize.
+     * @returns The text colored in dim.
+     */
+    dim(text: string): string;
+}
 
 export interface Log {
     /**
@@ -65,6 +117,8 @@ export interface Log {
      * @param message A message to display
      */
     spinner(message: string): Spinner;
+    /** A set of utilities to colorize text. */
+    color: Color;
 }
 
 export const Log: Log = {
@@ -101,6 +155,16 @@ export const Log: Log = {
         const spinner = new SpinnerImpl();
         spinner.setMessage(message);
         return spinner;
+    },
+    color: {
+        cyan,
+        red,
+        green,
+        yellow,
+        magenta,
+        gray,
+        orange,
+        dim,
     },
 };
 
