@@ -1,4 +1,4 @@
 ---
 title: Test setup
-status: forging
+status: ready
 ---

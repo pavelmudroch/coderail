@@ -1,4 +1,4 @@
 ---
 title: Edge case scenarios
-status: forging
+status: ready
 ---
