@@ -4,6 +4,9 @@
 deno lint --fix "./src/${file}.ts"
 deno fmt "./src/${file}.ts"
 
+[src/main.ts]
+deno test -A --coverage --coverage-raw-data-only "./tests/main.test.ts" && deno coverage --detailed --include="./src/main.ts"; code=$?; rm -rf ./coverage; exit $code
+
 [src/${path}/${file}.ts]
 deno lint --fix "./src/${path}/${file}.ts"
 deno fmt "./src/${path}/${file}.ts"
