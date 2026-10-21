@@ -1,12 +1,7 @@
-import { join } from '@std/path';
+import { isAbsolute, join } from '@std/path';
 import { Path } from '@path';
-
-export type IdeaFrontmatter = {
-    title: string;
-    status: IdeaStatus;
-};
-
-export type IdeaStatus = 'forging' | 'ready' | 'split';
+import type { IdeaFrontmatter } from './idea-frontmatter.ts';
+import { getIdeaFrontmatter } from './get-idea-frontmatter.ts';
 
 export interface IdeaTreeItem {
     fullPath: string;
@@ -24,35 +19,33 @@ export interface IdeaTreeItem {
 export type IdeaTree = IdeaTreeItem[];
 
 export async function getIdeaTree(cwd: string): Promise<IdeaTree> {
+    if (!isAbsolute(cwd)) {
+        throw new Error('Expected an absolute path');
+    }
     const ideaDirectory = join(cwd, Path.CODERAIL_DIR, Path.PLANS_DIR);
     const dirEntries = Deno.readDir(ideaDirectory);
-    const promises: Promise<IdeaTreeItem>[] = [];
+    const items: IdeaTreeItem[] = [];
     for await (const dirEntry of dirEntries) {
         if (!dirEntry.isDirectory) {
             continue;
         }
 
-        const promisedIdeaTreeItem = getIdeaTreeItem(ideaDirectory, '.', dirEntry.name);
-        promises.push(promisedIdeaTreeItem);
+        const item = await getIdeaTreeItem(ideaDirectory, '.', dirEntry.name);
+        if (item !== undefined) items.push(item);
     }
-    return Promise.all(promises);
+    return items.sort((a, b) => a.ideaPath.localeCompare(b.ideaPath));
 }
 
 async function getIdeaTreeItem(
     ideaDirectory: string,
     parentIdea: string,
     currentIdea: string,
-): Promise<IdeaTreeItem> {
+): Promise<IdeaTreeItem | undefined> {
     const fullPath = join(ideaDirectory, parentIdea, currentIdea);
     const ideaPath = join(parentIdea, currentIdea);
     const title = currentIdea;
-    // TODO: Read frontmatter from IDEA.md if it exists.
-    const frontmatter: IdeaFrontmatter = {
-        status: 'forging',
-        title,
-    };
     const files: string[] = [];
-    const promisedChildren: Promise<IdeaTreeItem>[] = [];
+    const directories: string[] = [];
 
     const dirEntries = Deno.readDir(fullPath);
     for await (const dirEntry of dirEntries) {
@@ -62,12 +55,18 @@ async function getIdeaTreeItem(
         }
 
         if (dirEntry.isDirectory) {
-            const promisedChild = getIdeaTreeItem(ideaDirectory, ideaPath, dirEntry.name);
-            promisedChildren.push(promisedChild);
+            directories.push(dirEntry.name);
         }
     }
 
-    const children = await Promise.all(promisedChildren);
+    if (!files.includes('IDEA.md')) return undefined;
+    const frontmatter = await getIdeaFrontmatter(join(fullPath, 'IDEA.md'));
+    const children: IdeaTree = [];
+    for (const directory of directories.sort()) {
+        const child = await getIdeaTreeItem(ideaDirectory, ideaPath, directory);
+        if (child !== undefined) children.push(child);
+    }
+    files.sort();
 
     return {
         fullPath,

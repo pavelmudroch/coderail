@@ -1,6 +1,5 @@
-import type { Command, ParsedArguments } from '@commands';
-import type { RunContext } from '../helpers/command.ts';
-import { parseArguments, validateArguments } from './utils/parse-arguments.ts';
+import type { Command, ParsedArguments, RunContext } from '@commands';
+import { parseArguments, validateArguments } from './helpers/parse-arguments.ts';
 
 type CreateArguments = {
     help: boolean;

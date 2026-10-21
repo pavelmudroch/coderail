@@ -4,6 +4,7 @@ import { Cr, type GlobalArguments } from './commands/cr.ts';
 export type { Command };
 export type { ParsedArguments };
 export type { GlobalArguments };
+export type { RunContext } from './commands/helpers/command.ts';
 
 export interface Commands {
     cr(): Cr;
