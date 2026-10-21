@@ -16,6 +16,7 @@ async function main(): Promise<void> {
             : globalArguments.args.quiet
             ? 'quiet'
             : 'normal';
+        Log.noColor = globalArguments.args.noColor;
 
         let command: Command = globalCommand;
         let parsedArguments: ParsedArguments = globalArguments;
@@ -44,6 +45,7 @@ async function main(): Promise<void> {
         const configuration = await Conf.loadConfiguration(context, globalArguments.args);
 
         Log.level = configuration.logLevel;
+        Log.noColor = configuration.noColor;
         signalHandlers.signal.throwIfAborted();
 
         await command.run({
