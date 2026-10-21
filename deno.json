@@ -31,6 +31,8 @@
         "@cli": "./src/cli.ts",
         "@commands": "./src/commands.ts",
         "@runtime": "./src/runtime.ts",
+        "@md": "./src/md.ts",
+        "@md/": "./src/md/",
         "@utils": "./src/utils.ts",
         "oxc-parser": "npm:oxc-parser@^0.153.0"
     },
