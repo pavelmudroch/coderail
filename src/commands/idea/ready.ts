@@ -3,7 +3,7 @@ import { parseArguments, validateArguments } from './helpers/parse-arguments.ts'
 
 type ReadyArguments = {
     help: boolean;
-    ideaPath?: string;
+    ideaReference?: string;
 };
 
 export class Ready implements Command<ReadyArguments> {
@@ -12,7 +12,7 @@ export class Ready implements Command<ReadyArguments> {
     parseArguments(args: readonly string[]): ParsedArguments<ReadyArguments> {
         const parsed = parseArguments(args, this, []);
         validateArguments(parsed, this, 1, 1);
-        return { args: { help: parsed.args.help, ideaPath: parsed.rest[0] }, rest: [] };
+        return { args: { help: parsed.args.help, ideaReference: parsed.rest[0] }, rest: [] };
     }
 
     shouldHandleHelp(parsedArguments: ParsedArguments<ReadyArguments>): boolean {
@@ -22,7 +22,7 @@ export class Ready implements Command<ReadyArguments> {
     getUsage(): string {
         return [
             'Usage:',
-            '  cr idea ready [--help] <idea_path>',
+            '  cr idea ready [--help] <idea>',
             '',
             '  Mark an idea as ready for further processing.',
             '',
@@ -30,7 +30,7 @@ export class Ready implements Command<ReadyArguments> {
             '  -h, --help           Show this help message and exit.',
             '',
             'Arguments:',
-            '  <idea_path>          Path to the idea to mark as ready.',
+            '  <idea>               Path, slug, id or title of the idea to mark as ready.',
         ].join('\n');
     }
 

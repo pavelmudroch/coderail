@@ -3,7 +3,7 @@ import { parseArguments, validateArguments } from './helpers/parse-arguments.ts'
 
 type ReforgeArguments = {
     help: boolean;
-    ideaPath?: string;
+    ideaReference?: string;
 };
 
 export class Reforge implements Command<ReforgeArguments> {
@@ -12,7 +12,7 @@ export class Reforge implements Command<ReforgeArguments> {
     parseArguments(args: readonly string[]): ParsedArguments<ReforgeArguments> {
         const parsed = parseArguments(args, this, []);
         validateArguments(parsed, this, 1, 1);
-        return { args: { help: parsed.args.help, ideaPath: parsed.rest[0] }, rest: [] };
+        return { args: { help: parsed.args.help, ideaReference: parsed.rest[0] }, rest: [] };
     }
 
     shouldHandleHelp(parsedArguments: ParsedArguments<ReforgeArguments>): boolean {
@@ -22,7 +22,7 @@ export class Reforge implements Command<ReforgeArguments> {
     getUsage(): string {
         return [
             'Usage:',
-            '  cr idea reforge [--help] <idea_path>',
+            '  cr idea reforge [--help] <idea>',
             '',
             '  Reforge an existing idea. Not applicable to a split idea.',
             '',
@@ -30,7 +30,7 @@ export class Reforge implements Command<ReforgeArguments> {
             '  -h, --help           Show this help message and exit.',
             '',
             'Arguments:',
-            '  <idea_path>          Path to the idea to reforge.',
+            '  <idea>               Path, slug, id or title of the idea to reforge.',
         ].join('\n');
     }
 

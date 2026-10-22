@@ -3,7 +3,7 @@ import { parseArguments, validateArguments } from './helpers/parse-arguments.ts'
 
 type SplitArguments = {
     help: boolean;
-    ideaPath?: string;
+    ideaReference?: string;
     childTitles: string[];
 };
 
@@ -16,7 +16,7 @@ export class Split implements Command<SplitArguments> {
         return {
             args: {
                 help: parsed.args.help,
-                ideaPath: parsed.rest[0],
+                ideaReference: parsed.rest[0],
                 childTitles: parsed.rest.slice(1),
             },
             rest: [],
@@ -30,7 +30,7 @@ export class Split implements Command<SplitArguments> {
     getUsage(): string {
         return [
             'Usage:',
-            '  cr idea split [--help] <idea_path> <child_title> <child_title>',
+            '  cr idea split [--help] <idea> <child_title> <child_title>',
             '                [<child_title> ...]',
             '',
             '  Split an existing idea into multiple child ideas.',
@@ -39,7 +39,7 @@ export class Split implements Command<SplitArguments> {
             '  -h, --help           Show this help message and exit.',
             '',
             'Arguments:',
-            '  <idea_path>          Path to the idea to split.',
+            '  <idea>               Path, slug, id or title of the idea to split.',
             '  <child_title>        Title of a child idea. At least two child titles must be',
             '                       specified.',
         ].join('\n');

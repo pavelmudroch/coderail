@@ -23,14 +23,15 @@ export class Create implements Command<CreateArguments> {
     getUsage(): string {
         return [
             'Usage:',
-            '  cr idea create [--help] [--parent <parent_idea_path>] <idea_title>',
+            '  cr idea create [--help] [--parent <parent_idea>] <idea_title>',
             '',
             '  Create a new idea.',
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
-            '  -p, --parent <parent_idea_path>',
-            '                       Path to parent idea under which to create the new idea.',
+            '  -p, --parent <parent_idea>',
+            '                       Path, slug, id or title to parent idea under which to',
+            '                       create the new idea.',
             '',
             'Arguments:',
             '  <idea_title>         Title of the new idea.',
