@@ -73,11 +73,29 @@ Deno.test('Cr handles global help and exposes root usage', () => {
     );
 });
 
-Deno.test('Cr runs without initialization or a child command', async () => {
+Deno.test('Cr rejects missing and unknown root commands', () => {
+    const command = Commands.cr();
+    for (
+        const [args, message] of [
+            [[], 'Required command is missing.'],
+            [['unknown'], 'Unknown command "unknown".'],
+        ] as const
+    ) {
+        try {
+            command.getSubcommand(command.parseArguments(args));
+            throw new Error('Expected getSubcommand to throw.');
+        } catch (error) {
+            expect(error).toBeInstanceOf(UsageError);
+            expect((error as Error).message).toBe(message);
+            expect((error as UsageError).usage()).toBe(command.getUsage());
+        }
+    }
+});
+
+Deno.test('Cr runs without initialization', async () => {
     const command = Commands.cr();
     const parsedArguments = command.parseArguments([]);
     expect(command.requiresInit).toBe(false);
-    expect(command.getSubcommand(parsedArguments)).toBeUndefined();
     await expect(command.run({
         context: { currentWorkingDirectory: '/project', installRoot: '/install' },
         configuration: {
