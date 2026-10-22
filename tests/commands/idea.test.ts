@@ -154,13 +154,13 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
         const command = new Idea();
         await runStub(command, root);
         expect(output).toEqual([[[
-            '├── last ◌ forging [IDEA.md]',
+            '├── Display title ◌ forging [IDEA.md]',
             `│   ${join(plans, 'last')}`,
-            '│   └── child ● ready [IDEA.md]',
+            '│   └── Display title ● ready [IDEA.md]',
             `│       ${join(plans, 'last', 'child')}`,
-            '└── parent ◉ split [IDEA.md, SPEC.md]',
+            '└── Display title ◉ split [IDEA.md, SPEC.md]',
             `    ${join(plans, 'parent')}`,
-            '    └── child ● ready [IDEA.md]',
+            '    └── Display title ● ready [IDEA.md]',
             `        ${join(plans, 'parent', 'child')}`,
         ].join('\n')]]);
         await command.run({
@@ -171,33 +171,33 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
         });
         expect(JSON.parse(output[1]?.[0] as string)).toEqual([
             {
-                path: 'last',
-                dir: join(plans, 'last'),
-                title: 'last',
+                path: join(plans, 'last'),
+                id: 'last',
+                title: 'Display title',
                 status: 'forging',
                 parent: null,
                 files: ['IDEA.md'],
             },
             {
-                path: 'last/child',
-                dir: join(plans, 'last', 'child'),
-                title: 'child',
+                path: join(plans, 'last', 'child'),
+                id: 'last/child',
+                title: 'Display title',
                 status: 'ready',
                 parent: 'last',
                 files: ['IDEA.md'],
             },
             {
-                path: 'parent',
-                dir: join(plans, 'parent'),
-                title: 'parent',
+                path: join(plans, 'parent'),
+                id: 'parent',
+                title: 'Display title',
                 status: 'split',
                 parent: null,
                 files: ['IDEA.md', 'SPEC.md'],
             },
             {
-                path: 'parent/child',
-                dir: join(plans, 'parent', 'child'),
-                title: 'child',
+                path: join(plans, 'parent', 'child'),
+                id: 'parent/child',
+                title: 'Display title',
                 status: 'ready',
                 parent: 'parent',
                 files: ['IDEA.md'],

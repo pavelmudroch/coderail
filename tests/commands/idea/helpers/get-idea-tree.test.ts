@@ -41,33 +41,33 @@ Deno.test('getIdeaTree reads nested ideas, metadata, direct files, and sorted si
         );
 
         const leaf = {
-            fullPath: join(plans, 'a-root', 'a-child', 'leaf'),
-            ideaPath: 'a-root/a-child/leaf',
-            title: 'leaf',
+            path: join(plans, 'a-root', 'a-child', 'leaf'),
+            id: 'a-root/a-child/leaf',
+            slug: 'leaf',
             frontmatter: { title: 'Leaf', status: 'forging' },
             files: ['IDEA.md'],
             children: [],
         };
         expect(await getIdeaTree(cwd)).toEqual([
             {
-                fullPath: join(plans, 'a-root'),
-                ideaPath: 'a-root',
-                title: 'a-root',
+                path: join(plans, 'a-root'),
+                id: 'a-root',
+                slug: 'a-root',
                 frontmatter: { title: 'Parent: idea', status: 'split' },
                 files: ['A.txt', 'IDEA.md', 'SPEC.md'],
                 children: [
                     {
-                        fullPath: join(plans, 'a-root', 'a-child'),
-                        ideaPath: 'a-root/a-child',
-                        title: 'a-child',
+                        path: join(plans, 'a-root', 'a-child'),
+                        id: 'a-root/a-child',
+                        slug: 'a-child',
                         frontmatter: { title: 'First child', status: 'ready' },
                         files: ['IDEA.md'],
                         children: [leaf],
                     },
                     {
-                        fullPath: join(plans, 'a-root', 'z-child'),
-                        ideaPath: 'a-root/z-child',
-                        title: 'z-child',
+                        path: join(plans, 'a-root', 'z-child'),
+                        id: 'a-root/z-child',
+                        slug: 'z-child',
                         frontmatter: { title: 'Last child', status: 'forging' },
                         files: ['IDEA.md'],
                         children: [],
@@ -75,9 +75,9 @@ Deno.test('getIdeaTree reads nested ideas, metadata, direct files, and sorted si
                 ],
             },
             {
-                fullPath: join(plans, 'z-root'),
-                ideaPath: 'z-root',
-                title: 'z-root',
+                path: join(plans, 'z-root'),
+                id: 'z-root',
+                slug: 'z-root',
                 frontmatter: { title: 'Last', status: 'ready' },
                 files: ['IDEA.md'],
                 children: [],
