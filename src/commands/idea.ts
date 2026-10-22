@@ -122,7 +122,7 @@ export class Idea implements Command<IdeaArguments> {
 
 type IdeaArtifact = {
     path: string;
-    dir: string;
+    id: string;
     title: string;
     status: IdeaStatus;
     parent: string | null;
@@ -133,11 +133,11 @@ function formatJson(ideaTree: IdeaTree): string {
     const artifacts: IdeaArtifact[] = [];
     function populateIdeaTreeArtifacts(ideaTree: IdeaTree): void {
         for (const idea of ideaTree) {
-            const parent = idea.ideaPath === idea.title ? null : dirname(idea.ideaPath);
+            const parent = idea.id === idea.slug ? null : dirname(idea.id);
             artifacts.push({
-                path: idea.ideaPath,
-                dir: idea.fullPath,
-                title: idea.title,
+                path: idea.path,
+                id: idea.id,
+                title: idea.frontmatter.title,
                 status: idea.frontmatter.status,
                 parent: parent,
                 files: idea.files,
@@ -170,9 +170,9 @@ function formatText(ideaTree: IdeaTree): string {
             const indent = prefix + (isLast ? '└──' : '├──');
             const status = getFormattedStatus(idea.frontmatter.status);
             const files = Log.color.gray('[' + idea.files.join(', ') + ']');
-            const line = `${indent} ${Log.color.cyan(idea.title)} ${status} ${files}`;
+            const line = `${indent} ${Log.color.cyan(idea.frontmatter.title)} ${status} ${files}`;
             const pathIndent = prefix + (isLast ? '    ' : '│   ');
-            const path = pathIndent + Log.color.gray(idea.fullPath);
+            const path = pathIndent + Log.color.gray(idea.path);
             formattedLines.push(line, path);
             if (idea.children.length > 0) {
                 populateFormattedLines(idea.children, prefix + (isLast ? '    ' : '│   '));

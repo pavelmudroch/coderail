@@ -4,12 +4,12 @@ import type { IdeaFrontmatter } from './idea-frontmatter.ts';
 import { getIdeaFrontmatter } from './get-idea-frontmatter.ts';
 
 export interface IdeaTreeItem {
-    fullPath: string;
-    ideaPath: string;
-    title: string;
+    path: string;
+    id: string;
+    slug: string;
     frontmatter: IdeaFrontmatter;
     /**
-     * Files directly in this idea directory, relative to fullPath.
+     * Files directly in this idea directory, relative to full path.
      * Includes IDEA.md and any other artifacts, such as SPEC.md.
      */
     files: string[];
@@ -33,7 +33,7 @@ export async function getIdeaTree(cwd: string): Promise<IdeaTree> {
         const item = await getIdeaTreeItem(ideaDirectory, '.', dirEntry.name);
         if (item !== undefined) items.push(item);
     }
-    return items.sort((a, b) => a.ideaPath.localeCompare(b.ideaPath));
+    return items.sort((a, b) => a.id.localeCompare(b.id));
 }
 
 async function getIdeaTreeItem(
@@ -41,13 +41,12 @@ async function getIdeaTreeItem(
     parentIdea: string,
     currentIdea: string,
 ): Promise<IdeaTreeItem | undefined> {
-    const fullPath = join(ideaDirectory, parentIdea, currentIdea);
-    const ideaPath = join(parentIdea, currentIdea);
-    const title = currentIdea;
+    const path = join(ideaDirectory, parentIdea, currentIdea);
+    const id = join(parentIdea, currentIdea);
     const files: string[] = [];
     const directories: string[] = [];
 
-    const dirEntries = Deno.readDir(fullPath);
+    const dirEntries = Deno.readDir(path);
     for await (const dirEntry of dirEntries) {
         if (dirEntry.isFile) {
             files.push(dirEntry.name);
@@ -60,18 +59,18 @@ async function getIdeaTreeItem(
     }
 
     if (!files.includes('IDEA.md')) return undefined;
-    const frontmatter = await getIdeaFrontmatter(join(fullPath, 'IDEA.md'));
+    const frontmatter = await getIdeaFrontmatter(join(path, 'IDEA.md'));
     const children: IdeaTree = [];
     for (const directory of directories.sort()) {
-        const child = await getIdeaTreeItem(ideaDirectory, ideaPath, directory);
+        const child = await getIdeaTreeItem(ideaDirectory, id, directory);
         if (child !== undefined) children.push(child);
     }
     files.sort();
 
     return {
-        fullPath,
-        ideaPath,
-        title,
+        path,
+        id,
+        slug: currentIdea,
         frontmatter,
         files,
         children,
