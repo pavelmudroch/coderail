@@ -7,7 +7,7 @@ type ReforgeArguments = {
 };
 
 export class Reforge implements Command<ReforgeArguments> {
-    readonly requiresInit = false;
+    readonly requiresInit = true;
 
     parseArguments(args: readonly string[]): ParsedArguments<ReforgeArguments> {
         const parsed = parseArguments(args, this, []);

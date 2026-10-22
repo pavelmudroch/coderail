@@ -28,7 +28,7 @@ export function testIdeaSubcommand(name: string, Child: new () => Command): void
 
     Deno.test(`Idea ${name} parses help and rejects invalid options`, () => {
         const child: Command = new Child();
-        expect(child.requiresInit).toBe(false);
+        expect(child.requiresInit).toBe(true);
         expect(child.getSubcommand(child.parseArguments(['--help']))).toBeUndefined();
         for (const help of ['-h', '--help']) {
             expect(child.shouldHandleHelp(child.parseArguments([help, '--unknown']))).toBe(true);

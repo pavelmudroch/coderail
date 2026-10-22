@@ -8,7 +8,7 @@ type SplitArguments = {
 };
 
 export class Split implements Command<SplitArguments> {
-    readonly requiresInit = false;
+    readonly requiresInit = true;
 
     parseArguments(args: readonly string[]): ParsedArguments<SplitArguments> {
         const parsed = parseArguments(args, this, []);

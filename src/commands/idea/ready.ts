@@ -7,7 +7,7 @@ type ReadyArguments = {
 };
 
 export class Ready implements Command<ReadyArguments> {
-    readonly requiresInit = false;
+    readonly requiresInit = true;
 
     parseArguments(args: readonly string[]): ParsedArguments<ReadyArguments> {
         const parsed = parseArguments(args, this, []);
