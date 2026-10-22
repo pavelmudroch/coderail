@@ -1,5 +1,5 @@
-import { stringifyFrontmatter } from '@md/helpers/frontmatter.ts';
-import type { Markdown } from '@md';
+import { stringifyFrontmatter } from './helpers/frontmatter.ts';
+import type { Markdown } from './parse.ts';
 
 export function toStream(markdown: Markdown): ReadableStream<string> {
     const header = stringifyFrontmatter(markdown.frontmatter);

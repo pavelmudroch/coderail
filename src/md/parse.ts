@@ -1,4 +1,4 @@
-import { type Frontmatter, parseFrontmatter } from '@md/helpers/frontmatter.ts';
+import { type Frontmatter, parseFrontmatter } from './helpers/frontmatter.ts';
 
 export type Markdown = {
     frontmatter: Frontmatter;
