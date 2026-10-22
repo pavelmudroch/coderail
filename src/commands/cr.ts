@@ -103,9 +103,11 @@ export class Cr implements Command<GlobalArguments> {
                 return new Loop();
             case COMMAND.TEMPLATE:
                 return new Template();
+            case undefined:
+                Cli.raiseUsageError('Required command is missing.', this);
+            default:
+                Cli.raiseUsageError(`Unknown command "${parsedArguments.args.command}".`, this);
         }
-
-        return undefined;
     }
 
     run(_context: RunContext<GlobalArguments>): Promise<void> {
