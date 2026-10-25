@@ -42,7 +42,9 @@ export class Create implements Command<CreateArguments> {
             }
             if (arg === '--') {
                 const positional = originalArgs.slice(i + 1);
-                if (!args.ideaTitle) args.ideaTitle = positional.shift() ?? '';
+                if (!args.ideaTitle) {
+                    args.ideaTitle = positional.shift() ?? '';
+                }
                 rest.push(...positional);
                 break;
             }
@@ -65,16 +67,6 @@ export class Create implements Command<CreateArguments> {
             }
             if (arg.startsWith('-')) {
                 Cli.raiseUsageError(`Unknown option "${arg}".`, this);
-            }
-            if (arg === '--') {
-                const title = originalArgs[i + 1];
-                if (title === undefined) {
-                    Cli.raiseUsageError('Missing required idea title.', this);
-                }
-                if (!args.ideaTitle) args.ideaTitle = title;
-                i++; // Skip the title argument as it has been consumed
-                rest.push(...originalArgs.slice(i + 1));
-                break;
             }
             if (!args.ideaTitle) {
                 args.ideaTitle = arg;
@@ -129,6 +121,7 @@ export class Create implements Command<CreateArguments> {
         const title = context.parsedArguments.args.ideaTitle;
         const slug = Text.slugify(title);
         const parent = context.parsedArguments.args.parent;
+        let ideaId = slug;
         let parentDirectory = join(
             context.context.currentWorkingDirectory,
             Path.CODERAIL_DIR,
@@ -146,6 +139,7 @@ export class Create implements Command<CreateArguments> {
                     throw new Error(`Parent idea "${parentIdea.id}" is not split.`);
                 }
                 parentDirectory = join(parentDirectory, parentIdea.id);
+                ideaId = join(parentIdea.id, slug);
             }
             const ideaDirectory = join(parentDirectory, slug);
             if (await Fs.exists(ideaDirectory)) {
@@ -156,7 +150,6 @@ export class Create implements Command<CreateArguments> {
             const ideaDir = await Fs.makeTempDirectory();
             await ideaDir.addFile('IDEA.md', Md.toStream(markdown));
             await Fs.replace(ideaDir.path, ideaDirectory);
-            const ideaId = parent === undefined ? slug : join(parent, slug);
             const newIdeaTree: IdeaTree = [{
                 path: ideaDirectory,
                 id: ideaId,

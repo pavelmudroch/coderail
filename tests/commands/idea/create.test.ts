@@ -2,6 +2,7 @@ import { expect } from '@std/expect';
 import { join } from '@std/path';
 import { Md } from '@md';
 import { Fs } from '@fs';
+import { Log } from '@log';
 import { UsageError } from '../../../src/cli/usage-error.ts';
 import { Create } from '../../../src/commands/idea/create.ts';
 
@@ -20,7 +21,7 @@ Deno.test('Idea create requires initialization and supports help', () => {
 Deno.test('Idea create parses a title and optional parent path', () => {
     const command = new Create();
     expect(command.parseArguments(['New idea'])).toEqual({
-        args: { help: false, ideaTitle: 'New idea', parent: undefined },
+        args: { help: false, ideaTitle: 'New idea', parent: undefined, json: false },
         rest: [],
     });
     for (
@@ -32,22 +33,40 @@ Deno.test('Idea create parses a title and optional parent path', () => {
         ]
     ) {
         expect(command.parseArguments(args)).toEqual({
-            args: { help: false, ideaTitle: 'New idea', parent: 'ideas/parent' },
+            args: { help: false, ideaTitle: 'New idea', parent: 'ideas/parent', json: false },
             rest: [],
         });
     }
     expect(command.parseArguments(['--', '--help'])).toEqual({
-        args: { help: false, ideaTitle: '--help', parent: undefined },
+        args: { help: false, ideaTitle: '--help', parent: undefined, json: false },
         rest: [],
     });
     expect(command.parseArguments(['New idea', '--'])).toEqual({
-        args: { help: false, ideaTitle: 'New idea', parent: undefined },
+        args: { help: false, ideaTitle: 'New idea', parent: undefined, json: false },
         rest: [],
     });
     const sparseArgs: string[] = [];
     sparseArgs.length = 1;
     sparseArgs.push('New idea');
     expect(command.parseArguments(sparseArgs)).toEqual(command.parseArguments(['New idea']));
+});
+
+Deno.test('Idea create parses JSON output before or after the title and parent', () => {
+    const command = new Create();
+    for (const args of [['--json', 'New idea'], ['New idea', '--json']]) {
+        expect(command.parseArguments(args)).toEqual({
+            args: { help: false, ideaTitle: 'New idea', parent: undefined, json: true },
+            rest: [],
+        });
+    }
+    expect(command.parseArguments(['--json', '-p', 'parent', '--', 'New idea'])).toEqual({
+        args: { help: false, ideaTitle: 'New idea', parent: 'parent', json: true },
+        rest: [],
+    });
+    expect(command.parseArguments(['--', '--json'])).toEqual({
+        args: { help: false, ideaTitle: '--json', parent: undefined, json: false },
+        rest: [],
+    });
 });
 
 Deno.test('Idea create rejects invalid options, titles, and extra arguments with usage', () => {
@@ -67,6 +86,8 @@ Deno.test('Idea create rejects invalid options, titles, and extra arguments with
             ['--parent', '--help'],
             ['--parent', 'idea'],
             ['--json'],
+            ['--json=true', 'New idea'],
+            ['New idea', '--json='],
             ['-x'],
             ['--help=value'],
             ['.'],
@@ -97,19 +118,32 @@ async function withWorkspace(run: (cwd: string, plans: string) => Promise<void>)
     }
 }
 
-async function create(cwd: string, args: string[]): Promise<void> {
+async function create(cwd: string, args: string[]): Promise<unknown[][]> {
     const command = new Create();
-    await command.run({
-        context: { currentWorkingDirectory: cwd, installRoot: '/install' },
-        configuration: {
-            logLevel: 'normal',
-            noColor: false,
-            nonInteractive: false,
-            verify: [],
-        },
-        parsedArguments: command.parseArguments(args),
-        signal: new AbortController().signal,
-    });
+    const originalOutput = Log.output;
+    const originalNoColor = Log.noColor;
+    const output: unknown[][] = [];
+    Log.output = (...messages): void => {
+        output.push(messages);
+    };
+    Log.noColor = true;
+    try {
+        await command.run({
+            context: { currentWorkingDirectory: cwd, installRoot: '/install' },
+            configuration: {
+                logLevel: 'normal',
+                noColor: false,
+                nonInteractive: false,
+                verify: [],
+            },
+            parsedArguments: command.parseArguments(args),
+            signal: new AbortController().signal,
+        });
+        return output;
+    } finally {
+        Log.output = originalOutput;
+        Log.noColor = originalNoColor;
+    }
 }
 
 async function expectIdea(directory: string, title: string): Promise<void> {
@@ -132,7 +166,7 @@ async function writeIdea(directory: string, title: string, status: string): Prom
 }
 
 async function expectFailure(
-    operation: Promise<void>,
+    operation: Promise<unknown>,
     title: string,
     cause: string,
 ): Promise<void> {
@@ -150,8 +184,28 @@ async function expectFailure(
 Deno.test('Idea create writes a forging idea in the supplied working directory', async () => {
     await withWorkspace(async (cwd, plans) => {
         const title = 'Příliš : "New idea"';
-        await create(cwd, [title]);
+        expect(await create(cwd, [title])).toEqual([[[
+            `└── ${title} ◌ forging [IDEA.md]`,
+            `    ${join(plans, 'prilis-new-idea')}`,
+        ].join('\n')]]);
         await expectIdea(join(plans, 'prilis-new-idea'), title);
+    });
+});
+
+Deno.test('Idea create outputs a root artifact as JSON', async () => {
+    await withWorkspace(async (cwd, plans) => {
+        const output = await create(cwd, ['New idea', '--json']);
+        expect(output).toHaveLength(1);
+        expect(output[0]).toHaveLength(1);
+        expect(JSON.parse(output[0]?.[0] as string)).toEqual([{
+            path: join(plans, 'new-idea'),
+            id: 'new-idea',
+            title: 'New idea',
+            status: 'forging',
+            parent: null,
+            files: ['IDEA.md'],
+        }]);
+        await expectIdea(join(plans, 'new-idea'), 'New idea');
     });
 });
 
@@ -169,7 +223,17 @@ Deno.test('Idea create resolves split parents by path, ID, slug, and title', asy
             'Parent idea',
         ];
         for (const [index, reference] of references.entries()) {
-            await create(cwd, ['--parent', reference, `Child ${index}`]);
+            const output = await create(cwd, ['--json', '--parent', reference, `Child ${index}`]);
+            expect(output).toHaveLength(1);
+            expect(output[0]).toHaveLength(1);
+            expect(JSON.parse(output[0]?.[0] as string)).toEqual([{
+                path: join(parent, `child-${index}`),
+                id: `root/parent/child-${index}`,
+                title: `Child ${index}`,
+                status: 'forging',
+                parent: 'root/parent',
+                files: ['IDEA.md'],
+            }]);
             await expectIdea(join(parent, `child-${index}`), `Child ${index}`);
         }
         expect(await Deno.readTextFile(join(parent, 'IDEA.md'))).toBe(original);
