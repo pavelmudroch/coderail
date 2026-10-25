@@ -24,16 +24,19 @@ export async function getIdeaTree(cwd: string): Promise<IdeaTree> {
     }
     const ideaDirectory = join(cwd, Path.CODERAIL_DIR, Path.PLANS_DIR);
     const dirEntries = Deno.readDir(ideaDirectory);
-    const items: IdeaTreeItem[] = [];
+    const itemPromises: Promise<IdeaTreeItem | undefined>[] = [];
     for await (const dirEntry of dirEntries) {
         if (!dirEntry.isDirectory) {
             continue;
         }
 
-        const item = await getIdeaTreeItem(ideaDirectory, '.', dirEntry.name);
-        if (item !== undefined) items.push(item);
+        const itemPromise = getIdeaTreeItem(ideaDirectory, '.', dirEntry.name);
+        itemPromises.push(itemPromise);
     }
-    return items.sort((a, b) => a.id.localeCompare(b.id));
+    const items = await Promise.all(itemPromises);
+    return items
+        .filter((item) => item !== undefined)
+        .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 async function getIdeaTreeItem(
@@ -60,11 +63,14 @@ async function getIdeaTreeItem(
 
     if (!files.includes('IDEA.md')) return undefined;
     const frontmatter = await getIdeaFrontmatter(join(path, 'IDEA.md'));
-    const children: IdeaTree = [];
+    const childrenPromises: Promise<IdeaTreeItem | undefined>[] = [];
     for (const directory of directories.sort()) {
-        const child = await getIdeaTreeItem(ideaDirectory, id, directory);
-        if (child !== undefined) children.push(child);
+        const childPromise = getIdeaTreeItem(ideaDirectory, id, directory);
+        childrenPromises.push(childPromise);
     }
+    const children = (await Promise.all(childrenPromises))
+        .filter((item) => item !== undefined)
+        .sort((a, b) => a.id.localeCompare(b.id));
     files.sort();
 
     return {
