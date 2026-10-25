@@ -8,18 +8,27 @@ import { Path } from '@path';
 import { Fs } from '@fs';
 import { Md } from '@md';
 import { IDEA_STATUS } from './helpers/idea-frontmatter.ts';
+import { formatJson, formatText } from './helpers/format.ts';
+import type { IdeaTree } from './helpers/get-idea-tree.ts';
+import { Log } from '@log';
 
 type CreateArguments = {
     help: boolean;
     ideaTitle: string;
     parent?: string;
+    json: boolean;
 };
 
 export class Create implements Command<CreateArguments> {
     readonly requiresInit = true;
 
     parseArguments(originalArgs: readonly string[]): ParsedArguments<CreateArguments> {
-        const args: CreateArguments = { help: false, ideaTitle: '', parent: undefined };
+        const args: CreateArguments = {
+            help: false,
+            ideaTitle: '',
+            parent: undefined,
+            json: false,
+        };
         const rest: string[] = [];
         for (let i = 0; i < originalArgs.length; i++) {
             const arg = originalArgs[i];
@@ -47,8 +56,25 @@ export class Create implements Command<CreateArguments> {
                 args.parent = value;
                 continue;
             }
+            if (arg === '--json') {
+                args.json = true;
+                continue;
+            }
+            if (arg.startsWith('--json=')) {
+                Cli.raiseUsageError('Option "--json" does not take a value.', this);
+            }
             if (arg.startsWith('-')) {
                 Cli.raiseUsageError(`Unknown option "${arg}".`, this);
+            }
+            if (arg === '--') {
+                const title = originalArgs[i + 1];
+                if (title === undefined) {
+                    Cli.raiseUsageError('Missing required idea title.', this);
+                }
+                if (!args.ideaTitle) args.ideaTitle = title;
+                i++; // Skip the title argument as it has been consumed
+                rest.push(...originalArgs.slice(i + 1));
+                break;
             }
             if (!args.ideaTitle) {
                 args.ideaTitle = arg;
@@ -130,6 +156,23 @@ export class Create implements Command<CreateArguments> {
             const ideaDir = await Fs.makeTempDirectory();
             await ideaDir.addFile('IDEA.md', Md.toStream(markdown));
             await Fs.replace(ideaDir.path, ideaDirectory);
+            const ideaId = parent === undefined ? slug : join(parent, slug);
+            const newIdeaTree: IdeaTree = [{
+                path: ideaDirectory,
+                id: ideaId,
+                slug: slug,
+                frontmatter: {
+                    title,
+                    status: IDEA_STATUS.FORGING,
+                },
+                files: ['IDEA.md'],
+                children: [],
+            }];
+            if (context.parsedArguments.args.json) {
+                Log.output(formatJson(newIdeaTree));
+                return;
+            }
+            Log.output(formatText(newIdeaTree));
         } catch (error) {
             throw new Error(`Cannot create idea "${title}"`, { cause: error });
         }
