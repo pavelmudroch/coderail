@@ -145,7 +145,7 @@ Inspect current idea map and existing `IDEA.md`.
 Reopen:
 
 ```sh
-cr idea regorge <idea-path>
+cr idea reforge <idea-path>
 ```
 
 Treat existing `IDEA.md` as agreed baseline. Preserve valid context. Change only what new discussion affects.
