@@ -58,7 +58,9 @@ title: Implement Ticket Dependency Append Logic
 status: open
 created_at: 2024-06-01T12:00:00Z
 updated_at: 2024-06-01T12:00:00Z
-requires: 0001, 0002
+dependencies:
+  - "0001"
+  - "0002"
 ---
 
 # Implement Ticket Dependency Append Logic
