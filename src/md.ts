@@ -1,4 +1,4 @@
-import type { Frontmatter } from '@md/helpers/frontmatter.ts';
+import type { Frontmatter } from './md/helpers/frontmatter.ts';
 import { type Markdown, parse } from './md/parse.ts';
 import { toStream } from './md/to-stream.ts';
 import { create } from './md/create.ts';
