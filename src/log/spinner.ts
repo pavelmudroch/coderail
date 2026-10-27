@@ -23,7 +23,7 @@ export class SpinnerImpl implements Spinner, LiveUI {
     #disposed: boolean = false;
 
     constructor() {
-        if (context.nonInteractive) {
+        if (context.nonInteractive || !Deno.stderr.isTerminal()) {
             this.#disposed = true;
             return;
         }
