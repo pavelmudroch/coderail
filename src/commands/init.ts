@@ -69,6 +69,7 @@ export class Init implements Command<InitArguments> {
         const directoryPath = join(context.currentWorkingDirectory, '.coderail');
         await Fs.makeDirectory(directoryPath);
 
+        using spinner = Log.spinner('Creating base structure...');
         const filePath = join(directoryPath, 'coderail.conf');
         try {
             const fileInfo = await Deno.lstat(filePath);
@@ -83,9 +84,12 @@ export class Init implements Command<InitArguments> {
             await Fs.write(filePath, defaultConfigContent());
             Log.notice(`Created new configuration file at "${filePath}".`);
         }
+        spinner.setMessage('Installing templates...');
         for (const template of parsedArguments.args.templates) {
+            spinner.addStep(`template "${template}".`);
             await installTemplate(template);
         }
+        Log.output(`Current working directory "${context.currentWorkingDirectory}" initialized.`);
     }
 }
 
@@ -114,6 +118,7 @@ function defaultConfigContent(): ReadableStream<Uint8Array> {
     });
 }
 
-function installTemplate(_template: string): Promise<void> {
-    return Promise.resolve();
+async function installTemplate(template: string): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 3000)); // Simulate async template installation
+    Log.notice(`Template "${template}" installed.`);
 }
