@@ -2,6 +2,7 @@ import { ClaudeConnector } from './harness/claude.ts';
 import { CodexConnector } from './harness/codex.ts';
 import type { HarnessConnector } from './harness/connector.ts';
 
+export type { ConnectorFile } from './harness/connector.ts';
 export type { HarnessConnector };
 
 export interface Harness {
