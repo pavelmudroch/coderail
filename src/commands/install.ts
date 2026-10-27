@@ -2,11 +2,13 @@ import type { Command, ParsedArguments } from '@commands';
 import type { RunContext } from './helpers/command.ts';
 import { Harness } from '@harness';
 import { Cli } from '@cli';
+import { runInstructionOperation } from './helpers/run-instruction-operation.ts';
 
 type InstallArguments = {
     help: boolean;
     force: boolean;
     yes: boolean;
+    no: boolean;
     harnesses: string[];
 };
 
@@ -14,7 +16,13 @@ export class Install implements Command<InstallArguments> {
     readonly requiresInit = false;
 
     parseArguments(originalArgs: readonly string[]): ParsedArguments<InstallArguments> {
-        const args: InstallArguments = { help: false, force: false, yes: false, harnesses: [] };
+        const args: InstallArguments = {
+            help: false,
+            force: false,
+            yes: false,
+            no: false,
+            harnesses: [],
+        };
         for (let i = 0; i < originalArgs.length; i++) {
             const arg = originalArgs[i];
             if (arg === undefined) {
@@ -45,10 +53,23 @@ export class Install implements Command<InstallArguments> {
             if (arg.startsWith('--yes=')) {
                 Cli.raiseUsageError('Option "--yes" does not take a value.', this);
             }
+            if (arg === '-n' || arg === '--no') {
+                args.no = true;
+                continue;
+            }
+            if (arg.startsWith('--no=')) {
+                Cli.raiseUsageError('Option "--no" does not take a value.', this);
+            }
             if (arg.startsWith('-')) {
                 Cli.raiseUsageError(`Unknown option "${arg}".`, this);
             }
             args.harnesses.push(arg);
+        }
+        if (args.yes && args.no) {
+            Cli.raiseUsageError('Options "--yes" and "--no" cannot be used together.', this);
+        }
+        if ((args.yes || args.no) && !args.force) {
+            Cli.raiseUsageError('Options "--yes" and "--no" require "--force".', this);
         }
         return { args, rest: [] };
     }
@@ -60,7 +81,7 @@ export class Install implements Command<InstallArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr install [--help] [--force] [--yes] [<harness> ...]',
+            '  cr install [--help] [--force [--yes | --no]] [<harness> ...]',
             '',
             '  Install instructions for specific harness, to allow agents of that harness use',
             '  coderail tool.',
@@ -71,14 +92,14 @@ export class Install implements Command<InstallArguments> {
             '                       changed instructions. Requires confirmation prompt before',
             '                       each action.',
             '  -y, --yes            Automatically answer "yes" to all prompts.',
+            '  -n, --no             Automatically answer "no" to all prompts.',
             '',
             'Arguments:',
             '  <harness>            The harness(es) to install instructions for. If no',
             '                       harness is provided, the one set as default in',
             '                       configuration is used.',
             '                       Available harnesses:',
-            `                       - ${Harness.codex.name}`,
-            `                       - ${Harness.claude.name}`,
+            ...Harness.names.map((name) => `                       - ${name}`),
         ];
         return usageLines.join('\n');
     }
@@ -87,7 +108,7 @@ export class Install implements Command<InstallArguments> {
         return undefined;
     }
 
-    run(_context: RunContext<InstallArguments>): Promise<void> {
-        return Promise.resolve();
+    run(context: RunContext<InstallArguments>): Promise<void> {
+        return runInstructionOperation('install', this, context);
     }
 }
