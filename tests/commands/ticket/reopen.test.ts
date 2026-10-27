@@ -137,8 +137,21 @@ Deno.test('Ticket reopen moves active and closed tickets and preserves its conte
             expect(output).toEqual([
                 [
                     json
-                        ? JSON.stringify([{ path, ...markdown.frontmatter }], null, 4)
-                        : join('.coderail', 'tickets', 'open', `${id}-new-ticket.md`),
+                        ? JSON.stringify(
+                            [{
+                                path,
+                                id,
+                                slug: 'new-ticket',
+                                title: 'New ticket',
+                                dependencies: ['0002'],
+                                status: 'open',
+                            }],
+                            null,
+                            2,
+                        )
+                        : `${Log.color.yellow(id)} ${Log.color.cyan('New ticket')} ${
+                            Log.color.gray(path)
+                        }`,
                 ],
             ]);
         });

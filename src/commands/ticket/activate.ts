@@ -4,7 +4,8 @@ import { Fs } from '@fs';
 import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
-import { join, relative } from '@std/path';
+import { join } from '@std/path';
+import { formatJson, formatText } from './helpers/format.ts';
 import { resolveTicket, TICKET_STATUS } from './helpers/resolve-ticket.ts';
 
 type ActivateArguments = {
@@ -109,11 +110,12 @@ export class Activate implements Command<ActivateArguments> {
             markdown.frontmatter.updated_at = new Date().toISOString();
             await Fs.write(path, Md.toStream(markdown));
             await Deno.remove(ticket.path);
+            const result = await resolveTicket(cwd, id);
             if (context.parsedArguments.args.json) {
-                Log.output(JSON.stringify([{ path, ...markdown.frontmatter }], null, 4));
+                Log.output(formatJson([result]));
                 return;
             }
-            Log.output(relative(cwd, path));
+            Log.output(formatText([result]));
         } catch (error) {
             throw new Error(`Cannot activate ticket "${id}"`, { cause: error });
         }

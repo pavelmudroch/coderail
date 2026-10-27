@@ -5,7 +5,8 @@ import { Fs } from '@fs';
 import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
-import { join, relative } from '@std/path';
+import { join } from '@std/path';
+import { formatJson, formatText } from './helpers/format.ts';
 import { getLastTicketId } from './helpers/get-last-ticket-id.ts';
 import { formatTicketId } from './helpers/format-ticket-id.ts';
 import { resolveTicket, type Ticket } from './helpers/resolve-ticket.ts';
@@ -163,12 +164,12 @@ export class Create implements Command<CreateArguments> {
             const markdown = Md.create('', frontmatter);
             await Fs.makeDirectory(directory);
             await Fs.write(path, Md.toStream(markdown));
-            // TODO: handle logging
+            const result = await resolveTicket(cwd, id);
             if (context.parsedArguments.args.json) {
-                Log.output(JSON.stringify([{ path, ...frontmatter }], null, 4));
+                Log.output(formatJson([result]));
                 return;
             }
-            Log.output(relative(cwd, path));
+            Log.output(formatText([result]));
         } catch (error) {
             throw new Error(`Cannot create ticket "${title}"`, { cause: error });
         }

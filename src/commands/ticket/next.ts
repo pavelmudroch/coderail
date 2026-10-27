@@ -2,7 +2,8 @@ import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Cli } from '@cli';
 import { Log } from '@log';
 import { Path } from '@path';
-import { join, relative } from '@std/path';
+import { join } from '@std/path';
+import { formatJson, formatText } from './helpers/format.ts';
 import { areDependenciesSatisfied } from './helpers/are-dependencies-satisfied.ts';
 import { resolveTicket, type Ticket, TICKET_STATUS } from './helpers/resolve-ticket.ts';
 
@@ -123,11 +124,11 @@ export class Next implements Command<NextArguments> {
                 if (tickets.length === context.parsedArguments.args.limit) break;
             }
             if (context.parsedArguments.args.json) {
-                Log.output(JSON.stringify(tickets, null, 4));
+                Log.output(formatJson(tickets));
                 return;
             }
             if (tickets.length > 0) {
-                Log.output(tickets.map((ticket) => relative(cwd, ticket.path)).join('\n'));
+                Log.output(formatText(tickets));
             }
         } catch (error) {
             throw new Error('Cannot get next tickets', { cause: error });

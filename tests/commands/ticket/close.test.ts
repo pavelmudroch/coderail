@@ -138,8 +138,22 @@ Deno.test('Ticket close moves open and active tickets and preserves its content 
             expect(output).toEqual([
                 [
                     json
-                        ? JSON.stringify([{ path, ...markdown.frontmatter }], null, 4)
-                        : join('.coderail', 'tickets', 'closed', `${id}-new-ticket.md`),
+                        ? JSON.stringify(
+                            [{
+                                path,
+                                id,
+                                slug: 'new-ticket',
+                                title: 'New ticket',
+                                dependencies: ['0002'],
+                                status: 'closed',
+                                reason: 'done',
+                            }],
+                            null,
+                            2,
+                        )
+                        : `${Log.color.yellow(id)} ${Log.color.cyan('New ticket')} ${
+                            Log.color.gray(path)
+                        }`,
                 ],
             ]);
         });

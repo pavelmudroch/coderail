@@ -223,8 +223,12 @@ Deno.test('Ticket next limits eligible tickets in numeric ID order', async () =>
         }
         expect(await next(cwd, ['-l', '2'])).toEqual([[
             [
-                join('.coderail', 'tickets', 'open', '0003-ticket.md'),
-                join('.coderail', 'tickets', 'open', '9999-ticket.md'),
+                `${Log.color.yellow('0003')} ${Log.color.cyan('Ticket')} ${
+                    Log.color.gray(join(tickets, 'open', '0003-ticket.md'))
+                }`,
+                `${Log.color.yellow('9999')} ${Log.color.cyan('Ticket')} ${
+                    Log.color.gray(join(tickets, 'open', '9999-ticket.md'))
+                }`,
             ].join('\n'),
         ]]);
         await Deno.writeTextFile(join(tickets, 'open', '10000-ticket.md'), 'Invalid metadata');

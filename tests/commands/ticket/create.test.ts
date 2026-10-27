@@ -76,12 +76,12 @@ async function expectFailure(operation: Promise<unknown>, cause: string): Promis
     }
 }
 
-Deno.test('Ticket create writes an open ticket and prints its relative path', async () => {
+Deno.test('Ticket create writes an open ticket and prints its ID, title, and path', async () => {
     await withWorkspace(async (cwd, tickets) => {
         const title = 'Příliš : "New ticket"';
         const path = join(tickets, 'open', '0001-prilis-new-ticket.md');
         expect(await create(cwd, [title])).toEqual([
-            [join('.coderail', 'tickets', 'open', '0001-prilis-new-ticket.md')],
+            [`${Log.color.yellow('0001')} ${Log.color.cyan(title)} ${Log.color.gray(path)}`],
         ]);
         const markdown = await Md.parse(await Fs.read(path, { text: true }));
         const timestamp = markdown.frontmatter.created_at;
@@ -138,7 +138,14 @@ Deno.test('Ticket create allocates IDs across statuses and preserves dependency 
         expect(markdown.frontmatter.dependencies).toEqual(['0002', '0005', '0009']);
         expect(output).toHaveLength(1);
         expect(output[0]).toHaveLength(1);
-        expect(JSON.parse(output[0]?.[0] as string)).toEqual([{ path, ...markdown.frontmatter }]);
+        expect(JSON.parse(output[0]?.[0] as string)).toEqual([{
+            path,
+            id: '0010',
+            slug: 'new-ticket',
+            title: 'New ticket',
+            dependencies: ['0002', '0005', '0009'],
+            status: 'open',
+        }]);
         for (const [index, [status, name]] of existingTickets.entries()) {
             expect(await Deno.readTextFile(join(tickets, status as string, name as string))).toBe(
                 originals[index],
