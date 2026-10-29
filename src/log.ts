@@ -7,9 +7,11 @@ import { warn } from './log/warn.ts';
 import { error } from './log/error.ts';
 import { output } from './log/output.ts';
 import { cyan, dim, gray, green, magenta, orange, red, yellow } from './log/helpers/ansi.ts';
+import { confirm, type ConfirmOptions } from './log/confirm.ts';
 
 export type { Progress };
 export type { Spinner };
+export type { ConfirmOptions };
 
 export interface Color {
     /**
@@ -117,6 +119,13 @@ export interface Log {
      * @param message A message to display
      */
     spinner(message: string): Spinner;
+    /**
+     * Displays a confirmation prompt to the user.
+     * @param message A message to display in the confirmation prompt.
+     * @param options Optional confirmation options.
+     * @returns `true` if the user confirmed, `false` otherwise.
+     */
+    confirm(message: string, options?: ConfirmOptions): boolean;
     /** A set of utilities to colorize text. */
     color: Color;
 }
@@ -146,6 +155,7 @@ export const Log: Log = {
     warn,
     error,
     output,
+    confirm,
     progress: (message: string) => {
         const progress = new ProgressImpl();
         progress.setMessage(message);
