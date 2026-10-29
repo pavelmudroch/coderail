@@ -12,7 +12,6 @@ const ANSI = {
     gray: '\x1b[90m',
     el: '\x1b[0K',
     ed: '\x1b[0J',
-    cup: '\x1b[A',
 };
 
 export function clear(): string {
@@ -20,7 +19,7 @@ export function clear(): string {
 }
 
 export function erase(): string {
-    return `${ANSI.ed}${ANSI.cup}`;
+    return ANSI.ed;
 }
 
 export function cyan(value: string): string {

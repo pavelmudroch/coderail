@@ -1,4 +1,5 @@
-import { clear, dim, erase, magenta } from './helpers/ansi.ts';
+import { writeSync } from './helpers/write-sync.ts';
+import { dim, erase, magenta } from './helpers/ansi.ts';
 import { type LiveUI, registerLiveUiItem, unregisterLiveUiItem } from './helpers/context.ts';
 import { context } from './helpers/context.ts';
 
@@ -23,7 +24,7 @@ export class SpinnerImpl implements Spinner, LiveUI {
     #disposed: boolean = false;
 
     constructor() {
-        if (context.nonInteractive || !Deno.stderr.isTerminal()) {
+        if (context.nonInteractive) {
             this.#disposed = true;
             return;
         }
@@ -56,7 +57,7 @@ export class SpinnerImpl implements Spinner, LiveUI {
         this.#disposed = true;
         clearInterval(this.#intervalId);
         unregisterLiveUiItem(this);
-        console.warn(erase());
+        writeSync(Deno.stderr, `\r${erase()}`);
     }
 
     redraw(): void {
@@ -98,7 +99,7 @@ export class SpinnerImpl implements Spinner, LiveUI {
                 remainingLength -= terminalWidth - 5;
             }
         }
-        const cuu = `\x1b[${lines.length}A`;
-        console.warn(lines.join(`\n${clear()}`), clear(), cuu);
+        const returnToStart = lines.length > 1 ? `\x1b[${lines.length - 1}F` : '\r';
+        writeSync(Deno.stderr, `\r${erase()}${lines.join('\r\n')}${returnToStart}`);
     }
 }

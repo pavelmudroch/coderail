@@ -1,3 +1,4 @@
+import { writeSync } from './helpers/write-sync.ts';
 import { clear, yellow } from './helpers/ansi.ts';
 import { context } from './helpers/context.ts';
 import { stringifyMessages } from './helpers/stringifyMessages.ts';
@@ -8,6 +9,6 @@ export function warn(...messages: unknown[]): void {
     }
 
     const messageString = `${yellow('warn:')} ${stringifyMessages(messages)}`;
-    console.warn(messageString, clear());
+    writeSync(Deno.stderr, `${messageString}${clear()}\n`);
     context.currentLiveUiItem?.redraw();
 }

@@ -1,3 +1,4 @@
+import { writeSync } from './helpers/write-sync.ts';
 import { context } from './helpers/context.ts';
 import { clear, cyan, dim, green, magenta, red } from './helpers/ansi.ts';
 import { stringifyMessages } from './helpers/stringifyMessages.ts';
@@ -18,7 +19,7 @@ export function trace(...messages: unknown[]): void {
         }
     }
 
-    console.warn(messageLines.join(`\n${clear()}`), clear());
+    writeSync(Deno.stderr, `${messageLines.join(`\n${clear()}`)}${clear()}\n`);
     context.currentLiveUiItem?.redraw();
 }
 
@@ -45,10 +46,9 @@ function colorizeStackLine(stackLine: string): string {
         return cyan(stackLine);
     }
 
-    const location = match[0] ?? '';
-    const line = match[1] ?? '';
-    const column = match[2] ?? '';
-    const closingParenthesis = match[3] ?? '';
+    const [location, line, column, closingParenthesis] = match as
+        & RegExpExecArray
+        & [string, string, string, string];
     const locationStart = stackLine.length - location.length;
     const pathStart = stackLine.lastIndexOf('(', locationStart) + 1 || stackLine.indexOf('at ') + 3;
     const prefix = stackLine.slice(0, pathStart);

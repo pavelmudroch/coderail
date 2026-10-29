@@ -10,6 +10,7 @@ export const context = {
     nonInteractive: false,
     currentLiveUiItem: null as LiveUI | null,
 };
+initContext();
 
 export function registerLiveUiItem(item: LiveUI): void {
     if (context.currentLiveUiItem !== null) {
@@ -23,5 +24,19 @@ export function unregisterLiveUiItem(item: LiveUI): void {
         const uiItem = context.currentLiveUiItem;
         context.currentLiveUiItem = null;
         uiItem[Symbol.dispose]();
+    }
+}
+
+function initContext(): void {
+    if (!Deno.stderr.isTerminal()) {
+        context.nonInteractive = true;
+    }
+
+    if (!Deno.stdout.isTerminal()) {
+        context.nonInteractive = true;
+    }
+
+    if (!Deno.stdin.isTerminal()) {
+        context.nonInteractive = true;
     }
 }
