@@ -85,8 +85,8 @@ function parseEnvironmentVariables(env: EnvironmentVariables): Partial<Configura
     }
 
     const nonInteractive = env.get('NON_INTERACTIVE');
-    if (nonInteractive !== undefined) {
-        result.nonInteractive = nonInteractive === 'true' || nonInteractive === '1';
+    if (nonInteractive !== undefined && (nonInteractive === 'true' || nonInteractive === '1')) {
+        result.nonInteractive = true;
     }
 
     if (accumulatedErrors.length > 0) {
