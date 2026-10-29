@@ -9,6 +9,8 @@ export interface Path {
     readonly CODERAIL_DIR: string;
     /** The name of the install manifest file. */
     readonly INSTALL_MANIFEST_NAME: string;
+    /** The path to the `instructions` directory within the `.coderail` directory. */
+    readonly INSTRUCTIONS_DIR: string;
     /**
      * Checks if the given path is within the specified root directory.
      * @param path The path to check.
@@ -23,5 +25,6 @@ export const Path: Path = {
     TICKETS_DIR: 'tickets',
     CODERAIL_DIR: '.coderail',
     INSTALL_MANIFEST_NAME: '.coderail-install',
+    INSTRUCTIONS_DIR: 'instructions',
     isWithin,
 };

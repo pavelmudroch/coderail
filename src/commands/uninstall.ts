@@ -1,8 +1,11 @@
 import type { Command, ParsedArguments } from '@commands';
 import type { RunContext } from './helpers/command.ts';
-import { Harness } from '@harness';
+import { Harness, type HarnessConnector } from '@harness';
 import { Cli } from '@cli';
-import { runInstructionOperation } from './helpers/run-instruction-operation.ts';
+import { dirname, join } from '@std/path';
+import { Path } from '@path';
+import { Log } from '@log';
+import { InstallManifest, type Manifest } from '@install-manifest';
 
 type UninstallArguments = {
     help: boolean;
@@ -121,10 +124,196 @@ export class Uninstall implements Command<UninstallArguments> {
         return undefined;
     }
 
-    run(context: RunContext<UninstallArguments>): Promise<void> {
+    async run(context: RunContext<UninstallArguments>): Promise<void> {
         if (context.parsedArguments.args.self) {
             return Promise.reject(new Error('Self-uninstallation is not implemented.'));
         }
-        return runInstructionOperation('uninstall', this, context);
+        context.signal.throwIfAborted();
+        const names = [...new Set(context.parsedArguments.args.harnesses)];
+        if (names.length === 0) {
+            const name = context.configuration.defaultHarness;
+            if (!name) {
+                Cli.raiseUsageError('No harness specified and no default harness set.', this);
+            }
+            names.push(name);
+        }
+        for (const name of names) {
+            if (!Harness.names.includes(name)) {
+                Cli.raiseUsageError(`Unknown harness "${name}".`, this);
+            }
+        }
+        const errors: Error[] = [];
+        for (const name of names) {
+            if (context.signal.aborted) break;
+            try {
+                using harness = Harness.get(name) ??
+                    Cli.raiseUsageError(`Unknown harness "${name}".`, this);
+                await performHarnessUninstallation(harness, context);
+            } catch (cause) {
+                const error = new Error(
+                    `Failed to uninstall instructions for ${name}: ${message(cause)}`,
+                    { cause },
+                );
+                Log.error(error);
+                errors.push(error);
+            }
+        }
+        if (errors.length) throw new AggregateError(errors, errors.map(message).join('\n'));
+        context.signal.throwIfAborted();
     }
+}
+
+function message(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+async function performHarnessUninstallation(
+    harness: HarnessConnector,
+    context: RunContext<UninstallArguments>,
+): Promise<void> {
+    const root = harness.home;
+    const path = join(root, Path.INSTALL_MANIFEST_NAME);
+    const args = context.parsedArguments.args;
+    let manifest: Manifest | null = null;
+    const removed = new Set<string>();
+    const missing = new Set<string>();
+    const skipped = new Set<string>();
+    let persistence = 'unchanged';
+    const persist = async (baseline: Manifest): Promise<void> => {
+        await inspectDestination(root, Path.INSTALL_MANIFEST_NAME);
+        const files = baseline.files.filter((file) =>
+            !removed.has(file.path) && !missing.has(file.path)
+        );
+        if (files.length) await InstallManifest.save(path, { ...baseline, files });
+        else await removeIfExists(path);
+        persistence = 'updated to track remaining files';
+    };
+    try {
+        await inspectDestination(root, Path.INSTALL_MANIFEST_NAME);
+        manifest = await InstallManifest.load(path);
+        if (!manifest) {
+            Log.output(`Nothing to uninstall for ${harness.name}.`);
+            return;
+        }
+        for (const file of manifest.files) {
+            if (
+                file.path === Path.INSTALL_MANIFEST_NAME ||
+                file.path.startsWith(`${Path.INSTALL_MANIFEST_NAME}/`)
+            ) {
+                throw new Error('Install manifest cannot track itself');
+            }
+            await inspectDestination(root, file.path);
+        }
+        const inspections = await InstallManifest.inspect(root, manifest);
+        for (const file of inspections) {
+            context.signal.throwIfAborted();
+            if (file.status !== 'modified') continue;
+            if (!args.force) throw new Error(`Modified file "${file.path}" requires --force.`);
+            if (
+                !args.yes && !args.no &&
+                (context.configuration.nonInteractive || !Deno.stdin.isTerminal())
+            ) {
+                throw new Error('Confirmation requires an interactive terminal');
+            }
+            if (
+                args.no ||
+                (!args.yes && !Log.confirm(`Remove modified file "${join(root, file.path)}"?`))
+            ) {
+                skipped.add(file.path);
+            }
+        }
+        for (const file of inspections) {
+            context.signal.throwIfAborted();
+            if (skipped.has(file.path)) continue;
+            if (
+                await inspectDestination(root, file.path) &&
+                await removeIfExists(join(root, file.path))
+            ) {
+                removed.add(file.path);
+                let parent = dirname(join(root, file.path));
+                while (parent !== root) {
+                    await removeIfEmpty(parent);
+                    parent = dirname(parent);
+                }
+            } else missing.add(file.path);
+        }
+        await persist(manifest);
+    } catch (cause) {
+        let persistenceError = '';
+        if (manifest && (removed.size || missing.size || manifest.files.length === 0)) {
+            try {
+                await persist(manifest);
+            } catch (error) {
+                persistence = 'update failed';
+                persistenceError = `\nManifest persistence failed: ${message(error)}.`;
+            }
+        }
+        const list = (paths: Iterable<string>): string =>
+            [...paths].map((item) => `"${join(root, item)}"`).join(', ') || 'none';
+        const pending = manifest?.files.filter((file) =>
+            !removed.has(file.path) && !missing.has(file.path) && !skipped.has(file.path)
+        ).map((file) => file.path);
+        throw new Error(
+            `${message(cause)}\nRemoved: ${list(removed)}.\nAlready missing: ${
+                list(missing)
+            }.\nSkipped (kept): ${list(skipped)}.\nRemaining files: ${
+                pending ? list(pending) : 'unknown; inspect the installation manifest'
+            }.\nManifest "${path}": ${persistence}.${persistenceError}`,
+            { cause },
+        );
+    }
+    Log.output(
+        `Uninstalled instructions for ${harness.name}: ${removed.size} removed, ${missing.size} missing, ${skipped.size} skipped.`,
+    );
+}
+
+async function removeIfExists(path: string): Promise<boolean> {
+    try {
+        await Deno.remove(path);
+        return true;
+    } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) {
+            throw error;
+        }
+    }
+    return false;
+}
+
+async function removeIfEmpty(path: string): Promise<void> {
+    try {
+        const entries = Deno.readDir(path);
+        for await (const _entry of entries) {
+            return;
+        }
+        await Deno.remove(path);
+    } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) {
+            throw error;
+        }
+    }
+}
+
+async function inspectDestination(root: string, path: string): Promise<boolean> {
+    const parts = ['', ...path.split('/')];
+    let current = root;
+    // Include the home itself so a symlink cannot redirect the installation.
+    for (const [index, part] of parts.entries()) {
+        current = join(current, part);
+        let info: Deno.FileInfo;
+        try {
+            info = await Deno.lstat(current);
+        } catch (error) {
+            if (error instanceof Deno.errors.NotFound) {
+                return false;
+            }
+            throw error;
+        }
+        if (info.isSymlink) {
+            throw new Error(`Install manifest path contains a symlink: "${current}".`);
+        }
+        if (index === parts.length - 1 ? !info.isFile : !info.isDirectory) {
+            throw new Error(`Invalid installation path "${current}".`);
+        }
+    }
+    return true;
 }

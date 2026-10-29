@@ -9,7 +9,7 @@ export interface Harness {
     readonly names: readonly string[];
     readonly codex: HarnessConnector;
     readonly claude: HarnessConnector;
-    get(name: string): HarnessConnector;
+    get(name: string): HarnessConnector | null;
 }
 
 export const Harness: Harness = {
@@ -20,14 +20,13 @@ export const Harness: Harness = {
     get claude() {
         return new ClaudeConnector();
     },
-    get(name): HarnessConnector {
+    get(name: string): HarnessConnector | null {
         switch (name) {
             case 'codex':
                 return Harness.codex;
             case 'claude':
                 return Harness.claude;
-            default:
-                throw new Error(`Unknown harness "${name}".`);
         }
+        return null;
     },
 };

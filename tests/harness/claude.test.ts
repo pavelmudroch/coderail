@@ -14,7 +14,6 @@ Deno.test('ClaudeConnector preserves registry names and safe disposal', () => {
 Deno.test('ClaudeConnector throws synchronously for unavailable locations', () => {
     const connector: HarnessConnector = new ClaudeConnector();
     expect(() => connector.home).toThrow(Error);
-    expect(() => connector.manifestPath).toThrow(Error);
 });
 
 Deno.test('ClaudeConnector rejects every translation without changing input', async () => {

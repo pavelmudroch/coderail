@@ -16,8 +16,6 @@ export interface HarnessConnector extends Disposable {
     readonly name: string;
     /** Absolute installation home. */
     readonly home: string;
-    /** Absolute installation manifest path. */
-    readonly manifestPath: string;
 
     /** Source paths are relative to the named skill's directory. */
     translateSkill(name: string, files: ConnectorFile[]): Promise<ConnectorFile[]>;

@@ -14,7 +14,6 @@ Deno.test('CodexConnector preserves registry names and safe disposal', () => {
 Deno.test('CodexConnector throws synchronously for unavailable locations', () => {
     const connector: HarnessConnector = new CodexConnector();
     expect(() => connector.home).toThrow(Error);
-    expect(() => connector.manifestPath).toThrow(Error);
 });
 
 Deno.test('CodexConnector rejects every translation without changing input', async () => {

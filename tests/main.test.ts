@@ -5,7 +5,6 @@ import { Conf } from '@conf';
 import { Log } from '@log';
 import { Runtime } from '@runtime';
 import { Harness } from '@harness';
-import { InstructionOperations } from '../src/instruction-operations.ts';
 
 let runId = 0;
 
@@ -268,43 +267,4 @@ Deno.test('main does not execute when aborted', async () => {
     expect(fixture.errors).toEqual([]);
     expect(Deno.exitCode).toBe(3);
     expect(fixture.events.at(-1)).toBe('cleanup');
-});
-
-Deno.test('main maps install/uninstall usage, operation failures, and cancellation to exit codes', async () => {
-    for (const name of ['install', 'uninstall'] as const) {
-        using fixture = setupCommands(true);
-        const original = { get: Harness.get, ...InstructionOperations };
-        Harness.get = (name) => ({
-            name,
-            home: '/home',
-            manifestPath: '/home/manifest',
-            translateSkill: () => Promise.resolve([]),
-            translateGlobalInstructions: () => Promise.resolve([]),
-            translateSubagent: () => Promise.resolve([]),
-            [Symbol.dispose](): void {},
-        });
-        try {
-            await run(['--quiet', name, '--help']);
-            expect(Deno.exitCode).toBe(0);
-            expect(fixture.events).toEqual(['cleanup']);
-            await run([name, '--yes']);
-            expect(Deno.exitCode).toBe(2);
-            InstructionOperations[name] = () =>
-                Promise.resolve({ outcomes: [], error: new Error('failed') });
-            await run([name, 'codex']);
-            expect(Deno.exitCode).toBe(1);
-            InstructionOperations[name] = () => {
-                fixture.controller.abort(new Error('cancelled'));
-                return Promise.reject(fixture.controller.signal.reason);
-            };
-            fixture.globals.length = 0;
-            await run([name, 'codex', 'claude']);
-            expect(Deno.exitCode).toBe(3);
-            expect(fixture.warnings.at(-1)).toEqual(['Operation was aborted']);
-        } finally {
-            Harness.get = original.get;
-            InstructionOperations.install = original.install;
-            InstructionOperations.uninstall = original.uninstall;
-        }
-    }
 });

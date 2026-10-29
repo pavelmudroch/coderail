@@ -34,6 +34,7 @@
         "@md": "./src/md.ts",
         "@harness": "./src/harness.ts",
         "@utils": "./src/utils.ts",
+        "@install-manifest": "./src/install-manifest.ts",
         "oxc-parser": "npm:oxc-parser@^0.153.0"
     },
     "lint": {
