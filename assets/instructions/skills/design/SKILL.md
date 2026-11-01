@@ -1,6 +1,6 @@
 ---
 name: design
-description: Collaboratively design implementation architecture, source structure, and public interfaces from a given context.
+description: Collaboratively establish implementation architecture, source structure, and public interfaces from any context.
 disable-model-invocation: true
 ---
 
@@ -8,60 +8,99 @@ disable-model-invocation: true
 
 Collaborate with the user to transform the given context into a concrete, implementation-ready design.
 
-Work iteratively with the user to reason about implementation approaches, evaluate trade-offs, and establish consequential design decisions.
+Explore implementation approaches, evaluate trade-offs, and establish consequential design decisions with the user.
 
-Design directly in the repository where appropriate, creating or modifying source files to establish:
+Prefer deep modules that hide complexity behind small, stable, testable interfaces.
 
-- module boundaries and responsibilities
-- source file and directory structure
-- public interfaces, function signatures, and data contracts
-- types, schemas, and component interactions
-- important invariants and error handling contracts
-- implementation skeletons where useful
+Inspect relevant architecture, conventions, code, and tests. Delegate substantial repository research using <skill>research</skill> when appropriate.
 
-Prefer deep modules that hide meaningful complexity behind small, stable, testable interfaces.
+Reuse established decisions, explore unresolved alternatives, and respect the agreed scope.
 
-Inspect existing architecture, conventions, implementations, and tests to ensure the design fits the codebase. Delegate substantial repository research to a worker agent using <skill>research</skill> when appropriate.
+**Treat source code as the primary design artifact when applicable. Express the design through module structure, interfaces, declarations, types, schemas, and function signatures rather than internal implementation logic.**
 
-Reuse established decisions from the provided context. Evaluate alternatives when consequential decisions remain unresolved, and involve the user in selecting the approach.
-
-Preserve relevant design decisions in source code, or in additional artifacts when they cannot be adequately expressed through code alone.
-
-The resulting design should provide a concrete foundation for subsequent ticket decomposition and implementation.
+Produce a concrete foundation for subsequent ticket decomposition and implementation.
 
 ## Boundary
 
-- Accept any provided context, including ideas, requirements, existing source code, problems, or user instructions. Do not require an `IDEA.md` or other specific artifact.
-- Keep the user involved in consequential decisions about architecture, public interfaces, module boundaries, and observable behavior.
-- Use <skill>question</skill> when user input is needed to resolve consequential uncertainty. Present meaningful alternatives and their trade-offs rather than making arbitrary decisions.
-- Infer low-impact implementation details when consistent with the established design and repository conventions.
-- May create or modify source files to establish the agreed structure, contracts, and implementation skeletons.
-- May create or update supporting design artifacts when useful. Do not require a fixed artifact name, location, or format.
-- May use focused experiments or throwaway prototypes to validate uncertain design decisions. Preserve only relevant results in the final design.
-- Do not implement complete feature behavior beyond what is necessary to establish or validate the design.
-- Do not create tickets or perform ticket decomposition.
-- Do not expand the design beyond the agreed scope without user involvement.
-- Preserve existing behavior and compatibility unless the user explicitly agrees to changes.
+### Context
+
+- Accept any context, including ideas, requirements, existing code, problems, or instructions.
+- Require no specific input artifacts, such as `IDEA.md` or `SPEC.md`.
+- Respect established scope, requirements, and decisions.
+- Involve the user before expanding the agreed scope.
+- Preserve existing behavior and compatibility unless explicitly agreed otherwise.
+
+### Collaboration
+
+Choose between interactive and delegated design based on the task and available capabilities. Switch approaches when beneficial.
+
+**Interactive design:**
+
+- Discuss consequential decisions about architecture, module boundaries, interfaces, contracts, and observable behavior with the user.
+- Present meaningful alternatives and trade-offs.
+- Use <skill>question</skill> when missing information could materially affect decisions.
+- Resolve low-impact details autonomously using established decisions and repository conventions.
+- Treat agreed decisions as approved without requiring redundant final approval.
+- Review any new consequential decisions introduced while assembling the design with the user.
+
+**Delegated design:**
+
+- Delegate bounded research, analysis, experiments, or design work to worker agents when appropriate.
+- Provide workers with sufficient context, constraints, and established decisions.
+- Require workers to record proposals, alternatives, trade-offs, assumptions, and unresolved questions in an artifact.
+- Review delegated results before adopting consequential decisions.
+- Resolve consequential questions with the user and relay answers to workers when necessary.
+- Prevent workers from independently finalizing decisions requiring user agreement.
+- Keep user interaction through the main agent unless the harness supports direct worker interaction.
+
+Pause for required user input and resume the design process once available.
+
+### Source code and artifacts
+
+- Prefer creating or modifying module structure, interfaces, declarations, types, schemas, exports, and function signatures.
+- Create minimal implementation skeletons only to establish responsibilities, dependencies, and integration boundaries.
+- Focus persistent source changes on structure and contracts, not internal behavior.
+- Avoid incomplete behavior in existing execution paths and unnecessary build or test failures.
+- Create supporting artifacts when code alone cannot adequately express decisions, rationale, or requirements.
+- Reuse existing artifacts instead of introducing redundant ones.
+- Record consequential decisions and rationale not evident from source code.
+- Avoid duplicating information already expressed in code.
+
+### Design and implementation boundary
+
+- Implement focused functionality only when necessary to discover, validate, or express consequential design decisions.
+- Use disposable prototypes or experiments to evaluate uncertain approaches.
+- Stop experimental implementation once the uncertainty is resolved.
+- Preserve validated interfaces, structural decisions, and relevant findings; discard unnecessary experimental code.
+- Leave internal business logic and complete feature behavior for subsequent implementation.
+- Avoid turning design into an unplanned implementation session.
+- Do not create tickets or decompose the design into implementation tasks.
 
 ## Completion
 
-Success:
+Complete the design only after:
 
-- The design addresses the agreed scope and requirements.
-- Consequential architectural and implementation decisions have been established with the user.
-- Module responsibilities and boundaries are defined.
-- Public interfaces, contracts, and relevant data structures are concretely expressed.
-- Source structure and implementation skeletons are established where appropriate.
-- Important behavior, invariants, and error handling expectations are understood.
-- Relevant testing and validation expectations are identified.
-- The design is sufficiently concrete to be decomposed into implementation tickets without requiring further consequential design decisions.
-- The user has approved the resulting design.
+- Addressing the agreed scope and requirements.
+- Establishing consequential decisions with the user.
+- Defining module responsibilities, boundaries, interfaces, contracts, and relevant data structures.
+- Establishing source structure, declarations, and skeletons where appropriate.
+- Clarifying important behavior, state transitions, interactions, invariants, and error handling.
+- Identifying relevant testing and validation expectations.
+- Preserving consequential decisions and rationale not evident from code.
+- Resolving uncertainties that could materially change architecture, public behavior, interfaces, or ticket decomposition.
+- Ensuring sufficient detail for ticket decomposition without further consequential design decisions.
+
+Infer reasonable low-impact details rather than blocking completion. Do not require complete behavioral implementation.
+
+Pause for user input when consequential decisions require it, and resume once available.
 
 Stop and return control when:
 
-- A consequential decision requires user input.
-- Essential context is unavailable.
+- Consequential uncertainty cannot be resolved.
+- Essential context remains unavailable.
 - Proceeding would violate an established boundary.
-- The user chooses to suspend or end the design process.
+- The user suspends or ends the process.
 
-Do not create tickets or begin full implementation upon completion.
+On successful completion, summarize the design, relevant source files and artifacts, agreed decisions, and remaining low-impact assumptions.
+
+Do not require redundant final approval, create tickets, or begin full implementation.
