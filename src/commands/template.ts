@@ -13,7 +13,26 @@ export class Template implements Command {
     }
 
     getUsage(): string {
-        return '';
+        const usageLines = [
+            'Usage:',
+            '  cr template [--help] [--json | --path] [<name> | <command>]',
+            '',
+            '  List, manage and interact with templates within the coderail system.',
+            '',
+            'Options:',
+            '  -h, --help           Show this help message and exit.',
+            '      --json           Output in JSON format.',
+            '      --path           Show only the path to the template.',
+            '',
+            'Arguments:',
+            '  <name>               Name of the template to filter by. To list template with',
+            '                       reserved name "create" or "delete", use "-- <name>".',
+            '',
+            'Commands:',
+            '  create <name>        Create a new template with the specified name.',
+            '  delete <name>        Delete the template with the specified name.',
+        ];
+        return usageLines.join('\n');
     }
 
     getSubcommand(): Command | undefined {

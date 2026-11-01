@@ -13,7 +13,16 @@ export class Upgrade implements Command {
     }
 
     getUsage(): string {
-        return '';
+        const usageLines = [
+            'Usage:',
+            '  cr upgrade [--help]',
+            '',
+            '  ',
+            '',
+            'Options:',
+            '  -h, --help           Show this help message and exit.',
+        ];
+        return usageLines.join('\n');
     }
 
     getSubcommand(): Command | undefined {

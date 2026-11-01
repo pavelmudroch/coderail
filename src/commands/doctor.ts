@@ -13,7 +13,19 @@ export class Doctor implements Command {
     }
 
     getUsage(): string {
-        return '';
+        const usageLines = [
+            'Usage:',
+            '  cr doctor [--help] [--repair]',
+            '',
+            '  Run system diagnostics and checks, providing information about coderail setup,',
+            '  environment, and optional steps for repair. Allows automatic remediation where',
+            '  possible.',
+            '',
+            'Options:',
+            '  -h, --help           Show this help message and exit.',
+            '      --repair         Attempt automatic remediation of detected issues.',
+        ];
+        return usageLines.join('\n');
     }
 
     getSubcommand(): Command | undefined {
