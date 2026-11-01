@@ -15,12 +15,14 @@ export class Upgrade implements Command {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr upgrade [--help]',
+            '  cr upgrade [--help] [--version <version>]',
             '',
-            '  ',
+            '  Upgrade the Coderail CLI to the latest or selected version.',
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
+            '      --version <version>',
+            '                       Specify the version to upgrade to.',
         ];
         return usageLines.join('\n');
     }

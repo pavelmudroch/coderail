@@ -80,7 +80,7 @@ export class Reforge implements Command<ReforgeArguments> {
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
-            '  --json               Output the idea as JSON.',
+            '      --json           Output the idea as JSON.',
             '',
             'Arguments:',
             '  <idea>               Path, slug, id or title of the idea to reforge.',

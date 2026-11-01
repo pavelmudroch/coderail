@@ -24,7 +24,7 @@ export class Delete implements Command {
             '      --path           Show only the path to the template.',
             '',
             'Arguments:',
-            '  <name>               Name of the template to filter by.',
+            '  <name>               Name of the template to delete.',
         ];
         return usageLines.join('\n');
     }

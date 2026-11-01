@@ -125,8 +125,8 @@ export class Close implements Command<CloseArguments> {
         const usageLines = [
             'Usage:',
             '  cr ticket close [--help] [--json] [--reason <done | dismissed>] <ticket-id>',
-            '  cr ticket close [--help] [--json] --reason duplicate --duplicate-of <ticket-id>',
-            '                  <ticket-id>',
+            '  cr ticket close [--help] [--json] --reason duplicate',
+            '                  --duplicate-of <ticket-id> <ticket-id>',
             '',
             '  Close the currently open or active ticket with the given ticket ID.',
             '',

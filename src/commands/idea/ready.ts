@@ -80,7 +80,7 @@ export class Ready implements Command<ReadyArguments> {
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
-            '  --json               Output the idea as JSON.',
+            '      --json           Output the idea as JSON.',
             '',
             'Arguments:',
             '  <idea>               Path, slug, id or title of the idea to mark as ready.',

@@ -26,7 +26,7 @@ export class Create implements Command {
             '      --path           Show only the path to the template.',
             '',
             'Arguments:',
-            '  <name>               Name of the template to filter by.',
+            '  <name>               Name of the template to create.',
             '',
             'Template structure is as follows:',
             '  <template-name>/',

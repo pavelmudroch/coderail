@@ -98,7 +98,7 @@ export class Split implements Command<SplitArguments> {
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
-            '  --json               Output the idea and its children as JSON.',
+            '      --json           Output the idea and its children as JSON.',
             '',
             'Arguments:',
             '  <idea>               Path, slug, id or title of the idea to split.',
