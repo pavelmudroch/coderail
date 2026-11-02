@@ -18,7 +18,7 @@ export async function loadConfiguration(
         logLevel: 'normal',
         noColor: false,
         nonInteractive: false,
-        verify: [],
+        verify: { pre: undefined, post: undefined, rules: [] },
     };
 
     using globalConfigurationFile = await getGlobalConfigurationFile(context.installRoot);
@@ -143,7 +143,7 @@ function validateConfigurationResult(
         value.forEach((item, index) => validateItem(item, [...path, index]));
     }
 
-    function verify(value: unknown, path: Path): void {
+    function verifyRule(value: unknown, path: Path): void {
         if (value === null || typeof value !== 'object' || Array.isArray(value)) {
             report(path, 'Expected an object');
             return;
@@ -189,7 +189,21 @@ function validateConfigurationResult(
                 if (typeof value !== 'boolean') report(path, 'Expected a boolean');
                 break;
             case 'verify':
-                array(value, path, verify);
+                if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+                    report(path, 'Expected an object');
+                    break;
+                }
+                for (const [member, entry] of Object.entries(value)) {
+                    const nested = [...path, member];
+                    if (member === 'rules') array(entry, nested, verifyRule);
+                    else if (member === 'pre' || member === 'post') {
+                        array(
+                            entry,
+                            nested,
+                            (command, commandPath) => array(command, commandPath, string),
+                        );
+                    } else report(nested, 'Unknown property', 'key');
+                }
                 break;
             default:
                 report(path, 'Unknown property', 'key');
@@ -213,6 +227,11 @@ function mergeConfiguration(base: Configuration, override: Partial<Configuration
         base.nonInteractive = override.nonInteractive;
     }
     if (override.verify !== undefined) {
-        base.verify.push(...override.verify);
+        base.verify.rules.push(...override.verify.rules ?? []);
+        for (const phase of ['pre', 'post'] as const) {
+            if (override.verify[phase] !== undefined) {
+                (base.verify[phase] ??= []).push(...override.verify[phase]);
+            }
+        }
     }
 }

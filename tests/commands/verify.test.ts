@@ -39,9 +39,10 @@ async function fixture(
         root: string,
         run: (
             args: string[],
-            rules?: Configuration['verify'],
+            rules?: Configuration['verify']['rules'],
             signal?: AbortSignal,
             root?: string,
+            actions?: Pick<Configuration['verify'], 'pre' | 'post'>,
         ) => Promise<void>,
         output: string[],
         info: string[],
@@ -71,18 +72,23 @@ async function fixture(
         await Deno.mkdir(`${root}/empty`);
         await test(
             root,
-            (args, rules = [], signal = new AbortController().signal, repositoryRoot = root) =>
-                command.run({
-                    context: { repositoryRoot, currentWorkingDirectory: root, installRoot: root },
-                    configuration: {
-                        verify: rules,
-                        logLevel: 'normal',
-                        noColor: true,
-                        nonInteractive: true,
-                    },
-                    parsedArguments: command.parseArguments(args),
-                    signal,
-                }),
+            (
+                args,
+                rules = [],
+                signal = new AbortController().signal,
+                repositoryRoot = root,
+                actions = {},
+            ) => command.run({
+                context: { repositoryRoot, currentWorkingDirectory: root, installRoot: root },
+                configuration: {
+                    verify: { rules, ...actions },
+                    logLevel: 'normal',
+                    noColor: true,
+                    nonInteractive: true,
+                },
+                parsedArguments: command.parseArguments(args),
+                signal,
+            }),
             output,
             info,
         );
@@ -222,6 +228,8 @@ Deno.test('Verify runtime supports help outside projects, initialization, cwd, q
                 '-c',
                 'user.name=Test',
                 '-c',
+                'commit.gpgsign=false',
+                '-c',
                 'user.email=test@example.com',
                 'commit',
                 '-qm',
@@ -244,7 +252,7 @@ await command.run({context:{repositoryRoot:${JSON.stringify(root)},currentWorkin
             JSON.stringify(root)
         },installRoot:${
             JSON.stringify(root)
-        }}, configuration:{verify:[{pattern:'a',commands:[[Deno.execPath(),'eval',"console.log('child output')"]]}]}, parsedArguments:command.parseArguments(['a']), signal:new AbortController().signal});`;
+        }}, configuration:{verify:{rules:[{pattern:'a',commands:[[Deno.execPath(),'eval',"console.log('child output')"]]}]}}, parsedArguments:command.parseArguments(['a']), signal:new AbortController().signal});`;
         for (const level of ['normal', 'quiet']) {
             const result = await new Deno.Command(Deno.execPath(), {
                 args: ['eval', '--config', config.pathname, script, level],
@@ -260,4 +268,141 @@ await command.run({context:{repositoryRoot:${JSON.stringify(root)},currentWorkin
     } finally {
         await Deno.remove(root, { recursive: true });
     }
+});
+
+Deno.test('Verify runs global actions once, independently of reuse, and prepares dependencies', async () => {
+    await fixture(async (root, run) => {
+        const append = [
+            Deno.execPath(),
+            'eval',
+            "Deno.writeTextFileSync('order', 'x', {append:true})",
+        ];
+        await run(
+            ['a', 'b'],
+            [
+                { pattern: '*', commands: [append], requires: ['ready'] },
+                { pattern: '*', commands: [append] },
+            ],
+            undefined,
+            root,
+            {
+                pre: [[], append, [Deno.execPath(), 'eval', "Deno.writeTextFileSync('ready', '')"]],
+                post: [append, [], append],
+            },
+        );
+        expect(await Deno.readTextFile(`${root}/order`)).toBe('xxxx');
+        expect(Deno.exitCode).toBe(0);
+    });
+});
+
+Deno.test('Verify cleanup follows preparation and verification failures and attempts every cleanup', async () => {
+    for (const short of [false, true]) {
+        for (const phase of ['pre', 'verify', 'post', 'launch'] as const) {
+            await fixture(async (root, run, output) => {
+                const mark = (
+                    text: string,
+                ) => [
+                    Deno.execPath(),
+                    'eval',
+                    `Deno.writeTextFileSync('order', '${text}', {append:true})`,
+                ];
+                const fail = [Deno.execPath(), 'eval', 'Deno.exit(1)'];
+                await run(
+                    [...(short ? ['-s'] : []), 'a'],
+                    [{
+                        pattern: '*',
+                        commands: phase === 'verify' ? [fail] : [mark('v')],
+                    }],
+                    undefined,
+                    root,
+                    {
+                        pre: [
+                            mark('p'),
+                            ...(phase === 'pre'
+                                ? [fail, mark('unreachable')]
+                                : phase === 'launch'
+                                ? [['/missing-coderail-command']]
+                                : []),
+                        ],
+                        post: [fail, ['/missing-coderail-cleanup'], mark('c')],
+                    },
+                );
+                expect(await Deno.readTextFile(`${root}/order`)).toBe(
+                    phase === 'pre' || phase === 'launch'
+                        ? 'pc'
+                        : phase === 'verify'
+                        ? 'pc'
+                        : 'pvc',
+                );
+                expect(Deno.exitCode).toBe(1);
+                expect(output.some((line) => line.includes('Cleanup') && line.includes('fail')))
+                    .toBe(true);
+            });
+        }
+    }
+});
+
+Deno.test('Verify skips actions without matching commands and validates before preparation', async () => {
+    await fixture(async (root, run) => {
+        const actions = {
+            pre: [[Deno.execPath(), 'eval', "Deno.writeTextFileSync('marker', '')"]],
+        };
+        for (
+            const rules of [[], [{ pattern: 'other', commands: [['unused']] }], [{
+                pattern: '*',
+                commands: [[]],
+            }]]
+        ) {
+            await run(['a'], rules, undefined, root, actions);
+        }
+        await expect(run(['missing'], [], undefined, root, actions)).rejects.toThrow();
+        await expect(run(['a'], [{ pattern: '${bad', commands: [] }], undefined, root, actions))
+            .rejects.toThrow();
+        await expect(Deno.stat(`${root}/marker`)).rejects.toThrow();
+    });
+});
+
+Deno.test('Verify successful cleanup preserves failures and runs after cancellation', async () => {
+    await fixture(async (root, run) => {
+        const post = [[
+            Deno.execPath(),
+            'eval',
+            "Deno.writeTextFileSync('clean', 'x', {append:true})",
+        ]];
+        await run(
+            ['a'],
+            [{ pattern: '*', commands: [[Deno.execPath(), 'eval', 'Deno.exit(1)']] }],
+            undefined,
+            root,
+            { post },
+        );
+        expect(Deno.exitCode).toBe(1);
+        const controller = new AbortController();
+        const pending = run(
+            ['a'],
+            [{
+                pattern: '*',
+                commands: [[
+                    Deno.execPath(),
+                    'eval',
+                    "Deno.writeTextFileSync('started', ''); setInterval(() => {}, 1000)",
+                ]],
+            }],
+            controller.signal,
+            root,
+            { post },
+        );
+        const timer = setInterval(() => {
+            try {
+                Deno.statSync(`${root}/started`);
+                controller.abort(new Error('cancelled'));
+            } catch { /* wait for child */ }
+        }, 10);
+        try {
+            await expect(pending).rejects.toThrow('cancelled');
+        } finally {
+            clearInterval(timer);
+        }
+        expect(await Deno.readTextFile(`${root}/clean`)).toBe('xx');
+    });
 });

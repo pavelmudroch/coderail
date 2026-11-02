@@ -102,7 +102,7 @@ Deno.test('Cr runs without initialization', async () => {
             logLevel: 'normal',
             noColor: false,
             nonInteractive: false,
-            verify: [],
+            verify: { rules: [] },
         },
         parsedArguments,
         signal: new AbortController().signal,

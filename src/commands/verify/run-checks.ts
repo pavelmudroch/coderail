@@ -65,31 +65,12 @@ export async function runChecks(
             if (!available) continue;
             for (const command of expanded.commands) {
                 signal.throwIfAborted();
-                const [executable, ...args] = command;
+                const [executable] = command;
                 if (executable === undefined) continue;
                 const key = JSON.stringify(command);
                 let outcome = cache.get(key);
                 if (!outcome) {
-                    try {
-                        const output = await new Deno.Command(executable, {
-                            args,
-                            cwd: root,
-                            signal,
-                            stdin: 'null',
-                            stdout: 'piped',
-                            stderr: 'piped',
-                        }).output();
-                        signal.throwIfAborted();
-                        const decoder = new TextDecoder();
-                        outcome = {
-                            command,
-                            status: output.success ? 'ok' : 'fail',
-                            output: decoder.decode(output.stdout) + decoder.decode(output.stderr),
-                        };
-                    } catch (error) {
-                        signal.throwIfAborted();
-                        outcome = { command, status: 'fail', output: String(error) };
-                    }
+                    outcome = await executeCommand(root, command, signal);
                     cache.set(key, outcome);
                     executedCommands++;
                 }
@@ -104,4 +85,34 @@ export async function runChecks(
         report(result);
     }
     return { executedCommands, failedFiles };
+}
+
+export async function executeCommand(
+    root: string,
+    command: string[],
+    signal: AbortSignal,
+): Promise<CommandResult> {
+    signal.throwIfAborted();
+    const [executable, ...args] = command;
+    if (executable === undefined) throw new Error('Cannot execute an empty command');
+    try {
+        const output = await new Deno.Command(executable, {
+            args,
+            cwd: root,
+            signal,
+            stdin: 'null',
+            stdout: 'piped',
+            stderr: 'piped',
+        }).output();
+        signal.throwIfAborted();
+        const decoder = new TextDecoder();
+        return {
+            command,
+            status: output.success ? 'ok' : 'fail',
+            output: decoder.decode(output.stdout) + decoder.decode(output.stderr),
+        };
+    } catch (error) {
+        signal.throwIfAborted();
+        return { command, status: 'fail', output: String(error) };
+    }
 }

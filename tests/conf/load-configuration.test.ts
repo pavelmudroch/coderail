@@ -118,7 +118,7 @@ Deno.test({
             logLevel: 'normal',
             noColor: false,
             nonInteractive: false,
-            verify: [],
+            verify: { rules: [] },
         });
         expect(
             await read(
@@ -126,14 +126,14 @@ Deno.test({
 log_level = "quiet"
 no_color = true
 non_interactive = false
-[[verify]]
+[[verify.rules]]
 pattern = "*.ts"
 commands = [["deno", "check"], []]
 requires = ["deno"]
 `,
                 `log_level = "verbose"
 non_interactive = true
-[[verify]]
+[[verify.rules]]
 pattern = "*.js"
 commands = []
 `,
@@ -143,10 +143,12 @@ commands = []
             logLevel: 'quiet',
             noColor: true,
             nonInteractive: false,
-            verify: [
-                { pattern: '*.js', commands: [] },
-                { pattern: '*.ts', commands: [['deno', 'check'], []], requires: ['deno'] },
-            ],
+            verify: {
+                rules: [
+                    { pattern: '*.js', commands: [] },
+                    { pattern: '*.ts', commands: [['deno', 'check'], []], requires: ['deno'] },
+                ],
+            },
         });
     },
 });
@@ -230,18 +232,18 @@ Deno.test({
                 'no_color = "true"',
                 'non_interactive = 0',
                 'verify = null',
-                '[verify]',
+                '[[verify]]',
                 'verify = [null, false, "rule", []]',
                 'unknown = true',
                 '__proto__ = true',
-                '[[verify]]\npattern = false\ncommands = []',
-                '[[verify]]\npattern = "*"\ncommands = false',
-                '[[verify]]\npattern = "*"\ncommands = ["deno"]',
-                '[[verify]]\npattern = "*"\ncommands = [[null, ["deno"]]]',
-                '[[verify]]\npattern = "*"\ncommands = []\nrequires = true',
-                '[[verify]]\npattern = "*"\ncommands = []\nrequires = [1]',
-                '[[verify]]\npattern = "*"\ncommands = []\nunknown = true',
-                '[[verify]]',
+                '[[verify.rules]]\npattern = false\ncommands = []',
+                '[[verify.rules]]\npattern = "*"\ncommands = false',
+                '[[verify.rules]]\npattern = "*"\ncommands = ["deno"]',
+                '[[verify.rules]]\npattern = "*"\ncommands = [[null, ["deno"]]]',
+                '[[verify.rules]]\npattern = "*"\ncommands = []\nrequires = true',
+                '[[verify.rules]]\npattern = "*"\ncommands = []\nrequires = [1]',
+                '[[verify.rules]]\npattern = "*"\ncommands = []\nunknown = true',
+                '[[verify.rules]]',
             ]
         ) {
             expect((await errors(text)).length, text).toBeGreaterThan(0);
@@ -255,24 +257,53 @@ Deno.test({
     fn: async () => {
         const failures = await errors(`no_color = 1
 unknown = true
-[[verify]]
+[[verify.rules]]
 pattern = false
 commands = [["deno", 2], [null]]
 requires = [false]
 extra = 0
-[[verify]]
+[[verify.rules]]
 requires = []
 `);
         expect(failures.map((error) => error.message)).toEqual([
             'no_color: Expected a boolean at line 1, column 12',
             'unknown: Unknown property at line 2, column 1',
-            'verify.0.pattern: Expected a string at line 4, column 11',
-            'verify.0.commands.0.1: Expected a string at line 5, column 22',
-            'verify.0.commands.1.0: Expected a string at line 5, column 27',
-            'verify.0.requires.0: Expected a string at line 6, column 13',
-            'verify.0.extra: Unknown property at line 7, column 1',
-            'verify.1.pattern: Missing required property "pattern"',
-            'verify.1.commands: Missing required property "commands"',
+            'verify.rules.0.pattern: Expected a string at line 4, column 11',
+            'verify.rules.0.commands.0.1: Expected a string at line 5, column 22',
+            'verify.rules.0.commands.1.0: Expected a string at line 5, column 27',
+            'verify.rules.0.requires.0: Expected a string at line 6, column 13',
+            'verify.rules.0.extra: Unknown property at line 7, column 1',
+            'verify.rules.1.pattern: Missing required property "pattern"',
+            'verify.rules.1.commands: Missing required property "commands"',
         ]);
     },
+});
+
+Deno.test('Conf::loadConfiguration validates and merges global actions independently', async () => {
+    expect(
+        (await read(
+            '[verify]\npre = [["local"]]\npost = [["clean"]]',
+            '[verify]\npre = [\n ["global"],\n []\n]\npost = [["first"]]',
+        )).verify,
+    ).toEqual({
+        rules: [],
+        pre: [['global'], [], ['local']],
+        post: [['first'], ['clean']],
+    });
+    expect((await read('[verify]', '[verify]\npre = [["global"]]')).verify).toEqual({
+        rules: [],
+        pre: [['global']],
+    });
+    for (
+        const text of [
+            '[verify]\nrules = [null]',
+            '[verify]\npre = false',
+            '[verify]\npost = ["bad"]',
+            '[verify]\npre = [[1]]',
+            '[verify]\nunknown = []',
+        ]
+    ) expect((await errors(text)).length).toBeGreaterThan(0);
+    expect((await errors('[verify]\npre = [[1]]'))[0]?.message).toBe(
+        'verify.pre.0.0: Expected a string at line 2, column 9',
+    );
 });

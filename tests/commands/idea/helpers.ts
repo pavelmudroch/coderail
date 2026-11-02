@@ -9,7 +9,7 @@ export async function runStub(command: Command, cwd: string): Promise<void> {
             logLevel: 'normal',
             noColor: false,
             nonInteractive: false,
-            verify: [],
+            verify: { pre: undefined, post: undefined, rules: [] },
         },
         parsedArguments: command.parseArguments(['--help']),
         signal: new AbortController().signal,

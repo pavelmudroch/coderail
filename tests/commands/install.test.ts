@@ -139,7 +139,7 @@ async function setupInstall(): Promise<InstallFixture> {
             logLevel: 'normal',
             noColor: false,
             nonInteractive: true,
-            verify: [],
+            verify: { rules: [] },
         },
         parsedArguments: command.parseArguments([]),
         signal: new AbortController().signal,

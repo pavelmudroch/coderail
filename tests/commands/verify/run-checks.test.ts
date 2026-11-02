@@ -200,3 +200,10 @@ Deno.test('runChecks skips filesystem roots, non-directory errors, and uncompile
         Deno.lstat = original;
     }
 });
+
+Deno.test('executeCommand rejects an empty command', async () => {
+    const { executeCommand } = await import('../../../src/commands/verify/run-checks.ts');
+    await expect(executeCommand('.', [], new AbortController().signal)).rejects.toThrow(
+        'Cannot execute an empty command',
+    );
+});

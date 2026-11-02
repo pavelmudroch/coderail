@@ -16,8 +16,8 @@ Additional decisions established during design:
   for later investigation. An empty command list has the same effect.
 
 Preserve the existing edits to `src/commands/verify.ts`, extending its help and
-replacing its stubs during implementation. No changes to configuration loading,
-runtime discovery, global argument parsing, or generic filesystem APIs are needed.
+replacing its stubs during implementation. Configuration loading supports the verification object described below.
+Runtime discovery, global argument parsing, and generic filesystem APIs are unchanged.
 
 ## Source structure and responsibilities
 
@@ -107,7 +107,7 @@ Pass the abort signal to Git subprocesses and check it while traversing.
 
 ## Rule compilation contract
 
-Reuse the existing rule type through `Configuration['verify']`.
+Reuse the existing rule type through `Configuration['verify']['rules']`.
 
 ```ts
 export type ExpandedRule = {
@@ -119,7 +119,7 @@ export type CompiledRule = {
     match(path: string): ExpandedRule | undefined;
 };
 
-export function compileRules(rules: Configuration['verify']): CompiledRule[];
+export function compileRules(rules: Configuration['verify']['rules']): CompiledRule[];
 ```
 
 Compile every rule once, preserving configuration order. Validate syntax and all
@@ -250,3 +250,37 @@ integration. Do not change existing configuration-loader acceptance tests.
 Run `cr test` for each changed source file and each added/changed test file as
 required by the repository instructions. No source or test files are changed by
 this design artifact.
+
+## Global preparation and cleanup
+
+Verification configuration is an object with `rules` (defaulting to an empty
+array), and optional `pre` and `post` argument-array command lists. Migrate old
+`[[verify]]` headers to `[[verify.rules]]`; the old array shape is rejected.
+Rules-only configuration can use `[[verify.rules]]` without a parent header.
+Global configuration entries precede local entries independently for all three
+lists; omitted members preserve earlier entries.
+
+```toml
+[verify]
+pre = [["mkdir", "-p", "coverage"]]
+post = [["rm", "-rf", ".mutation-tmp"]]
+
+[[verify.rules]]
+pattern = "src/**/*.ts"
+commands = [["deno", "test", "--coverage=coverage"]]
+```
+
+Compile rules and validate selection before actions. If no selected file matches
+a rule with a nonempty command, skip actions. Otherwise run preparation once,
+sequentially, before dependency checks, allowing preparation to create required
+files. Stop preparation at its first failure and skip verification. Always
+attempt every cleanup command in a finally block, including after errors or
+cancellation. Cleanup uses an independent abort signal so invocation cancellation
+does not prevent it; forced process termination cannot guarantee cleanup.
+
+Actions use the same project directory, argument boundaries, and output buffering
+as checks, without capture substitution or result reuse. A preparation or cleanup
+failure is reported by phase, without a file association. Short output retains
+phase failures; quiet output suppresses captured output. Any action failure sets
+a failure exit status and cleanup success does not clear earlier failures.
+Original invocation errors propagate after cleanup.

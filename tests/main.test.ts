@@ -129,7 +129,7 @@ function setupCommands(realCommands = false): Fixture {
             logLevel: 'normal',
             noColor: false,
             nonInteractive: false,
-            verify: [],
+            verify: { rules: [] },
         });
     };
     Log.output = (...messages) => {

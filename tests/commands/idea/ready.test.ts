@@ -85,7 +85,7 @@ async function ready(cwd: string, args: string[]): Promise<unknown[][]> {
                 logLevel: 'normal',
                 noColor: false,
                 nonInteractive: false,
-                verify: [],
+                verify: { rules: [] },
             },
             parsedArguments: command.parseArguments(args),
             signal: new AbortController().signal,

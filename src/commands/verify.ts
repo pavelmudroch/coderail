@@ -4,7 +4,7 @@ import { Cli } from '@cli';
 import { Log } from '@log';
 import { compileRules } from './verify/compile-rules.ts';
 import { selectFiles } from './verify/select-files.ts';
-import { type FileResult, runChecks } from './verify/run-checks.ts';
+import { executeCommand, type FileResult, runChecks } from './verify/run-checks.ts';
 
 type VerifyArguments = {
     help: boolean;
@@ -68,6 +68,8 @@ export class Verify implements Command<VerifyArguments> {
             '  on stderr. --short shows only file statuses; --quiet suppresses command',
             '  output while retaining file and command statuses.',
             '',
+            '  Optional verify.pre and verify.post run once around matching work.',
+            '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
             '  -s, --short          Show a short output, verified file per line with status',
@@ -93,7 +95,7 @@ export class Verify implements Command<VerifyArguments> {
         }
 
         const args = context.parsedArguments.args;
-        const rules = compileRules(context.configuration.verify);
+        const rules = compileRules(context.configuration.verify.rules);
         const files = await selectFiles(
             root,
             context.context.currentWorkingDirectory,
@@ -101,28 +103,62 @@ export class Verify implements Command<VerifyArguments> {
             args.changed,
             context.signal,
         );
-        const result = await runChecks(root, files, rules, context.signal, (file) => {
-            const status = formatStatus(file.status);
-            Log.output(`${file.path} ${status}`);
-            if (args.short) {
-                return;
-            }
-
-            for (const command of file.commands) {
-                const commandStatus = formatStatus(command.status);
-                Log.output(`  ${JSON.stringify(command.command)} ${commandStatus}`);
-                if (command.output) {
-                    Log.info(command.output);
+        const verify = context.configuration.verify;
+        const hasWork = files.some((file) =>
+            rules.some((rule) => rule.match(file)?.commands.some((command) => command.length > 0))
+        );
+        const runActions = async (phase: 'pre' | 'post', signal: AbortSignal): Promise<boolean> => {
+            let successful = true;
+            for (const command of verify[phase] ?? []) {
+                if (command.length === 0) continue;
+                const outcome = await executeCommand(root, command, signal);
+                if (!args.short || outcome.status === 'fail') {
+                    Log.output(
+                        `${phase === 'pre' ? 'Preparation' : 'Cleanup'} ${
+                            formatStatus(outcome.status)
+                        }`,
+                    );
+                }
+                if (!args.short) {
+                    Log.output(`  ${JSON.stringify(command)} ${formatStatus(outcome.status)}`);
+                    if (outcome.output) Log.info(outcome.output);
+                }
+                if (outcome.status === 'fail') {
+                    successful = false;
+                    Deno.exitCode = 1;
+                    if (phase === 'pre') break;
                 }
             }
-        });
+            return successful;
+        };
+        try {
+            if (hasWork && !await runActions('pre', context.signal)) return;
+            const result = await runChecks(root, files, rules, context.signal, (file) => {
+                const status = formatStatus(file.status);
+                Log.output(`${file.path} ${status}`);
+                if (args.short) {
+                    return;
+                }
 
-        if (result.executedCommands === 0) {
-            Log.output('No tests found');
-        }
+                for (const command of file.commands) {
+                    const commandStatus = formatStatus(command.status);
+                    Log.output(`  ${JSON.stringify(command.command)} ${commandStatus}`);
+                    if (command.output) {
+                        Log.info(command.output);
+                    }
+                }
+            });
 
-        if (result.failedFiles > 0) {
-            Deno.exitCode = 1;
+            if (result.executedCommands === 0) {
+                Log.output('No tests found');
+            }
+
+            if (result.failedFiles > 0) {
+                Deno.exitCode = 1;
+            }
+        } finally {
+            // Cleanup is best effort after cancellation; forced termination cannot run finally.
+            if (hasWork) await runActions('post', new AbortController().signal);
         }
     }
 }

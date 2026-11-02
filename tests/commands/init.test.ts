@@ -12,7 +12,12 @@ const defaultConfiguration = [
     '',
     '# Add your verification configuration here.',
     '# Example:',
-    '# [[verify]]',
+    '# Optional global actions (place before rule entries):',
+    '# [verify]',
+    '# pre = [["mkdir", "-p", "coverage"]]',
+    '# post = [["rm", "-rf", ".mutation-tmp"]]',
+    '#',
+    '# [[verify.rules]]',
     '# pattern = src/${path:**}/${file:*}.ts',
     '# commands = [',
     '#   ["command", "argument_1", "argument_2"]',
@@ -25,7 +30,12 @@ function context(root: string, args: string[] = []): RunContext<
 > {
     return {
         context: { currentWorkingDirectory: root, installRoot: root },
-        configuration: { logLevel: 'normal', noColor: false, nonInteractive: false, verify: [] },
+        configuration: {
+            logLevel: 'normal',
+            noColor: false,
+            nonInteractive: false,
+            verify: { rules: [] },
+        },
         parsedArguments: new Init().parseArguments(args),
         signal: new AbortController().signal,
     };

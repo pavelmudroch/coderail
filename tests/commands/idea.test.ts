@@ -165,7 +165,12 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
         ].join('\n')]]);
         await command.run({
             context: { currentWorkingDirectory: root, installRoot: '/install' },
-            configuration: { logLevel: 'normal', noColor: true, nonInteractive: false, verify: [] },
+            configuration: {
+                logLevel: 'normal',
+                noColor: true,
+                nonInteractive: false,
+                verify: { rules: [] },
+            },
             parsedArguments: command.parseArguments(['--json']),
             signal: new AbortController().signal,
         });

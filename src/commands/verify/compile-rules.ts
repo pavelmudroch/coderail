@@ -35,7 +35,7 @@ function compileGlob(glob: string, segmentStart = true): string {
     return source;
 }
 
-export function compileRules(rules: Configuration['verify']): CompiledRule[] {
+export function compileRules(rules: Configuration['verify']['rules']): CompiledRule[] {
     return rules.map((rule, index): CompiledRule => {
         const names: string[] = [];
         const pattern = rule.pattern;
