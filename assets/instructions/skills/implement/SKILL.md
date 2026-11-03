@@ -25,6 +25,6 @@ Implement the specified or next ready ticket, validate changes, and close the co
 3. Read the activated ticket and its tasks.
 4. Close the ticket with `cr ticket close --reason=duplicate --duplicate-of=<duplicate-ticket> <ticket>` and stop if another ticket already implements its scope.
 5. Implement each task in numbered order. Validate its criteria before marking it `[x]`.
-6. Validate changed project files with `cr test -s <changed-files...>` after completing all tasks.
-7. Inspect each failed file with `cr test <failed-file>`. Fix failures and repeat step 6 until all changed files pass.
+6. Validate changed project files with `cr verify -s <changed-files...>` after completing all tasks.
+7. Inspect each failed file with `cr verify <failed-file>`. Fix failures and repeat step 6 until all changed files pass.
 8. Close the ticket with `cr ticket close --reason=done <ticket>` only after completing every task and passing validation.
