@@ -1,14 +1,26 @@
 ---
 name: code
-description: Always use for task involving source code, coding, implementation, modification, refactoring, debugging, testing, or code review.
+description: Apply to source code implementation, modification, refactoring, debugging, testing, and review.
 ---
 
-For coding work, interpret general instructions as follows:
+## Goal
 
-* "Minimum complete solution" means minimum working code satisfying the request.
-* "Existing conventions" includes coding style, naming, file structure, APIs, and test patterns.
-* "Existing work" includes dirty worktrees and unknown changes.
-* "Unused or obsolete" includes imports, variables, functions, types, and code made dead by your changes.
-* Don't remove pre-existing dead code unless directly requested or necessary for the requested change.
+Deliver the minimum complete working solution satisfying the request.
 
-To validate changes, run `cr test --changed` or `cr test <path-to-file-or-directory> ...` for specific files.
+- Match existing conventions for style, naming, structure, APIs, and tests.
+- Prefer explicitness over convenience.
+- Keep communication concise.
+- Validate changes using `cr test --changed` or `cr test <path> ...` for specific files.
+
+## Boundary
+
+- State assumptions that materially affect the solution. Ask before proceeding when material uncertainty remains.
+- Present materially different interpretations instead of choosing silently.
+- Propose simpler alternatives and challenge unnecessary complexity.
+- Change only what is requested or necessary to support it.
+- Avoid abstractions and structure for one-off use unless they materially improve clarity.
+- Preserve existing work, including dirty worktrees and unknown changes. Treat unknown changes as user-owned.
+- Explain necessary modifications and their reasons.
+- Remove imports, variables, functions, types, and other code made unused or obsolete by your changes.
+- Preserve pre-existing unused or obsolete code unless its removal is requested or necessary.
+- Report unrelated issues without modifying them.

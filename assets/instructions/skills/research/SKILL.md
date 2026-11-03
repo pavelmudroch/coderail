@@ -1,26 +1,24 @@
 ---
 name: research
-description: Gather information, analyze data, and synthesize insights for specific topics or questions.
+description: Delegate focused research to a subagent and return concise, evidence-backed findings without polluting the main context.
 ---
-Delegate research that would consume main-agent context, such as:
 
-* searching or tracing code
-* locating definitions, usages, dependencies, related implementations
-* researching docs, standards, APIs, or web sources
-* comparing approaches or options
+## Goal
 
-Give the subagent:
+Delegate context-intensive research to a subagent. Investigate code, dependencies, documentation, standards, APIs, external sources, or alternative approaches.
 
-* research question
-* relevant context and constraints
-* scope to inspect
+## Boundary
 
-Ask it to investigate independently and return only a concise summary with:
+- Delegate only research with a clear question and scope.
+- Provide the research question, relevant context, constraints, and inspection scope.
+- Keep raw findings, search output, and exploration within the subagent context.
+- Avoid implementation, file modifications, and unrelated investigation.
+- Preserve references needed to verify findings.
 
-* relevant findings
-* important paths, symbols, commands, URLs, or other evidence
-* material uncertainties, conflicts, or missing information
+## Completion
 
-Use the summary as the research result in main context.
-
-Keep raw search output, exploration, and irrelevant details in subagent context.
+- Return a concise summary of relevant findings.
+- Include important paths, symbols, commands, URLs, and supporting evidence.
+- Identify material uncertainties, conflicting evidence, and missing information.
+- Distinguish verified findings from assumptions.
+- Incorporate only the summary into the main context.

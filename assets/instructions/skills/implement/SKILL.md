@@ -3,57 +3,28 @@ name: implement
 description: Implement the next ready ticket.
 disable-model-invocation: true
 ---
-# Implement the next ready ticket.
 
-`<ticket>` may be a numeric ID, title slug, ID + title slug, or ticket path.
+## Goal
 
-## 1. Determine the ticket:
+Implement the specified or next ready ticket, validate changes, and close the completed ticket.
 
-If the user provided a ticket, use it, otherwise retrieve one ready ticket:
+## Boundary
 
-`cr ticket next -l 1`
+- Accept `<ticket>` as a numeric ID, title slug, ID + title slug, or ticket path.
+- Follow ticket tasks in numbered order.
+- Preserve unrelated changes.
+- Mark tasks `[x]` only after satisfying their validation criteria.
+- Leave incomplete tasks `[ ]`.
+- Exclude the ticket file and files not changed by this implementation from validation.
+- Never close an incomplete or failing ticket.
 
-Stop if none is available.
+## Completion
 
-## 2. Activate it:
-
-`cr ticket activate <ticket>`
-
-Use the returned path as the active ticket path.
-
-## 3. Read the activated ticket.
-
-## 4. If the ticket is already implemented by another ticket, close it as a duplicate:
-
-`cr ticket close --reason=duplicate --duplicate-of=<duplicate-ticket> <ticket>`
-
-Then stop.
-
-## 5. Implement tasks in numbered order.
-
-For each task:
-
-* follow its details and validation criteria
-* preserve unrelated existing changes
-* mark it `[x]` only after its validation criteria are satisfied
-* leave incomplete tasks `[ ]`
-
-## 6. After all tasks are complete, validate project files changed by this implementation:
-
-`cr test -s <changed-files...>`
-
-Include only project files changed by the agent, excluding the ticket file.
-
-## 7. For each failed file, inspect the failure:
-
-`cr test <failed-file>`
-
-Fix the issue, then rerun:
-
-`cr test -s <changed-files...>`
-
-Repeat until all changed files pass.
-
-## 8. When every task is `[x]` and all changed files pass, close the ticket:
-
-`cr ticket close --reason=done <ticket>`
+1. Use the provided `<ticket>` or retrieve the next ready ticket with `cr ticket next -l 1`. Stop if none exists.
+2. Activate the ticket with `cr ticket activate <ticket>`. Use the returned path for subsequent operations.
+3. Read the activated ticket and its tasks.
+4. Close the ticket with `cr ticket close --reason=duplicate --duplicate-of=<duplicate-ticket> <ticket>` and stop if another ticket already implements its scope.
+5. Implement each task in numbered order. Validate its criteria before marking it `[x]`.
+6. Validate changed project files with `cr test -s <changed-files...>` after completing all tasks.
+7. Inspect each failed file with `cr test <failed-file>`. Fix failures and repeat step 6 until all changed files pass.
+8. Close the ticket with `cr ticket close --reason=done <ticket>` only after completing every task and passing validation.

@@ -1,80 +1,40 @@
 ---
 name: commit
-description: Commit changes to the Git repository
+description: Commit staged Git changes into logically coherent commits
 disable-model-invocation: true
 ---
 
-Create one or more commits from currently staged Git changes.
+## Goal
 
-Treat the staged diff at invocation time as the complete commit input. Never include originally unstaged or untracked changes.
+Create one or more logically coherent commits from currently staged Git changes.
 
-## Inspect
+Group changes by purpose, not by file. Separate independent concerns into distinct commits. Keep related implementation, tests, documentation, and configuration together.
 
-Inspect:
+Follow repository conventions and use Conventional Commits:
 
-```sh
-git status --short
-git diff --cached
-git diff
-git log -10 --oneline
-```
+`<type>[optional scope]: <description>`
 
-If nothing is staged, stop.
+Use `feat`, `fix`, `docs`, `chore`, `test`, `refactor`, or `style`. Keep descriptions concise and intent-focused. Add bodies or footers when useful.
 
-Use recent history to follow repository conventions.
+## Boundary
 
-## Group
+- Treat the initial staged diff as the complete and immutable commit scope.
+- Never include initially unstaged or untracked changes.
+- Preserve existing unstaged and untracked changes.
+- Split individual files or hunks across commits when necessary.
+- Stage only changes belonging to the current commit.
+- Never use `git add .` or `git add -A`.
+- Never modify source files to facilitate commits.
+- Never amend existing commits.
 
-Group changes by logical purpose, not by file.
+## Completion
 
-Use one commit per coherent change. Split independent features, fixes, refactors, docs, tests, tooling, cleanup, or other unrelated concerns.
-
-A single file may belong to multiple commits. Split chunks when needed.
-
-Keep related implementation, tests, docs, and configuration together.
-
-When splitting:
-
-* preserve the original staged diff as the source of truth
-* never include originally unstaged or untracked changes
-* avoid `git add .` and `git add -A`
-* use explicit paths or patch-based staging
-* after each commit, stage only the remaining original changes for the next group
-
-Before each commit, verify with:
-
-```sh
-git diff --cached
-```
-
-## Commit messages
-
-Use Conventional Commits:
-
-```text
-<type>[optional scope]: <description>
-```
-
-Types: `feat`, `fix`, `docs`, `chore`, `tests`, `refactor`, `style`.
-
-Keep the description concise and intent-focused.
-
-Add body or footer when useful using additional `-m` arguments.
-
-## Verify
-
-After all commits:
-
-```sh
-git status --short
-git log --oneline -n <number-of-created-commits>
-```
-
-Verify that:
-
-* all originally staged changes were committed
-* originally unstaged and untracked changes remain untouched
-* unrelated changes were separated
-* each commit is logically coherent
-
-Summarize created commits and their contents.
+1. Inspect `git status --short`, `git diff --cached`, `git diff`, and `git log -10 --oneline`.
+2. Stop if no changes are staged.
+3. Identify independent change groups within the initial staged diff.
+4. Isolate each group using explicit paths or patch-based staging.
+5. Verify each staged group with `git diff --cached`.
+6. Commit each group using Conventional Commits.
+7. Verify the result with `git status --short` and `git log --oneline -n <count>`.
+8. Confirm all initially staged changes were committed and all initially unstaged and untracked changes remain intact.
+9. Summarize created commits and their contents.
