@@ -2,10 +2,11 @@
 id: "0001"
 slug: "resolve-and-verify-upgrade-release-packages"
 title: "Resolve and verify upgrade release packages"
-status: "open"
+status: "closed"
 created_at: "2026-11-03T13:10:42.738Z"
-updated_at: "2026-11-03T13:29:11.965Z"
+updated_at: "2026-11-03T15:53:05.986Z"
 dependencies: []
+reason: "done"
 ---
 
 # Resolve and verify upgrade release packages
@@ -14,9 +15,9 @@ Provide a verified staged distribution for a selected stable release or current 
 
 ## Tasks
 
-1. [ ] Add fixture-driven release resolution and package validation tests
-2. [ ] Implement stable and canary release resolution
-3. [ ] Download, validate, and extract the selected distribution into staging
+1. [x] Add fixture-driven release resolution and package validation tests
+2. [x] Implement stable and canary release resolution
+3. [x] Download, validate, and extract the selected distribution into staging
 
 ## Task details
 
