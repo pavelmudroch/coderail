@@ -147,7 +147,7 @@ export class Create implements Command<CreateArguments> {
                 throw new Error(`Idea with "${ideaDirectory}" already exists.`);
             }
 
-            const markdown = Md.create('', { title, status: IDEA_STATUS.FORGING });
+            const markdown = Md.create('', { title, status: IDEA_STATUS.OPEN });
             const ideaDir = await Fs.makeTempDirectory();
             await ideaDir.addFile('IDEA.md', Md.toStream(markdown));
             await Fs.replace(ideaDir.path, ideaDirectory);
@@ -157,7 +157,7 @@ export class Create implements Command<CreateArguments> {
                 slug: slug,
                 frontmatter: {
                     title,
-                    status: IDEA_STATUS.FORGING,
+                    status: IDEA_STATUS.OPEN,
                 },
                 files: ['IDEA.md'],
                 children: [],

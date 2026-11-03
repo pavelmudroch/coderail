@@ -23,9 +23,9 @@ Deno.test('getIdeaTree reads nested ideas, metadata, direct files, and sorted si
     await withPlans(async (plans, cwd) => {
         await writeIdea(plans, 'z-root', 'title: Last\nstatus: ready');
         await writeIdea(plans, 'a-root', 'title: "Parent: idea"\nstatus: split');
-        await writeIdea(plans, 'a-root/z-child', 'title: Last child\nstatus: forging');
+        await writeIdea(plans, 'a-root/z-child', 'title: Last child\nstatus: open');
         await writeIdea(plans, 'a-root/a-child', 'title: First child\nstatus: ready');
-        await writeIdea(plans, 'a-root/a-child/leaf', 'title: Leaf\nstatus: forging');
+        await writeIdea(plans, 'a-root/a-child/leaf', 'title: Leaf\nstatus: open');
         await Deno.writeTextFile(join(plans, 'a-root', 'SPEC.md'), 'Specification');
         await Deno.writeTextFile(join(plans, 'a-root', 'A.txt'), 'Attachment');
         await Deno.writeTextFile(join(plans, 'README.md'), 'Not an idea');
@@ -44,7 +44,7 @@ Deno.test('getIdeaTree reads nested ideas, metadata, direct files, and sorted si
             path: join(plans, 'a-root', 'a-child', 'leaf'),
             id: 'a-root/a-child/leaf',
             slug: 'leaf',
-            frontmatter: { title: 'Leaf', status: 'forging' },
+            frontmatter: { title: 'Leaf', status: 'open' },
             files: ['IDEA.md'],
             children: [],
         };
@@ -68,7 +68,7 @@ Deno.test('getIdeaTree reads nested ideas, metadata, direct files, and sorted si
                         path: join(plans, 'a-root', 'z-child'),
                         id: 'a-root/z-child',
                         slug: 'z-child',
-                        frontmatter: { title: 'Last child', status: 'forging' },
+                        frontmatter: { title: 'Last child', status: 'open' },
                         files: ['IDEA.md'],
                         children: [],
                     },

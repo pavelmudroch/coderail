@@ -2,21 +2,21 @@ import { expect } from '@std/expect';
 import { join } from '@std/path';
 import { Log } from '@log';
 import { UsageError } from '../../../src/cli/usage-error.ts';
-import { Reforge } from '../../../src/commands/idea/reforge.ts';
+import { Reopen } from '../../../src/commands/idea/reopen.ts';
 
-Deno.test('Idea reforge requires initialization and supports help', () => {
-    const command = new Reforge();
+Deno.test('Idea reopen requires initialization and supports help', () => {
+    const command = new Reopen();
     expect(command.requiresInit).toBe(true);
     expect(command.getSubcommand()).toBeUndefined();
-    expect(command.getUsage()).toContain('cr idea reforge');
+    expect(command.getUsage()).toContain('cr idea reopen');
     for (const args of [['-h', '--unknown'], ['--help'], ['idea', '--help']]) {
         expect(command.shouldHandleHelp(command.parseArguments(args))).toBe(true);
     }
     expect(command.shouldHandleHelp(command.parseArguments(['idea']))).toBe(false);
 });
 
-Deno.test('Idea reforge parses one reference and optional JSON output', () => {
-    const command = new Reforge();
+Deno.test('Idea reopen parses one reference and optional JSON output', () => {
+    const command = new Reopen();
     expect(command.parseArguments(['ideas/example'])).toEqual({
         args: { help: false, ideaReference: 'ideas/example', json: false },
         rest: [],
@@ -40,8 +40,8 @@ Deno.test('Idea reforge parses one reference and optional JSON output', () => {
     expect(command.parseArguments(sparseArgs)).toEqual(command.parseArguments(['idea']));
 });
 
-Deno.test('Idea reforge rejects invalid arguments with usage', () => {
-    const command = new Reforge();
+Deno.test('Idea reopen rejects invalid arguments with usage', () => {
+    const command = new Reopen();
     for (
         const args of [
             [],
@@ -69,8 +69,8 @@ Deno.test('Idea reforge rejects invalid arguments with usage', () => {
     }
 });
 
-async function reforge(cwd: string, args: string[]): Promise<unknown[][]> {
-    const command = new Reforge();
+async function reopen(cwd: string, args: string[]): Promise<unknown[][]> {
+    const command = new Reopen();
     const originalOutput = Log.output;
     const originalNoColor = Log.noColor;
     const output: unknown[][] = [];
@@ -97,7 +97,7 @@ async function reforge(cwd: string, args: string[]): Promise<unknown[][]> {
     }
 }
 
-Deno.test('Idea reforge resolves references and preserves content, metadata, and other files', async () => {
+Deno.test('Idea reopen resolves references and preserves content, metadata, and other files', async () => {
     const cwd = await Deno.makeTempDir();
     const parent = join(cwd, '.coderail', 'plans', 'parent');
     const directory = join(parent, 'example');
@@ -118,13 +118,13 @@ Deno.test('Idea reforge resolves references and preserves content, metadata, and
             await Deno.writeTextFile(
                 filePath,
                 `---\ntitle: Example idea\nstatus: ${
-                    index === 0 ? 'forging' : 'ready'
+                    index === 0 ? 'open' : 'ready'
                 }\ncustom: keep\n---\n# Content\n\nKeep me\n`,
             );
-            const output = await reforge(cwd, index === 0 ? [reference] : ['--json', reference]);
+            const output = await reopen(cwd, index === 0 ? [reference] : ['--json', reference]);
             if (index === 0) {
                 expect(output).toEqual([[[
-                    '└── Example idea ◌ forging [IDEA.md, SPEC.md]',
+                    '└── Example idea ◌ open [IDEA.md, SPEC.md]',
                     `    ${directory}`,
                 ].join('\n')]]);
             } else {
@@ -132,13 +132,13 @@ Deno.test('Idea reforge resolves references and preserves content, metadata, and
                     path: directory,
                     id: 'parent/example',
                     title: 'Example idea',
-                    status: 'forging',
+                    status: 'open',
                     parent: 'parent',
                     files: ['IDEA.md', 'SPEC.md'],
                 }]);
             }
             expect(await Deno.readTextFile(filePath)).toBe(
-                '---\ntitle: "Example idea"\nstatus: "forging"\ncustom: "keep"\n---\n# Content\n\nKeep me\n',
+                '---\ntitle: "Example idea"\nstatus: "open"\ncustom: "keep"\n---\n# Content\n\nKeep me\n',
             );
             expect(await Deno.readTextFile(join(directory, 'SPEC.md'))).toBe('Keep specification');
             expect(await Deno.readTextFile(join(parent, 'IDEA.md'))).toBe(parentContent);
@@ -148,7 +148,7 @@ Deno.test('Idea reforge resolves references and preserves content, metadata, and
     }
 });
 
-Deno.test('Idea reforge rejects split and missing ideas without changing files', async () => {
+Deno.test('Idea reopen rejects split and missing ideas without changing files', async () => {
     const cwd = await Deno.makeTempDir();
     const directory = join(cwd, '.coderail', 'plans', 'example');
     const filePath = join(directory, 'IDEA.md');
@@ -157,20 +157,20 @@ Deno.test('Idea reforge rejects split and missing ideas without changing files',
         const original = `---\ntitle: Example\nstatus: split\n---\nKeep me\n`;
         await Deno.writeTextFile(filePath, original);
         try {
-            await reforge(cwd, ['example']);
+            await reopen(cwd, ['example']);
             throw new Error('Expected status transition to fail.');
         } catch (error) {
-            expect((error as Error).message).toBe('Cannot reforge idea "example"');
+            expect((error as Error).message).toBe('Cannot reopen idea "example"');
             expect(((error as Error).cause as Error).message).toBe(
                 'Idea "example" is split.',
             );
         }
         expect(await Deno.readTextFile(filePath)).toBe(original);
         try {
-            await reforge(cwd, ['missing']);
+            await reopen(cwd, ['missing']);
             throw new Error('Expected resolution to fail.');
         } catch (error) {
-            expect((error as Error).message).toBe('Cannot reforge idea "missing"');
+            expect((error as Error).message).toBe('Cannot reopen idea "missing"');
             expect(((error as Error).cause as Error).message).toBe('Idea not found: missing');
         }
     } finally {

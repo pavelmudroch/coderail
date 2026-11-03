@@ -8,17 +8,17 @@ import { formatJson, formatText } from './helpers/format.ts';
 import { IDEA_STATUS } from './helpers/idea-frontmatter.ts';
 import { resolveIdea } from './helpers/resolve-idea.ts';
 
-type ReforgeArguments = {
+type ReopenArguments = {
     help: boolean;
     ideaReference: string;
     json: boolean;
 };
 
-export class Reforge implements Command<ReforgeArguments> {
+export class Reopen implements Command<ReopenArguments> {
     readonly requiresInit = true;
 
-    parseArguments(originalArgs: readonly string[]): ParsedArguments<ReforgeArguments> {
-        const args: ReforgeArguments = {
+    parseArguments(originalArgs: readonly string[]): ParsedArguments<ReopenArguments> {
+        const args: ReopenArguments = {
             help: false,
             ideaReference: '',
             json: false,
@@ -67,23 +67,23 @@ export class Reforge implements Command<ReforgeArguments> {
         return { args, rest };
     }
 
-    shouldHandleHelp(parsedArguments: ParsedArguments<ReforgeArguments>): boolean {
+    shouldHandleHelp(parsedArguments: ParsedArguments<ReopenArguments>): boolean {
         return parsedArguments.args.help;
     }
 
     getUsage(): string {
         return [
             'Usage:',
-            '  cr idea reforge [--help] [--json] <idea>',
+            '  cr idea reopen [--help] [--json] <idea>',
             '',
-            '  Reforge an existing idea. Not applicable to a split idea.',
+            '  Reopen an existing idea. Not applicable to a split idea.',
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
             '      --json           Output the idea as JSON.',
             '',
             'Arguments:',
-            '  <idea>               Path, slug, id or title of the idea to reforge.',
+            '  <idea>               Path, slug, id or title of the idea to reopen.',
         ].join('\n');
     }
 
@@ -91,7 +91,7 @@ export class Reforge implements Command<ReforgeArguments> {
         return undefined;
     }
 
-    async run(context: RunContext<ReforgeArguments>): Promise<void> {
+    async run(context: RunContext<ReopenArguments>): Promise<void> {
         const reference = context.parsedArguments.args.ideaReference;
         try {
             const idea = await resolveIdea(context.context.currentWorkingDirectory, reference);
@@ -100,16 +100,16 @@ export class Reforge implements Command<ReforgeArguments> {
             }
             const filePath = join(idea.path, 'IDEA.md');
             const markdown = await Md.parse(await Fs.read(filePath, { text: true }));
-            markdown.frontmatter.status = IDEA_STATUS.FORGING;
+            markdown.frontmatter.status = IDEA_STATUS.OPEN;
             await Fs.write(filePath, Md.toStream(markdown));
-            idea.frontmatter.status = IDEA_STATUS.FORGING;
+            idea.frontmatter.status = IDEA_STATUS.OPEN;
             if (context.parsedArguments.args.json) {
                 Log.output(formatJson([idea]));
                 return;
             }
             Log.output(formatText([idea]));
         } catch (error) {
-            throw new Error(`Cannot reforge idea "${reference}"`, { cause: error });
+            throw new Error(`Cannot reopen idea "${reference}"`, { cause: error });
         }
     }
 }

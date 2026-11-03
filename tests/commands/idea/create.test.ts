@@ -148,7 +148,7 @@ async function create(cwd: string, args: string[]): Promise<unknown[][]> {
 
 async function expectIdea(directory: string, title: string): Promise<void> {
     const markdown = await Md.parse(await Fs.read(join(directory, 'IDEA.md'), { text: true }));
-    expect(markdown.frontmatter).toEqual({ title, status: 'forging' });
+    expect(markdown.frontmatter).toEqual({ title, status: 'open' });
     let content = '';
     for await (const chunk of markdown.content) content += chunk;
     expect(content.trim()).toBe('');
@@ -181,11 +181,11 @@ async function expectFailure(
     }
 }
 
-Deno.test('Idea create writes a forging idea in the supplied working directory', async () => {
+Deno.test('Idea create writes an open idea in the supplied working directory', async () => {
     await withWorkspace(async (cwd, plans) => {
         const title = 'Příliš : "New idea"';
         expect(await create(cwd, [title])).toEqual([[[
-            `└── ${title} ◌ forging [IDEA.md]`,
+            `└── ${title} ◌ open [IDEA.md]`,
             `    ${join(plans, 'prilis-new-idea')}`,
         ].join('\n')]]);
         await expectIdea(join(plans, 'prilis-new-idea'), title);
@@ -201,7 +201,7 @@ Deno.test('Idea create outputs a root artifact as JSON', async () => {
             path: join(plans, 'new-idea'),
             id: 'new-idea',
             title: 'New idea',
-            status: 'forging',
+            status: 'open',
             parent: null,
             files: ['IDEA.md'],
         }]);
@@ -230,7 +230,7 @@ Deno.test('Idea create resolves split parents by path, ID, slug, and title', asy
                 path: join(parent, `child-${index}`),
                 id: `root/parent/child-${index}`,
                 title: `Child ${index}`,
-                status: 'forging',
+                status: 'open',
                 parent: 'root/parent',
                 files: ['IDEA.md'],
             }]);
@@ -260,7 +260,7 @@ Deno.test('Idea create rejects missing and unsplit parents', async () => {
             'Child',
             'Idea not found: missing',
         );
-        for (const status of ['forging', 'ready']) {
+        for (const status of ['open', 'ready']) {
             const parent = join(plans, status);
             await writeIdea(parent, status, status);
             await expectFailure(

@@ -66,7 +66,7 @@ Current situation and suggested Guidance
 * CLI unavailable - Explain installation using the available installation documentation, then verify cr --version.
 * Project not initialized - Recommend cr init from the project root.
 * New or unresolved idea - Recommend forge with the desired outcome or existing idea path.
-* Idea is forging - Identify unresolved decisions and recommend continuing forge.
+* Idea is open - Identify unresolved decisions and recommend continuing forge.
 * Idea is split - Select a relevant child; do not specify the split parent.
 * Ready idea needs a specification - Recommend spec with its IDEA.md path.
 * Specification is incomplete or stale - Recommend completing or updating it through spec.

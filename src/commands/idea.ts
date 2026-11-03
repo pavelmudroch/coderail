@@ -4,7 +4,7 @@ import { Cli } from '@cli';
 import { Create } from './idea/create.ts';
 import { Split } from './idea/split.ts';
 import { Ready } from './idea/ready.ts';
-import { Reforge } from './idea/reforge.ts';
+import { Reopen } from './idea/reopen.ts';
 import { ensurePlansDir } from './idea/helpers/ensure-plans-dir.ts';
 import { getIdeaTree } from './idea/helpers/get-idea-tree.ts';
 import { Log } from '@log';
@@ -76,8 +76,7 @@ export class Idea implements Command<IdeaArguments> {
             '  create               Create a new idea.',
             '  split                Split an existing idea into multiple child sub ideas.',
             '  ready                Mark an idea as ready for further processing.',
-            '  reforge              Reforge an existing idea into a new form. Not applicable',
-            '                       for splitted idea.',
+            '  reopen               Reopen an existing idea. Not applicable to a split idea.',
         ];
         return usageLines.join('\n');
     }
@@ -90,8 +89,8 @@ export class Idea implements Command<IdeaArguments> {
                 return new Split();
             case 'ready':
                 return new Ready();
-            case 'reforge':
-                return new Reforge();
+            case 'reopen':
+                return new Reopen();
             case undefined:
                 return undefined;
             default:

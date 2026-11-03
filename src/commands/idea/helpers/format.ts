@@ -38,8 +38,8 @@ export function formatText(ideaTree: IdeaTree): string {
     const formattedLines: string[] = [];
     function getFormattedStatus(status: IdeaStatus): string {
         switch (status) {
-            case 'forging':
-                return Log.color.yellow('◌ forging');
+            case 'open':
+                return Log.color.yellow('◌ open');
             case 'ready':
                 return Log.color.green('● ready');
             case 'split':

@@ -130,7 +130,7 @@ export class Split implements Command<SplitArguments> {
             for (const title of titles) {
                 const slug = Text.slugify(title);
                 const directory = join(idea.path, slug);
-                const childMarkdown = Md.create('', { title, status: IDEA_STATUS.FORGING });
+                const childMarkdown = Md.create('', { title, status: IDEA_STATUS.OPEN });
                 const childDir = await Fs.makeTempDirectory();
                 await childDir.addFile('IDEA.md', Md.toStream(childMarkdown));
                 await Fs.replace(childDir.path, directory);
@@ -138,7 +138,7 @@ export class Split implements Command<SplitArguments> {
                     path: directory,
                     id: join(idea.id, slug),
                     slug,
-                    frontmatter: { title, status: IDEA_STATUS.FORGING },
+                    frontmatter: { title, status: IDEA_STATUS.OPEN },
                     files: ['IDEA.md'],
                     children: [],
                 });

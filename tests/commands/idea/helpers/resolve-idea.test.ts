@@ -22,7 +22,7 @@ async function withIdeas(run: (cwd: string, plans: string) => Promise<void>): Pr
             await Deno.mkdir(directory, { recursive: true });
             await Deno.writeTextFile(
                 join(directory, 'IDEA.md'),
-                `---\ntitle: ${JSON.stringify(title)}\nstatus: forging\n---\n`,
+                `---\ntitle: ${JSON.stringify(title)}\nstatus: open\n---\n`,
             );
         }
         await run(cwd, plans);
@@ -45,7 +45,7 @@ Deno.test('resolveIdea resolves absolute and explicit relative directory paths',
             const idea = await resolveIdea(cwd, reference);
             expect(idea.id).toBe('auth/login');
             expect(idea.path).toBe(join(plans, 'auth', 'login'));
-            expect(idea.frontmatter).toEqual({ title: 'Improve login', status: 'forging' });
+            expect(idea.frontmatter).toEqual({ title: 'Improve login', status: 'open' });
         }
     });
 });

@@ -117,7 +117,7 @@ Deno.test('Idea ready resolves references and preserves content, metadata, and o
         for (const [index, reference] of references.entries()) {
             await Deno.writeTextFile(
                 filePath,
-                '---\ntitle: Example idea\nstatus: forging\ncustom: keep\n---\n# Content\n\nKeep me\n',
+                '---\ntitle: Example idea\nstatus: open\ncustom: keep\n---\n# Content\n\nKeep me\n',
             );
             const output = await ready(cwd, index === 0 ? [reference] : ['--json', reference]);
             if (index === 0) {
@@ -146,7 +146,7 @@ Deno.test('Idea ready resolves references and preserves content, metadata, and o
     }
 });
 
-Deno.test('Idea ready rejects non-forging and missing ideas without changing files', async () => {
+Deno.test('Idea ready rejects non-open and missing ideas without changing files', async () => {
     const cwd = await Deno.makeTempDir();
     const directory = join(cwd, '.coderail', 'plans', 'example');
     const filePath = join(directory, 'IDEA.md');
@@ -161,7 +161,7 @@ Deno.test('Idea ready rejects non-forging and missing ideas without changing fil
             } catch (error) {
                 expect((error as Error).message).toBe('Cannot mark idea "example" as ready');
                 expect(((error as Error).cause as Error).message).toBe(
-                    'Idea "example" is not forging.',
+                    'Idea "example" is not open.',
                 );
             }
             expect(await Deno.readTextFile(filePath)).toBe(original);

@@ -7,7 +7,7 @@ import { Idea } from '../../src/commands/idea.ts';
 import { Create } from '../../src/commands/idea/create.ts';
 import { Split } from '../../src/commands/idea/split.ts';
 import { Ready } from '../../src/commands/idea/ready.ts';
-import { Reforge } from '../../src/commands/idea/reforge.ts';
+import { Reopen } from '../../src/commands/idea/reopen.ts';
 import { runStub } from './idea/helpers.ts';
 
 Deno.test('Idea creates the plans directory and preserves existing contents', async () => {
@@ -60,7 +60,7 @@ Deno.test('Idea accepts no subcommand and rejects unknown commands and invalid o
     for (const args of [[], ['--']]) {
         expect(command.getSubcommand(command.parseArguments(args))).toBeUndefined();
     }
-    for (const args of [['unknown'], ['--', '--help'], ['map']]) {
+    for (const args of [['unknown'], ['--', '--help'], ['map'], ['reforge']]) {
         try {
             command.getSubcommand(command.parseArguments(args));
             throw new Error('Expected a usage error.');
@@ -82,7 +82,7 @@ for (
         ['create', Create],
         ['split', Split],
         ['ready', Ready],
-        ['reforge', Reforge],
+        ['reopen', Reopen],
     ] as const
 ) {
     Deno.test(`Idea dispatches ${name} and scopes help to the requested command`, () => {
@@ -139,7 +139,7 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
             const [path, status] of [
                 ['parent', 'split'],
                 ['parent/child', 'ready'],
-                ['last', 'forging'],
+                ['last', 'open'],
                 ['last/child', 'ready'],
             ] as const
         ) {
@@ -154,7 +154,7 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
         const command = new Idea();
         await runStub(command, root);
         expect(output).toEqual([[[
-            '├── Display title ◌ forging [IDEA.md]',
+            '├── Display title ◌ open [IDEA.md]',
             `│   ${join(plans, 'last')}`,
             '│   └── Display title ● ready [IDEA.md]',
             `│       ${join(plans, 'last', 'child')}`,
@@ -179,7 +179,7 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
                 path: join(plans, 'last'),
                 id: 'last',
                 title: 'Display title',
-                status: 'forging',
+                status: 'open',
                 parent: null,
                 files: ['IDEA.md'],
             },

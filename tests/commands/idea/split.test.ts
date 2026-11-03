@@ -137,7 +137,7 @@ async function split(cwd: string, args: string[]): Promise<unknown[][]> {
     }
 }
 
-Deno.test('Idea split resolves references, creates forging children, and preserves existing files', async () => {
+Deno.test('Idea split resolves references, creates open children, and preserves existing files', async () => {
     const cwd = await Deno.makeTempDir();
     const root = join(cwd, '.coderail', 'plans', 'root');
     try {
@@ -157,7 +157,7 @@ Deno.test('Idea split resolves references, creates forging children, and preserv
             await Deno.writeTextFile(
                 join(directory, 'IDEA.md'),
                 `---\ntitle: Parent ${index}\nstatus: ${
-                    index === 0 ? 'ready' : 'forging'
+                    index === 0 ? 'ready' : 'open'
                 }\ncustom: keep\n---\n# Content\n\nKeep me\n`,
             );
             await Deno.writeTextFile(join(directory, 'SPEC.md'), 'Keep specification');
@@ -171,9 +171,9 @@ Deno.test('Idea split resolves references, creates forging children, and preserv
                 expect(output).toEqual([[[
                     '└── Parent 0 ◉ split [IDEA.md, SPEC.md]',
                     `    ${directory}`,
-                    '    ├── Příliš : "New idea" ◌ forging [IDEA.md]',
+                    '    ├── Příliš : "New idea" ◌ open [IDEA.md]',
                     `    │   ${join(directory, 'prilis-new-idea')}`,
-                    '    └── Zebra ◌ forging [IDEA.md]',
+                    '    └── Zebra ◌ open [IDEA.md]',
                     `        ${join(directory, 'zebra')}`,
                 ].join('\n')]]);
             } else {
@@ -192,7 +192,7 @@ Deno.test('Idea split resolves references, creates forging children, and preserv
                         path: join(directory, slug as string),
                         id: `root/parent-${index}/${slug}`,
                         title,
-                        status: 'forging',
+                        status: 'open',
                         parent: `root/parent-${index}`,
                         files: ['IDEA.md'],
                     })),
@@ -203,7 +203,7 @@ Deno.test('Idea split resolves references, creates forging children, and preserv
             );
             for (const [slug, title] of [['zebra', titles[0]], ['prilis-new-idea', titles[1]]]) {
                 expect(await Deno.readTextFile(join(directory, slug as string, 'IDEA.md'))).toBe(
-                    `---\ntitle: ${JSON.stringify(title)}\nstatus: "forging"\n---\n`,
+                    `---\ntitle: ${JSON.stringify(title)}\nstatus: "open"\n---\n`,
                 );
             }
             expect(await Deno.readTextFile(join(directory, 'SPEC.md'))).toBe('Keep specification');
@@ -222,7 +222,7 @@ Deno.test('Idea split rejects missing, split, and occupied ideas before changing
         await Deno.mkdir(directory, { recursive: true });
         for (
             const [reference, status, occupied, cause] of [
-                ['missing', 'forging', false, 'Idea not found: missing'],
+                ['missing', 'open', false, 'Idea not found: missing'],
                 ['example', 'split', false, 'Idea "example" is already split.'],
                 ['example', 'ready', true, 'already exists'],
             ] as const

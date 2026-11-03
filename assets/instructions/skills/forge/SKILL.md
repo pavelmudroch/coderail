@@ -14,7 +14,7 @@ Own `IDEA.md`. Let `cr` manage front matter and status.
 
 Statuses:
 
-* `forging` — unresolved or discussing
+* `open` — unresolved or discussing
 * `ready` — resolved for one specification
 * `split` — resolved into child ideas
 
@@ -72,7 +72,7 @@ Test:
 
 > Could `SPEC.md` be written now without choosing between materially different interpretations?
 
-If not, keep status `forging`, update `IDEA.md`, and preserve unresolved matters under Open Questions.
+If not, keep status `open`, update `IDEA.md`, and preserve unresolved matters under Open Questions.
 
 When resolved, present a concise synthesis covering:
 
@@ -126,7 +126,7 @@ Split:
 cr idea split <idea-path> "<child-title>" "<child-title>" [<child-title>...]
 ```
 
-Each child starts as `forging`.
+Each child starts as `open`.
 
 Keep shared context, decisions, constraints, assumptions, and risks in parent.
 
@@ -138,21 +138,21 @@ Do not create `SPEC.md` for a split parent.
 
 Report that parent is forged. List child paths.
 
-## Reforge ready idea
+## Reopen ready idea
 
 Inspect current idea map and existing `IDEA.md`.
 
 Reopen:
 
 ```sh
-cr idea reforge <idea-path>
+cr idea reopen <idea-path>
 ```
 
 Treat existing `IDEA.md` as agreed baseline. Preserve valid context. Change only what new discussion affects.
 
 Resume normal forging.
 
-A reforged idea may become `ready`, `split`, or remain `forging`.
+A reopened idea may become `ready`, `split`, or remain `open`.
 
 ## Scope
 
@@ -165,6 +165,6 @@ Establish:
 
 Produce one of:
 
-* updated `forging` idea;
+* updated `open` idea;
 * `ready` idea eligible for `SPEC.md`;
 * `split` idea with at least two child ideas.

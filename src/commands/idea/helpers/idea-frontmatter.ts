@@ -1,9 +1,9 @@
 import type { Frontmatter } from '@md';
 
-export type IdeaStatus = 'forging' | 'ready' | 'split';
+export type IdeaStatus = 'open' | 'ready' | 'split';
 
 export const IDEA_STATUS = {
-    FORGING: 'forging',
+    OPEN: 'open',
     READY: 'ready',
     SPLIT: 'split',
 } satisfies Record<string, IdeaStatus>;
@@ -19,7 +19,7 @@ export const IdeaFrontmatter = {
             return false;
         }
 
-        if (fm.status !== 'forging' && fm.status !== 'ready' && fm.status !== 'split') {
+        if (fm.status !== 'open' && fm.status !== 'ready' && fm.status !== 'split') {
             return false;
         }
         return true;

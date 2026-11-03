@@ -95,8 +95,8 @@ export class Ready implements Command<ReadyArguments> {
         const reference = context.parsedArguments.args.ideaReference;
         try {
             const idea = await resolveIdea(context.context.currentWorkingDirectory, reference);
-            if (idea.frontmatter.status !== IDEA_STATUS.FORGING) {
-                throw new Error(`Idea "${idea.id}" is not forging.`);
+            if (idea.frontmatter.status !== IDEA_STATUS.OPEN) {
+                throw new Error(`Idea "${idea.id}" is not open.`);
             }
             const filePath = join(idea.path, 'IDEA.md');
             const markdown = await Md.parse(await Fs.read(filePath, { text: true }));

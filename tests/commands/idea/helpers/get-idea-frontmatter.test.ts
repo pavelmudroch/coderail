@@ -13,7 +13,7 @@ async function withIdea(run: (filePath: string) => Promise<void>): Promise<void>
 
 Deno.test('getIdeaFrontmatter reads title and each supported status', async () => {
     await withIdea(async (filePath) => {
-        for (const status of ['forging', 'ready', 'split']) {
+        for (const status of ['open', 'ready', 'split']) {
             await Deno.writeTextFile(
                 filePath,
                 `---\ntitle: "An idea: title"\nstatus: ${status}\nextra: true\n---\n# Body`,
@@ -34,6 +34,7 @@ Deno.test('getIdeaFrontmatter rejects missing or invalid metadata', async () => 
                 'title: [Idea]\nstatus: ready',
                 'title: Idea',
                 'title: Idea\nstatus: unknown',
+                'title: Idea\nstatus: forging',
                 'title: Idea\nstatus: true',
                 'title: Idea\nstatus: [ready]',
             ]
