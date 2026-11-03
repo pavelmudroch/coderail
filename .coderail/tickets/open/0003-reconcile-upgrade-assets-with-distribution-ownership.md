@@ -43,7 +43,7 @@ Scope: implement the asset mutation phase and progress/error reporting, leaving 
 
 Expected outcome: apply only approved writes/removals and persist successful results before activation can occur. Preserve prior checksums/sizes for declined tracked actions; declined untracked destinations remain unowned. Remove manifest entries only for completed removals or verified absence. Same-version reconciliation follows identical conflict rules. Expose partial progress on runtime failure; no automatic rollback is required.
 
-Validation: task 1 reconciliation tests pass, including injected failures and manifest-save failures preventing activation. Run `cr test ./src/<changed-file>.ts` and `cr test ./tests/<changed-file>.test.ts` for changed source/test files.
+Validation: task 1 reconciliation tests pass, including injected failures and manifest-save failures preventing activation. Run `cr verify ./src/<changed-file>.ts` and `cr verify ./tests/<changed-file>.test.ts` for changed source/test files.
 
 ## References
 

@@ -33,7 +33,7 @@ Scope: inspect `src/runtime/context.ts`, `src/path.ts`, instruction loading, tem
 
 Expected outcome: derive the chosen root from the resolved physical executable in `libexec`, without an installation-directory flag. Use flattened installed resources and preserve repository development lookup. Document the path contract for upgrade helpers. Audit placeholder template functionality without expanding this ticket into implementing unrelated template commands or harness install/uninstall behavior.
 
-Validation: task 1 tests and affected existing consumer tests pass. Verify the compiled-path branch with a temporary native compile/smoke run when supported locally; record host limitations for other platforms. Run `cr test ./src/<changed-file>.ts` and `cr test ./tests/<changed-file>.test.ts` for changed source/test files.
+Validation: task 1 tests and affected existing consumer tests pass. Verify the compiled-path branch with a temporary native compile/smoke run when supported locally; record host limitations for other platforms. Run `cr verify ./src/<changed-file>.ts` and `cr verify ./tests/<changed-file>.test.ts` for changed source/test files.
 
 ## References
 

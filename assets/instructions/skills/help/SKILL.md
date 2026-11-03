@@ -90,9 +90,9 @@ cr init creates a comment-only test map. Recommend configuring
 
 Explain relevant commands:
 
-- cr test <paths...> validates selected files or directories.
-- cr test --changed selects staged, unstaged, and untracked files.
-- cr test --short <paths...> provides compact results.
+- cr verify <paths...> validates selected files or directories.
+- cr verify --changed selects staged, unstaged, and untracked files.
+- cr verify --short <paths...> provides compact results.
 
 No tests found means no mapped commands ran; it does not establish that
 the changes passed validation.

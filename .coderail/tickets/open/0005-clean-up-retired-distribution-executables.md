@@ -43,7 +43,7 @@ Scope: retire the previous owned executable only after successful launcher activ
 
 Expected outcome: immediate safe deletion where supported; deferred Windows deletion respects protected/current executable identities and remains limited to owned retired binaries. If cleanup fails, keep the new installation active, report the residual executable, and retain enough ownership information for the next upgrade to retry. Clean up helper resources without requiring elevation.
 
-Validation: task 1 deferred lifecycle tests pass, including helper startup/deletion failures and a later upgrade retry. Run `cr test ./src/<changed-file>.ts` and `cr test ./tests/<changed-file>.test.ts` for changed source/test files.
+Validation: task 1 deferred lifecycle tests pass, including helper startup/deletion failures and a later upgrade retry. Run `cr verify ./src/<changed-file>.ts` and `cr verify ./tests/<changed-file>.test.ts` for changed source/test files.
 
 ## References
 

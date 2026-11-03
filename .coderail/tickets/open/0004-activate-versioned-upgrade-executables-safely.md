@@ -44,7 +44,7 @@ Scope: create/update `<root>/bin/cr` as a symlink on Linux/macOS and `<root>/bin
 
 Expected outcome: activation occurs only after approved asset writes/removals and manifest persistence succeed. Prepare and replace the launcher safely; preserve the existing target when preparation fails. Windows requires no symlink privilege. Report activation success separately from later cleanup; no automatic rollback is required if mutation already progressed.
 
-Validation: task 1 launcher and failure tests pass; the stable bin directory exposes no versioned executables. Run `cr test ./src/<changed-file>.ts` and `cr test ./tests/<changed-file>.test.ts` for changed source/test files.
+Validation: task 1 launcher and failure tests pass; the stable bin directory exposes no versioned executables. Run `cr verify ./src/<changed-file>.ts` and `cr verify ./tests/<changed-file>.test.ts` for changed source/test files.
 
 ## References
 

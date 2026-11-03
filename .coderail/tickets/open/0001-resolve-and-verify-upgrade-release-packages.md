@@ -4,7 +4,7 @@ slug: "resolve-and-verify-upgrade-release-packages"
 title: "Resolve and verify upgrade release packages"
 status: "open"
 created_at: "2026-11-03T13:10:42.738Z"
-updated_at: "2026-11-03T13:10:42.738Z"
+updated_at: "2026-11-03T13:29:11.965Z"
 dependencies: []
 ---
 
@@ -42,7 +42,7 @@ Scope: define concrete `build.json` and SHA-256 checksum formats, pinned asset i
 
 Expected outcome: select `coderail-<target>.zip`; validate its published SHA-256 and build version/commit/target against the resolved build. Require archive-root `cr` or `cr.exe`, `instructions/`, `templates/`, and `build.json`, without an `assets/` level. Reject unsafe paths, escaping links, malformed/duplicate destinations, and missing or changing publication identity before installation mutation. Return verified staged paths/build metadata and clean up temporary staging on completion/failure. Automatic GitHub source archives are never inputs.
 
-Validation: task 1 package tests pass and exercise publication races, traversal/absolute paths, platform path collisions, and invalid executable/resource contents. Run `cr test ./src/<changed-file>.ts` and `cr test ./tests/<changed-file>.test.ts` for each changed source/test file.
+Validation: task 1 package tests pass and exercise publication races, traversal/absolute paths, platform path collisions, and invalid executable/resource contents. Run `cr verify ./src/<changed-file>.ts` and `cr verify ./tests/<changed-file>.test.ts` for each changed source/test file.
 
 ## References
 

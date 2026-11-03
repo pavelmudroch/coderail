@@ -10,7 +10,6 @@ Deliver the minimum complete working solution satisfying the request.
 - Match existing conventions for style, naming, structure, APIs, and tests.
 - Prefer explicitness over convenience.
 - Keep communication concise.
-- Validate changes using `cr test --changed` or `cr test <path> ...` for specific files.
 
 ## Boundary
 
