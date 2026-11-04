@@ -59,15 +59,19 @@ export function compileRules(rules: Configuration['verify']['rules']): CompiledR
             const colon = content.indexOf(':');
             const name = content.slice(0, colon);
             if (
-                end === -1 || colon === -1 || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ||
-                names.includes(name) || content.includes('${')
+                end === -1 ||
+                colon === -1 ||
+                !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ||
+                names.includes(name) ||
+                content.includes('${')
             ) {
                 throw new Error(`Rule ${index}: invalid pattern ${JSON.stringify(pattern)}`);
             }
             names.push(name);
             const glob = content.slice(colon + 1);
             if (
-                glob === '**' && (start === 0 || pattern.charAt(start - 1) === '/') &&
+                glob === '**' &&
+                (start === 0 || pattern.charAt(start - 1) === '/') &&
                 pattern.charAt(end + 1) === '/'
             ) {
                 source += '(?:([\\s\\S]*)/)?';
@@ -91,7 +95,9 @@ export function compileRules(rules: Configuration['verify']['rules']): CompiledR
         return {
             match(path: string): ExpandedRule | undefined {
                 const match = expression.exec(path);
-                if (match === null) return undefined;
+                if (match === null) {
+                    return undefined;
+                }
                 const expand = (value: string): string => {
                     return value.replace(
                         /\$\{([^}]*)\}/g,

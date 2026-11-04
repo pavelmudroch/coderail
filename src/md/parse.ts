@@ -19,14 +19,18 @@ export async function parse(content: ReadableStream<string>): Promise<Markdown> 
                 return line;
             }
             if (done) {
-                if (pending === '') return undefined;
+                if (pending === '') {
+                    return undefined;
+                }
                 const line = pending;
                 pending = '';
                 return line;
             }
             const chunk = await reader.read();
             done = chunk.done;
-            if (!chunk.done) pending += chunk.value;
+            if (!chunk.done) {
+                pending += chunk.value;
+            }
         }
     }
 
@@ -41,8 +45,12 @@ export async function parse(content: ReadableStream<string>): Promise<Markdown> 
             let header = '';
             for (;;) {
                 const line = await readLine();
-                if (line === undefined) throw new SyntaxError('Unclosed frontmatter at line 1');
-                if (delimiter(line)) break;
+                if (line === undefined) {
+                    throw new SyntaxError('Unclosed frontmatter at line 1');
+                }
+                if (delimiter(line)) {
+                    break;
+                }
                 header += line;
             }
             try {

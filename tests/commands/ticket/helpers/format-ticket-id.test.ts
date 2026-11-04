@@ -1,9 +1,11 @@
 import { expect } from '@std/expect';
+
 import { formatTicketId } from '../../../../src/commands/ticket/helpers/format-ticket-id.ts';
 
-Deno.test('formatTicketId pads IDs to at least four characters without truncating larger IDs', () => {
-    for (
-        const [id, expected] of [
+Deno.test(
+    'formatTicketId pads IDs to at least four characters without truncating larger IDs',
+    () => {
+        for (const [id, expected] of [
             [0, '0000'],
             [1, '0001'],
             [12, '0012'],
@@ -12,8 +14,8 @@ Deno.test('formatTicketId pads IDs to at least four characters without truncatin
             [9999, '9999'],
             [10000, '10000'],
             [123456, '123456'],
-        ] as const
-    ) {
-        expect(formatTicketId(id)).toBe(expected);
-    }
-});
+        ] as const) {
+            expect(formatTicketId(id)).toBe(expected);
+        }
+    },
+);

@@ -7,7 +7,7 @@ export async function getFileStream(path: string): Promise<ConfFileStream | null
     try {
         const file = await Deno.open(path);
         const stream = file.readable;
-        const dispose = () => stream.cancel();
+        const dispose = (): Promise<void> => stream.cancel();
 
         return { path, stream, [Symbol.dispose]: dispose };
     } catch (error) {

@@ -1,7 +1,11 @@
-import { writeSync } from './helpers/write-sync.ts';
 import { dim, erase, magenta } from './helpers/ansi.ts';
-import { type LiveUI, registerLiveUiItem, unregisterLiveUiItem } from './helpers/context.ts';
-import { context } from './helpers/context.ts';
+import {
+    context,
+    type LiveUI,
+    registerLiveUiItem,
+    unregisterLiveUiItem,
+} from './helpers/context.ts';
+import { writeSync } from './helpers/write-sync.ts';
 
 export interface Spinner extends Disposable {
     /**
@@ -65,7 +69,7 @@ export class SpinnerImpl implements Spinner, LiveUI {
             return;
         }
 
-        // deno-lint-ignore no-non-null-assertion -- bounds checked by modulo operation
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- bounds checked by modulo operation
         const frame = this.#spinnerFrames[this.#currentFrame]!;
         const lines: string[] = [];
         const terminalWidth = Deno.consoleSize().columns;

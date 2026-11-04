@@ -1,4 +1,5 @@
 import { join } from '@std/path';
+
 import { type ConfFileStream, getFileStream } from './get-file-stream.ts';
 
 export async function getLocalConfigurationFile(

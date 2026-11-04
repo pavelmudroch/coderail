@@ -1,5 +1,6 @@
-import { expect } from '@std/expect';
 import type { Command } from '@commands';
+import { expect } from '@std/expect';
+
 import { UsageError } from '../../../src/cli/usage-error.ts';
 
 export async function runStub(command: Command, cwd: string): Promise<void> {

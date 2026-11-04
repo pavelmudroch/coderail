@@ -1,10 +1,11 @@
-import type { Command, ParsedArguments } from '@commands';
-import type { RunContext } from './helpers/command.ts';
 import { Cli } from '@cli';
+import type { Command, ParsedArguments } from '@commands';
 import { Log } from '@log';
+
+import type { RunContext } from './helpers/command.ts';
 import { compileRules } from './verify/compile-rules.ts';
-import { selectFiles } from './verify/select-files.ts';
 import { executeCommand, type FileResult, runChecks } from './verify/run-checks.ts';
+import { selectFiles } from './verify/select-files.ts';
 
 type VerifyArguments = {
     help: boolean;
@@ -19,7 +20,9 @@ export class Verify implements Command<VerifyArguments> {
     parseArguments(originalArgs: readonly string[]): ParsedArguments<VerifyArguments> {
         const args: VerifyArguments = { help: false, short: false, changed: false, paths: [] };
         for (const [index, arg] of originalArgs.entries()) {
-            if (arg === undefined) continue;
+            if (arg === undefined) {
+                continue;
+            }
             if (arg === '-h' || arg === '--help') {
                 args.help = true;
                 return { args, rest: [] };
@@ -41,7 +44,9 @@ export class Verify implements Command<VerifyArguments> {
                     Cli.raiseUsageError(`Option "${option}" does not take a value.`, this);
                 }
             }
-            if (arg.startsWith('-')) Cli.raiseUsageError(`Unknown option "${arg}".`, this);
+            if (arg.startsWith('-')) {
+                Cli.raiseUsageError(`Unknown option "${arg}".`, this);
+            }
             args.paths.push(arg);
         }
         if (!args.changed && args.paths.length === 0) {
@@ -105,34 +110,42 @@ export class Verify implements Command<VerifyArguments> {
         );
         const verify = context.configuration.verify;
         const hasWork = files.some((file) =>
-            rules.some((rule) => rule.match(file)?.commands.some((command) => command.length > 0))
+            rules.some((rule) => rule.match(file)?.commands.some((command) => command.length > 0)),
         );
         const runActions = async (phase: 'pre' | 'post', signal: AbortSignal): Promise<boolean> => {
             let successful = true;
             for (const command of verify[phase] ?? []) {
-                if (command.length === 0) continue;
+                if (command.length === 0) {
+                    continue;
+                }
                 const outcome = await executeCommand(root, command, signal);
                 if (!args.short || outcome.status === 'fail') {
                     Log.output(
-                        `${phase === 'pre' ? 'Preparation' : 'Cleanup'} ${
-                            formatStatus(outcome.status)
-                        }`,
+                        `${phase === 'pre' ? 'Preparation' : 'Cleanup'} ${formatStatus(
+                            outcome.status,
+                        )}`,
                     );
                 }
                 if (!args.short) {
                     Log.output(`  ${JSON.stringify(command)} ${formatStatus(outcome.status)}`);
-                    if (outcome.output) Log.info(outcome.output);
+                    if (outcome.output) {
+                        Log.info(outcome.output);
+                    }
                 }
                 if (outcome.status === 'fail') {
                     successful = false;
                     Deno.exitCode = 1;
-                    if (phase === 'pre') break;
+                    if (phase === 'pre') {
+                        break;
+                    }
                 }
             }
             return successful;
         };
         try {
-            if (hasWork && !await runActions('pre', context.signal)) return;
+            if (hasWork && !(await runActions('pre', context.signal))) {
+                return;
+            }
             const result = await runChecks(root, files, rules, context.signal, (file) => {
                 const status = formatStatus(file.status);
                 Log.output(`${file.path} ${status}`);
@@ -158,7 +171,9 @@ export class Verify implements Command<VerifyArguments> {
             }
         } finally {
             // Cleanup is best effort after cancellation; forced termination cannot run finally.
-            if (hasWork) await runActions('post', new AbortController().signal);
+            if (hasWork) {
+                await runActions('post', new AbortController().signal);
+            }
         }
     }
 }
@@ -176,6 +191,6 @@ function formatStatus(status: FileResult['status']): string {
             const exhaustiveCheck: never = status;
             return exhaustiveCheck;
         }
-            // deno-coverage-ignore-stop
+        // deno-coverage-ignore-stop
     }
 }

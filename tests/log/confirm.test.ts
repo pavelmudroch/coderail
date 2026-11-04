@@ -1,4 +1,5 @@
 import { expect } from '@std/expect';
+
 import { confirm, type ConfirmOptions } from '../../src/log/confirm.ts';
 import { context } from '../../src/log/helpers/context.ts';
 

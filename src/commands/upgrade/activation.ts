@@ -1,4 +1,5 @@
 import { basename, join, resolve } from '@std/path';
+
 import type { ManifestFile } from '../../install-manifest.ts';
 import { canonicalRoot, fingerprint, regularFile } from '../../install-manifest/capture.ts';
 import {
@@ -65,7 +66,9 @@ async function inspectExecutableDirectory(path: string, create = true): Promise<
 }
 
 export function windowsLauncher(name: string): string {
-    if (!/^cr-[A-Za-z0-9_.-]+\.exe$/.test(name)) throw new Error('Unsafe launcher executable');
+    if (!/^cr-[A-Za-z0-9_.-]+\.exe$/.test(name)) {
+        throw new Error('Unsafe launcher executable');
+    }
     return `@echo off\r\n"%~dp0..\\libexec\\${name}" %*\r\nexit /b %errorlevel%\r\n`;
 }
 
@@ -75,14 +78,20 @@ export async function launcherTarget(root: string, windows: boolean): Promise<st
     try {
         info = await Deno.lstat(path);
     } catch (error) {
-        if (error instanceof Deno.errors.NotFound) return undefined;
+        if (error instanceof Deno.errors.NotFound) {
+            return undefined;
+        }
         throw error;
     }
-    if (!windows && info.isSymlink) return resolve(root, 'bin', await Deno.readLink(path));
+    if (!windows && info.isSymlink) {
+        return resolve(root, 'bin', await Deno.readLink(path));
+    }
     if (windows && info.isFile && !info.isSymlink) {
         const text = await Deno.readTextFile(path);
         const name = text.match(/libexec\\(cr-[A-Za-z0-9_.-]+\.exe)"/)?.[1];
-        if (name && text === windowsLauncher(name)) return join(root, 'libexec', name);
+        if (name && text === windowsLauncher(name)) {
+            return join(root, 'libexec', name);
+        }
     }
     throw new Error('Unsafe existing launcher');
 }
@@ -114,7 +123,9 @@ export async function activateDistribution(
     if (
         !/^(canary|[0-9]+\.[0-9]+\.[0-9]+)$/.test(stage.build.version) ||
         !/^[0-9a-f]{40}$/.test(stage.build.commit)
-    ) throw new Error('Invalid executable identity');
+    ) {
+        throw new Error('Invalid executable identity');
+    }
     return await withInstallationLock(installation, async (root) => {
         const windows = Deno.build.os === 'windows';
         await inspectExecutableDirectory(join(root, 'bin'), false);
@@ -122,7 +133,8 @@ export async function activateDistribution(
         const currentLauncherTarget = await launcherTarget(root, windows);
         const runningExecutable = await Deno.realPath(options.runningExecutable ?? Deno.execPath());
         // Bootstrap claiming is only meaningful for binaries inside this root.
-        const bootstrap = runningExecutable &&
+        const bootstrap =
+            runningExecutable &&
             runningExecutable === join(root, 'libexec', basename(runningExecutable));
         const plan = await planAssets(root, stage, {
             ...options,
@@ -132,33 +144,42 @@ export async function activateDistribution(
         await inspectExecutableDirectory(join(root, 'bin'));
         await inspectExecutableDirectory(join(root, 'libexec'));
         const expected = await fingerprint(stage.executable);
-        const identity = stage.build.version === 'canary'
-            ? `canary-${stage.build.commit}`
-            : stage.build.version;
+        const identity =
+            stage.build.version === 'canary' ? `canary-${stage.build.commit}` : stage.build.version;
         const stem = `cr-${identity}`;
         const suffix = windows ? '.exe' : '';
         let selected: ManifestFile | undefined;
         for (const file of [...plan.manifest.files, ...(plan.bootstrap ? [plan.bootstrap] : [])]) {
-            if (!file.path.startsWith(`libexec/${stem}`)) continue;
+            if (!file.path.startsWith(`libexec/${stem}`)) {
+                continue;
+            }
             if (
                 !new RegExp(
                     `^libexec/${stem.replaceAll('.', '\\.')}(-[0-9a-f-]+)?${
                         windows ? '\\.exe' : ''
                     }$`,
                 ).test(file.path)
-            ) continue;
+            ) {
+                continue;
+            }
             try {
                 const actual = await fingerprint(await regularFile(root, file.path));
                 if (
-                    actual.checksum === expected.checksum && actual.size === expected.size &&
-                    file.checksum === actual.checksum && file.size === actual.size
-                ) selected = file;
+                    actual.checksum === expected.checksum &&
+                    actual.size === expected.size &&
+                    file.checksum === actual.checksum &&
+                    file.size === actual.size
+                ) {
+                    selected = file;
+                }
             } catch (error) {
                 if (!(error instanceof Deno.errors.NotFound)) {
                     throw error;
                 }
             }
-            if (selected) break;
+            if (selected) {
+                break;
+            }
         }
         if (!selected) {
             let name = `${stem}${suffix}`;
@@ -184,12 +205,16 @@ export async function activateDistribution(
                     } finally {
                         try {
                             source.close();
-                        } catch { /* pipe closes streams */ }
+                        } catch {
+                            /* pipe closes streams */
+                        }
                     }
                 } catch (error) {
                     try {
                         destination.close();
-                    } catch { /* pipe may have closed it */ }
+                    } catch {
+                        /* pipe may have closed it */
+                    }
                     await Deno.remove(join(root, 'libexec', name));
                     throw error;
                 }
@@ -221,13 +246,13 @@ export async function activateDistribution(
         }
         const protectedExecutables = [
             ...new Set(
-                [runningExecutable, currentLauncherTarget, selectedExecutable].filter((
-                    path,
-                ): path is string => path !== undefined),
+                [runningExecutable, currentLauncherTarget, selectedExecutable].filter(
+                    (path): path is string => path !== undefined,
+                ),
             ),
         ];
         const ownedExecutables = plan.manifest.files.filter((file) =>
-            file.path.startsWith('libexec/')
+            file.path.startsWith('libexec/'),
         );
         return {
             activated: true,
@@ -236,9 +261,9 @@ export async function activateDistribution(
             selectedExecutable,
             ownedExecutables,
             protectedExecutables,
-            retiredExecutables: ownedExecutables.map((file) => join(root, file.path)).filter((
-                path,
-            ) => !protectedExecutables.includes(path)),
+            retiredExecutables: ownedExecutables
+                .map((file) => join(root, file.path))
+                .filter((path) => !protectedExecutables.includes(path)),
         };
     });
 }

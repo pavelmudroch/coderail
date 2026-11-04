@@ -1,5 +1,6 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
+
 import { resolveIdea } from '../../../../src/commands/idea/helpers/resolve-idea.ts';
 
 async function withIdeas(run: (cwd: string, plans: string) => Promise<void>): Promise<void> {
@@ -33,15 +34,13 @@ async function withIdeas(run: (cwd: string, plans: string) => Promise<void>): Pr
 
 Deno.test('resolveIdea resolves absolute and explicit relative directory paths', async () => {
     await withIdeas(async (cwd, plans) => {
-        for (
-            const reference of [
-                join(plans, 'auth', 'login'),
-                '.coderail/plans/auth/login',
-                './.coderail/plans/auth/login',
-                './.coderail/plans/auth/../auth/login/',
-                `../${cwd.split('/').pop()}/.coderail/plans/auth/login`,
-            ]
-        ) {
+        for (const reference of [
+            join(plans, 'auth', 'login'),
+            '.coderail/plans/auth/login',
+            './.coderail/plans/auth/login',
+            './.coderail/plans/auth/../auth/login/',
+            `../${cwd.split('/').pop()}/.coderail/plans/auth/login`,
+        ]) {
             const idea = await resolveIdea(cwd, reference);
             expect(idea.id).toBe('auth/login');
             expect(idea.path).toBe(join(plans, 'auth', 'login'));
@@ -52,16 +51,14 @@ Deno.test('resolveIdea resolves absolute and explicit relative directory paths',
 
 Deno.test('resolveIdea strips a trailing /IDEA.md from paths and IDs', async () => {
     await withIdeas(async (cwd, plans) => {
-        for (
-            const reference of [
-                join(plans, 'auth', 'login', 'IDEA.md'),
-                '.coderail/plans/auth/login/IDEA.md',
-                './.coderail/plans/auth/login/IDEA.md',
-                `../${cwd.split('/').pop()}/.coderail/plans/auth/login/IDEA.md`,
-                'auth/login/IDEA.md',
-                'login/IDEA.md',
-            ]
-        ) {
+        for (const reference of [
+            join(plans, 'auth', 'login', 'IDEA.md'),
+            '.coderail/plans/auth/login/IDEA.md',
+            './.coderail/plans/auth/login/IDEA.md',
+            `../${cwd.split('/').pop()}/.coderail/plans/auth/login/IDEA.md`,
+            'auth/login/IDEA.md',
+            'login/IDEA.md',
+        ]) {
             expect((await resolveIdea(cwd, reference)).id).toBe('auth/login');
         }
         for (const reference of ['auth/login/idea.md', 'auth/login/IDEA.md.backup']) {
@@ -74,15 +71,13 @@ Deno.test('resolveIdea strips a trailing /IDEA.md from paths and IDs', async () 
 
 Deno.test('resolveIdea matches exact IDs before slugs and slugs before titles', async () => {
     await withIdeas(async (cwd) => {
-        for (
-            const [reference, id] of [
-                ['auth', 'auth'],
-                ['auth/login', 'auth/login'],
-                ['login', 'auth/login'],
-                ['Improve login', 'auth/login'],
-                ['Nested authentication', 'billing/auth'],
-            ] as [string, string][]
-        ) {
+        for (const [reference, id] of [
+            ['auth', 'auth'],
+            ['auth/login', 'auth/login'],
+            ['login', 'auth/login'],
+            ['Improve login', 'auth/login'],
+            ['Nested authentication', 'billing/auth'],
+        ] as [string, string][]) {
             expect((await resolveIdea(cwd, reference)).id).toBe(id);
         }
     });
@@ -101,21 +96,19 @@ Deno.test('resolveIdea rejects ambiguous slugs and titles and lists matching IDs
 
 Deno.test('resolveIdea rejects missing, partial, and case-mismatched references', async () => {
     await withIdeas(async (cwd, plans) => {
-        for (
-            const reference of [
-                '',
-                'missing',
-                'Improve',
-                'improve login',
-                'Login',
-                './missing',
-                '.coderail/plans/missing',
-                join(plans, 'missing'),
-                '.',
-                '..',
-                '.coderail/plans',
-            ]
-        ) {
+        for (const reference of [
+            '',
+            'missing',
+            'Improve',
+            'improve login',
+            'Login',
+            './missing',
+            '.coderail/plans/missing',
+            join(plans, 'missing'),
+            '.',
+            '..',
+            '.coderail/plans',
+        ]) {
             await expect(resolveIdea(cwd, reference)).rejects.toThrow(
                 `Idea not found: ${reference}`,
             );

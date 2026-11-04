@@ -1,5 +1,6 @@
-import { expect } from '@std/expect';
 import { crc32, deflateRawSync } from 'node:zlib';
+
+import { expect } from '@std/expect';
 
 const commit = 'a'.repeat(40);
 const target = 'x86_64-unknown-linux-gnu';
@@ -82,8 +83,8 @@ export function entries(version = '2.10.0', platform = target): Entry[] {
     const os = platform.includes('windows')
         ? 'windows'
         : platform.includes('apple')
-        ? 'darwin'
-        : 'linux';
+          ? 'darwin'
+          : 'linux';
     return [
         { name: os === 'windows' ? 'cr.exe' : 'cr', data: executable(os, platform.split('-')[0]) },
         { name: 'instructions/a.md', data: encoder.encode('instruction'), method: 8 },
@@ -110,7 +111,9 @@ function release(tag = 'v2.10.0', id = 1): Record<string, unknown> {
 
 // Bound mock traffic even when a mutation repeats or decrements the page number.
 function recordRequest(calls: string[], input: Parameters<typeof fetch>[0]): URL {
-    if (calls.length >= 100) throw new Error('Mock request limit exceeded');
+    if (calls.length >= 100) {
+        throw new Error('Mock request limit exceeded');
+    }
     const url = new URL(String(input));
     calls.push(url.href);
     if (url.pathname.endsWith('/releases') || url.pathname.endsWith('/assets')) {
@@ -122,20 +125,20 @@ function recordRequest(calls: string[], input: Parameters<typeof fetch>[0]): URL
     return url;
 }
 
-export async function fixture(options: {
-    entries?: Entry[];
-    archive?: Uint8Array;
-    releases?: Record<string, unknown>[];
-    platform?: string;
-    checksum?: string;
-} = {}): Promise<
-    {
-        fetcher: typeof fetch;
-        calls: string[];
-        release: Record<string, unknown>;
-        assets: Record<string, unknown>[];
-    }
-> {
+export async function fixture(
+    options: {
+        entries?: Entry[];
+        archive?: Uint8Array;
+        releases?: Record<string, unknown>[];
+        platform?: string;
+        checksum?: string;
+    } = {},
+): Promise<{
+    fetcher: typeof fetch;
+    calls: string[];
+    release: Record<string, unknown>;
+    assets: Record<string, unknown>[];
+}> {
     const archive = options.archive ?? zip(options.entries ?? entries());
     const assetName = `coderail-${options.platform ?? target}.zip`;
     const hash = Array.from(
@@ -164,13 +167,15 @@ export async function fixture(options: {
             expect(new Headers(init?.headers).get('Accept')).toBe('application/octet-stream');
             return Promise.resolve(new Response(new Uint8Array(archive)));
         }
-        if (url.endsWith('/releases/assets/11')) return Promise.resolve(new Response(checksum));
+        if (url.endsWith('/releases/assets/11')) {
+            return Promise.resolve(new Response(checksum));
+        }
         if (url.includes('/assets?')) {
             return Promise.resolve(Response.json(page === '1' ? assets : []));
         }
         if (url.includes('/releases?')) {
             return Promise.resolve(
-                Response.json(page === '1' ? options.releases ?? [selected] : []),
+                Response.json(page === '1' ? (options.releases ?? [selected]) : []),
             );
         }
         return Promise.resolve(Response.json(selected));

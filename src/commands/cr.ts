@@ -1,15 +1,16 @@
+import { Cli } from '@cli';
+
+import { Doctor } from './doctor.ts';
 import type { Command, ParsedArguments, RunContext } from './helpers/command.ts';
+import { Idea } from './idea.ts';
 import { Init } from './init.ts';
 import { Install } from './install.ts';
-import { Uninstall } from './uninstall.ts';
-import { Upgrade } from './upgrade.ts';
-import { Ticket } from './ticket.ts';
-import { Idea } from './idea.ts';
-import { Verify } from './verify.ts';
-import { Doctor } from './doctor.ts';
 import { Loop } from './loop.ts';
 import { Template } from './template.ts';
-import { Cli } from '@cli';
+import { Ticket } from './ticket.ts';
+import { Uninstall } from './uninstall.ts';
+import { Upgrade } from './upgrade.ts';
+import { Verify } from './verify.ts';
 
 type CommandName = string;
 
@@ -114,9 +115,7 @@ export class Cr implements Command<GlobalArguments> {
         return Promise.resolve();
     }
 
-    #parseGlobalArguments(
-        originalArgs: readonly string[],
-    ): ParsedArguments<GlobalArguments> {
+    #parseGlobalArguments(originalArgs: readonly string[]): ParsedArguments<GlobalArguments> {
         const rest: string[] = [];
         const args: GlobalArguments = {
             command: undefined,
@@ -210,7 +209,14 @@ export class Cr implements Command<GlobalArguments> {
                     break;
                 case arg.startsWith('-'):
                     if (arg.length > 2) {
-                        argumentList.splice(i, 1, ...arg.slice(1).split('').map((ch) => `-${ch}`));
+                        argumentList.splice(
+                            i,
+                            1,
+                            ...arg
+                                .slice(1)
+                                .split('')
+                                .map((ch) => `-${ch}`),
+                        );
                         i--; // Re-evaluate the current index with the newly spliced arguments
                         break;
                     }

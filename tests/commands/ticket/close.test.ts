@@ -1,8 +1,9 @@
-import { expect } from '@std/expect';
-import { join } from '@std/path';
 import { Fs } from '@fs';
 import { Log } from '@log';
 import { Md } from '@md';
+import { expect } from '@std/expect';
+import { join } from '@std/path';
+
 import { UsageError } from '../../../src/cli/usage-error.ts';
 import { Close } from '../../../src/commands/ticket/close.ts';
 
@@ -19,9 +20,11 @@ Deno.test('Ticket close parses IDs, JSON output, and help', () => {
         args: { help: false, ticketId: '0001', json: false, reason: 'done' },
         rest: [],
     });
-    for (
-        const args of [['--json', '--', '10000'], ['10000', '--json'], ['--json', '10000', '--']]
-    ) {
+    for (const args of [
+        ['--json', '--', '10000'],
+        ['10000', '--json'],
+        ['--json', '10000', '--'],
+    ]) {
         expect(command.parseArguments(args)).toEqual({
             args: { help: false, ticketId: '10000', json: true, reason: 'done' },
             rest: [],
@@ -35,24 +38,22 @@ Deno.test('Ticket close parses IDs, JSON output, and help', () => {
 
 Deno.test('Ticket close rejects missing, invalid, and extra arguments', () => {
     const command = new Close();
-    for (
-        const args of [
-            [],
-            [''],
-            [' '],
-            ['--'],
-            ['--json'],
-            ['1'],
-            ['abcd'],
-            ['../0001'],
-            ['0001', '0002'],
-            ['0001', '--', '0002'],
-            ['--', '0001', '0002'],
-            ['--help=value'],
-            ['--json=true', '0001'],
-            ['-x'],
-        ]
-    ) {
+    for (const args of [
+        [],
+        [''],
+        [' '],
+        ['--'],
+        ['--json'],
+        ['1'],
+        ['abcd'],
+        ['../0001'],
+        ['0001', '0002'],
+        ['0001', '--', '0002'],
+        ['--', '0001', '0002'],
+        ['--help=value'],
+        ['--json=true', '0001'],
+        ['-x'],
+    ]) {
         expect(() => command.parseArguments(args)).toThrow(UsageError);
     }
 });
@@ -97,68 +98,79 @@ async function writeTicket(tickets: string, status: string, id = '0001'): Promis
     const path = join(directory, `${id}-new-ticket.md`);
     await Fs.write(
         path,
-        Md.toStream(Md.create('# Ticket\n\n- [ ] Task\n', {
-            id,
-            title: 'New ticket',
-            status,
-            dependencies: ['0002'],
-            created_at: '2020-01-01T00:00:00.000Z',
-            updated_at: '2020-01-01T00:00:00.000Z',
-            custom: ['preserve', 'metadata'],
-            ...(status === 'closed' ? { reason: 'done' } : {}),
-        })),
+        Md.toStream(
+            Md.create('# Ticket\n\n- [ ] Task\n', {
+                id,
+                title: 'New ticket',
+                status,
+                dependencies: ['0002'],
+                created_at: '2020-01-01T00:00:00.000Z',
+                updated_at: '2020-01-01T00:00:00.000Z',
+                custom: ['preserve', 'metadata'],
+                ...(status === 'closed' ? { reason: 'done' } : {}),
+            }),
+        ),
     );
     return path;
 }
 
-Deno.test('Ticket close moves open and active tickets and preserves its content and metadata', async () => {
-    for (const json of [false, true]) {
-        await withWorkspace(async (cwd, tickets) => {
-            const id = json ? '10000' : '0001';
-            const source = await writeTicket(tickets, json ? 'active' : 'open', id);
-            const path = join(tickets, 'closed', `${id}-new-ticket.md`);
-            const output = await close(cwd, json ? ['--json', id] : [id]);
-            expect(await Fs.exists(source)).toBe(false);
-            const markdown = await Md.parse(await Fs.read(path, { text: true }));
-            expect(markdown.frontmatter).toEqual({
-                id,
-                title: 'New ticket',
-                status: 'closed',
-                reason: 'done',
-                dependencies: ['0002'],
-                created_at: '2020-01-01T00:00:00.000Z',
-                updated_at: markdown.frontmatter.updated_at,
-                custom: ['preserve', 'metadata'],
+Deno.test(
+    'Ticket close moves open and active tickets and preserves its content and metadata',
+    async () => {
+        for (const json of [false, true]) {
+            await withWorkspace(async (cwd, tickets) => {
+                const id = json ? '10000' : '0001';
+                const source = await writeTicket(tickets, json ? 'active' : 'open', id);
+                const path = join(tickets, 'closed', `${id}-new-ticket.md`);
+                const output = await close(cwd, json ? ['--json', id] : [id]);
+                expect(await Fs.exists(source)).toBe(false);
+                const markdown = await Md.parse(await Fs.read(path, { text: true }));
+                expect(markdown.frontmatter).toEqual({
+                    id,
+                    title: 'New ticket',
+                    status: 'closed',
+                    reason: 'done',
+                    dependencies: ['0002'],
+                    created_at: '2020-01-01T00:00:00.000Z',
+                    updated_at: markdown.frontmatter.updated_at,
+                    custom: ['preserve', 'metadata'],
+                });
+                expect(Number.isNaN(Date.parse(markdown.frontmatter.updated_at as string))).toBe(
+                    false,
+                );
+                expect(markdown.frontmatter.updated_at).not.toBe(markdown.frontmatter.created_at);
+                let content = '';
+                for await (const chunk of markdown.content) {
+                    content += chunk;
+                }
+                expect(content).toBe('# Ticket\n\n- [ ] Task\n');
+                expect(output).toEqual([
+                    [
+                        json
+                            ? JSON.stringify(
+                                  [
+                                      {
+                                          path,
+                                          id,
+                                          slug: 'new-ticket',
+                                          title: 'New ticket',
+                                          dependencies: ['0002'],
+                                          status: 'closed',
+                                          reason: 'done',
+                                      },
+                                  ],
+                                  null,
+                                  2,
+                              )
+                            : `${Log.color.yellow(id)} ${Log.color.cyan('New ticket')} ${Log.color.gray(
+                                  path,
+                              )}`,
+                    ],
+                ]);
             });
-            expect(Number.isNaN(Date.parse(markdown.frontmatter.updated_at as string))).toBe(false);
-            expect(markdown.frontmatter.updated_at).not.toBe(markdown.frontmatter.created_at);
-            let content = '';
-            for await (const chunk of markdown.content) content += chunk;
-            expect(content).toBe('# Ticket\n\n- [ ] Task\n');
-            expect(output).toEqual([
-                [
-                    json
-                        ? JSON.stringify(
-                            [{
-                                path,
-                                id,
-                                slug: 'new-ticket',
-                                title: 'New ticket',
-                                dependencies: ['0002'],
-                                status: 'closed',
-                                reason: 'done',
-                            }],
-                            null,
-                            2,
-                        )
-                        : `${Log.color.yellow(id)} ${Log.color.cyan('New ticket')} ${
-                            Log.color.gray(path)
-                        }`,
-                ],
-            ]);
-        });
-    }
-});
+        }
+    },
+);
 
 async function expectFailure(operation: Promise<unknown>, cause: string): Promise<void> {
     try {
@@ -193,34 +205,41 @@ Deno.test('Ticket close rejects missing, closed, and ambiguous tickets', async (
     });
 });
 
-Deno.test('Ticket close preserves the source when the destination exists or cannot be written', async () => {
-    await withWorkspace(async (cwd, tickets) => {
-        const source = await writeTicket(tickets, 'open');
-        const original = await Deno.readTextFile(source);
-        const target = join(tickets, 'closed', '0001-new-ticket.md');
-        await Deno.mkdir(target, { recursive: true });
-        await expectFailure(close(cwd, ['0001']), 'already exists');
-        expect(await Deno.readTextFile(source)).toBe(original);
-        await Deno.remove(target);
-        await Deno.writeTextFile(join(tickets, 'closed', '.~0001-new-ticket.md.lock'), 'Locked');
-        await expectFailure(close(cwd, ['0001']), 'File exists');
-        expect(await Deno.readTextFile(source)).toBe(original);
-        expect(await Fs.exists(target)).toBe(false);
-    });
-});
+Deno.test(
+    'Ticket close preserves the source when the destination exists or cannot be written',
+    async () => {
+        await withWorkspace(async (cwd, tickets) => {
+            const source = await writeTicket(tickets, 'open');
+            const original = await Deno.readTextFile(source);
+            const target = join(tickets, 'closed', '0001-new-ticket.md');
+            await Deno.mkdir(target, { recursive: true });
+            await expectFailure(close(cwd, ['0001']), 'already exists');
+            expect(await Deno.readTextFile(source)).toBe(original);
+            await Deno.remove(target);
+            await Deno.writeTextFile(
+                join(tickets, 'closed', '.~0001-new-ticket.md.lock'),
+                'Locked',
+            );
+            await expectFailure(close(cwd, ['0001']), 'File exists');
+            expect(await Deno.readTextFile(source)).toBe(original);
+            expect(await Fs.exists(target)).toBe(false);
+        });
+    },
+);
 
 Deno.test('Ticket close parses closure reasons and duplicate references', () => {
     const command = new Close();
-    for (const args of [['0001', '-r', 'dismissed'], ['--reason=dismissed', '--', '0001']]) {
+    for (const args of [
+        ['0001', '-r', 'dismissed'],
+        ['--reason=dismissed', '--', '0001'],
+    ]) {
         expect(command.parseArguments(args).args.reason).toBe('dismissed');
     }
-    for (
-        const args of [
-            ['0001', '-r', 'duplicate', '-d', '0002'],
-            ['--reason=duplicate', '--duplicate-of=0002', '0001'],
-            ['--duplicate-of', '0002', '--reason', 'duplicate', '0001'],
-        ]
-    ) {
+    for (const args of [
+        ['0001', '-r', 'duplicate', '-d', '0002'],
+        ['--reason=duplicate', '--duplicate-of=0002', '0001'],
+        ['--duplicate-of', '0002', '--reason', 'duplicate', '0001'],
+    ]) {
         expect(command.parseArguments(args).args).toEqual({
             help: false,
             ticketId: '0001',
@@ -229,24 +248,22 @@ Deno.test('Ticket close parses closure reasons and duplicate references', () => 
             duplicateOf: '0002',
         });
     }
-    for (
-        const args of [
-            ['0001', '-r'],
-            ['0001', '--reason='],
-            ['0001', '--reason', '--json'],
-            ['0001', '--reason=invalid'],
-            ['0001', '--reason=duplicate'],
-            ['0001', '-d'],
-            ['0001', '--duplicate-of='],
-            ['0001', '-d', '--json'],
-            ['0001', '-d', 'invalid'],
-            ['0001', '-d', '1'],
-            ['0001', '-d', '../0002'],
-            ['0001', '-d', '0002'],
-            ['0001', '-r', 'dismissed', '-d', '0002'],
-            ['0001', '-r', 'duplicate', '-d', '0001'],
-        ]
-    ) {
+    for (const args of [
+        ['0001', '-r'],
+        ['0001', '--reason='],
+        ['0001', '--reason', '--json'],
+        ['0001', '--reason=invalid'],
+        ['0001', '--reason=duplicate'],
+        ['0001', '-d'],
+        ['0001', '--duplicate-of='],
+        ['0001', '-d', '--json'],
+        ['0001', '-d', 'invalid'],
+        ['0001', '-d', '1'],
+        ['0001', '-d', '../0002'],
+        ['0001', '-d', '0002'],
+        ['0001', '-r', 'dismissed', '-d', '0002'],
+        ['0001', '-r', 'duplicate', '-d', '0001'],
+    ]) {
         expect(() => command.parseArguments(args)).toThrow(UsageError);
     }
 });
@@ -258,7 +275,9 @@ Deno.test('Ticket close records dismissed and duplicate reasons', async () => {
             const target = await writeTicket(tickets, 'closed', '0002');
             const original = await Deno.readTextFile(target);
             const args = ['0001', '--reason', reason];
-            if (reason === 'duplicate') args.push('--duplicate-of', '0002');
+            if (reason === 'duplicate') {
+                args.push('--duplicate-of', '0002');
+            }
             await close(cwd, args);
             const markdown = await Md.parse(
                 await Fs.read(join(tickets, 'closed', '0001-new-ticket.md'), { text: true }),

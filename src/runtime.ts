@@ -1,7 +1,8 @@
+import type { Command, GlobalArguments } from '@commands';
+
+import { cleanup } from './runtime/cleanup.ts';
 import { createContext, type RuntimeContext } from './runtime/context.ts';
 import { registerSignalHandlers, type SignalHandlers } from './runtime/signals.ts';
-import { cleanup } from './runtime/cleanup.ts';
-import type { Command, GlobalArguments } from '@commands';
 
 export type { RuntimeContext };
 

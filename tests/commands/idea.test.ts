@@ -1,13 +1,14 @@
-import { expect } from '@std/expect';
-import { join } from '@std/path';
 import { Commands } from '@commands';
 import { Log } from '@log';
+import { expect } from '@std/expect';
+import { join } from '@std/path';
+
 import { UsageError } from '../../src/cli/usage-error.ts';
 import { Idea } from '../../src/commands/idea.ts';
 import { Create } from '../../src/commands/idea/create.ts';
-import { Split } from '../../src/commands/idea/split.ts';
 import { Ready } from '../../src/commands/idea/ready.ts';
 import { Reopen } from '../../src/commands/idea/reopen.ts';
+import { Split } from '../../src/commands/idea/split.ts';
 import { runStub } from './idea/helpers.ts';
 
 Deno.test('Idea creates the plans directory and preserves existing contents', async () => {
@@ -67,9 +68,7 @@ Deno.test('Idea accepts no subcommand and rejects unknown commands and invalid o
         } catch (error) {
             expect(error).toBeInstanceOf(UsageError);
             expect((error as UsageError).usage()).toBe(command.getUsage());
-            expect((error as Error).message).toBe(
-                `Unknown idea subcommand "${args.at(-1)}".`,
-            );
+            expect((error as Error).message).toBe(`Unknown idea subcommand "${args.at(-1)}".`);
         }
     }
     for (const option of ['--unknown', '-x', '--help=value', '--json=value']) {
@@ -77,14 +76,12 @@ Deno.test('Idea accepts no subcommand and rejects unknown commands and invalid o
     }
 });
 
-for (
-    const [name, Child] of [
-        ['create', Create],
-        ['split', Split],
-        ['ready', Ready],
-        ['reopen', Reopen],
-    ] as const
-) {
+for (const [name, Child] of [
+    ['create', Create],
+    ['split', Split],
+    ['ready', Ready],
+    ['reopen', Reopen],
+] as const) {
     Deno.test(`Idea dispatches ${name} and scopes help to the requested command`, () => {
         const root = Commands.cr();
         const globalArguments = root.parseArguments(['idea', name, '--help']);
@@ -96,7 +93,9 @@ for (
         expect(idea.shouldHandleHelp(parentArguments)).toBe(false);
         const child = idea.getSubcommand(parentArguments);
         expect(child).toBeInstanceOf(Child);
-        if (child === undefined) throw new Error('Expected an idea subcommand.');
+        if (child === undefined) {
+            throw new Error('Expected an idea subcommand.');
+        }
         const childArguments = child.parseArguments(parentArguments.rest);
         expect(child.shouldHandleHelp(childArguments)).toBe(true);
         expect(child.getUsage()).toContain(`cr idea ${name} [--help]`);
@@ -135,14 +134,12 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
     };
     Log.noColor = true;
     try {
-        for (
-            const [path, status] of [
-                ['parent', 'split'],
-                ['parent/child', 'ready'],
-                ['last', 'open'],
-                ['last/child', 'ready'],
-            ] as const
-        ) {
+        for (const [path, status] of [
+            ['parent', 'split'],
+            ['parent/child', 'ready'],
+            ['last', 'open'],
+            ['last/child', 'ready'],
+        ] as const) {
             const directory = join(plans, path);
             await Deno.mkdir(directory, { recursive: true });
             await Deno.writeTextFile(
@@ -153,16 +150,20 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
         await Deno.writeTextFile(join(plans, 'parent', 'SPEC.md'), 'Specification');
         const command = new Idea();
         await runStub(command, root);
-        expect(output).toEqual([[[
-            '├── Display title ◌ open [IDEA.md]',
-            `│   ${join(plans, 'last')}`,
-            '│   └── Display title ● ready [IDEA.md]',
-            `│       ${join(plans, 'last', 'child')}`,
-            '└── Display title ◉ split [IDEA.md, SPEC.md]',
-            `    ${join(plans, 'parent')}`,
-            '    └── Display title ● ready [IDEA.md]',
-            `        ${join(plans, 'parent', 'child')}`,
-        ].join('\n')]]);
+        expect(output).toEqual([
+            [
+                [
+                    '├── Display title ◌ open [IDEA.md]',
+                    `│   ${join(plans, 'last')}`,
+                    '│   └── Display title ● ready [IDEA.md]',
+                    `│       ${join(plans, 'last', 'child')}`,
+                    '└── Display title ◉ split [IDEA.md, SPEC.md]',
+                    `    ${join(plans, 'parent')}`,
+                    '    └── Display title ● ready [IDEA.md]',
+                    `        ${join(plans, 'parent', 'child')}`,
+                ].join('\n'),
+            ],
+        ]);
         await command.run({
             context: { currentWorkingDirectory: root, installRoot: '/install' },
             configuration: {

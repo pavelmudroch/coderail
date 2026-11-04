@@ -96,14 +96,17 @@ function digit(character: string): boolean {
 }
 
 function nameCharacter(character: string): boolean {
-    return digit(character) || (character >= 'A' && character <= 'Z') ||
-        (character >= 'a' && character <= 'z') || character === '_';
+    return (
+        digit(character) ||
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        character === '_'
+    );
 }
 
 function camelCase(key: string): string {
-    return key.replace(
-        /(?<=[A-Za-z0-9])_+([A-Za-z0-9])/g,
-        (_, character: string) => character.toUpperCase(),
+    return key.replace(/(?<=[A-Za-z0-9])_+([A-Za-z0-9])/g, (_, character: string) =>
+        character.toUpperCase(),
     );
 }
 
@@ -121,14 +124,14 @@ function toObject(root: ObjectNode): ParseResult {
     function object(node: ObjectNode): ParseResult {
         const result: ParseResult = {};
         for (const property of node.properties) {
-            // deno-lint-ignore no-non-null-assertion -- Every property is created with its assignment key or namespace segment.
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Every property is created with its assignment key or namespace segment.
             define(result, camelCase(property.keys[0]!.name), value(property.value));
         }
         return result;
     }
 
     function bracketArray(node: BracketArrayNode): BracketArray {
-        return node.items.map((item) => item.kind === 'scalar' ? item.value : bracketArray(item));
+        return node.items.map((item) => (item.kind === 'scalar' ? item.value : bracketArray(item)));
     }
 
     function value(node: ValueNode): ParseResult[string] {
@@ -164,8 +167,10 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
     }
 
     function whitespace(): void {
-        // deno-lint-ignore no-non-null-assertion -- cursor is within the string bounds.
-        for (; cursor < text.length && horizontal(text[cursor]!); cursor++) { /* advance */ }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- cursor is within the string bounds.
+        for (; cursor < text.length && horizontal(text[cursor]!); cursor++) {
+            /* advance */
+        }
     }
 
     function position(): Position {
@@ -175,9 +180,13 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
     function name(): KeyNode {
         const start = cursor;
         const location = position();
-        // deno-lint-ignore no-non-null-assertion -- cursor is within the string bounds.
-        for (; cursor < text.length && nameCharacter(text[cursor]!); cursor++) { /* advance */ }
-        if (cursor === start) fail('Expected name');
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- cursor is within the string bounds.
+        for (; cursor < text.length && nameCharacter(text[cursor]!); cursor++) {
+            /* advance */
+        }
+        if (cursor === start) {
+            fail('Expected name');
+        }
         return {
             name: text.slice(start, cursor),
             range: { start: location, end: position() },
@@ -197,7 +206,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
         let parent = result;
         const element = header.kind === 'element';
         for (let index = 0; index < header.path.length; index++) {
-            // deno-lint-ignore no-non-null-assertion -- index is within the header path bounds.
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- index is within the header path bounds.
             const part = header.path[index]!;
             const final = index === header.path.length - 1;
             const properties = members(parent);
@@ -206,9 +215,10 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
             if (property === undefined) {
                 property = {
                     keys: [part],
-                    value: final && element
-                        ? { kind: 'object-array', items: [] }
-                        : { kind: 'object', properties: [] },
+                    value:
+                        final && element
+                            ? { kind: 'object-array', items: [] }
+                            : { kind: 'object', properties: [] },
                 };
                 parent.properties.push(property);
                 properties.set(propertyName, property);
@@ -220,8 +230,10 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                 if (member.kind !== 'object-array' || (final && !element)) {
                     fail('Incompatible array namespace');
                 }
-                if (final) member.items.push({ kind: 'object', properties: [], header });
-                // deno-lint-ignore no-non-null-assertion -- Object arrays are populated when their first element header is parsed.
+                if (final) {
+                    member.items.push({ kind: 'object', properties: [], header });
+                }
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Object arrays are populated when their first element header is parsed.
                 parent = member.items[member.items.length - 1]!;
             } else {
                 if (member.kind !== 'object' || (final && element)) {
@@ -229,7 +241,9 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                 }
                 parent = member;
                 if (final) {
-                    if (parent.header !== undefined) fail('Repeated object header');
+                    if (parent.header !== undefined) {
+                        fail('Repeated object header');
+                    }
                     parent.header = header;
                 }
             }
@@ -241,7 +255,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
         let decoded = '';
         cursor++;
         for (; cursor < text.length; cursor++) {
-            // deno-lint-ignore no-non-null-assertion -- cursor is within the string bounds.
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- cursor is within the string bounds.
             const character = text[cursor]!;
             if (character === '"') {
                 cursor++;
@@ -275,14 +289,19 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                         for (let index = 0; index < 4; index++) {
                             cursor++;
                             const character = text[cursor];
-                            if (character === undefined) fail('Unfinished Unicode escape');
+                            if (character === undefined) {
+                                fail('Unfinished Unicode escape');
+                            }
                             let code: number;
-                            if (digit(character)) code = character.charCodeAt(0) - 48;
-                            else if (character >= 'a' && character <= 'f') {
+                            if (digit(character)) {
+                                code = character.charCodeAt(0) - 48;
+                            } else if (character >= 'a' && character <= 'f') {
                                 code = character.charCodeAt(0) - 87;
                             } else if (character >= 'A' && character <= 'F') {
                                 code = character.charCodeAt(0) - 55;
-                            } else fail('Invalid Unicode escape');
+                            } else {
+                                fail('Invalid Unicode escape');
+                            }
                             hex = hex * 16 + code;
                         }
                         decoded += String.fromCharCode(hex);
@@ -292,7 +311,9 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                         fail('Unsupported or unfinished escape');
                 }
             } else {
-                if (character.charCodeAt(0) < 32) fail('Raw string control');
+                if (character.charCodeAt(0) < 32) {
+                    fail('Raw string control');
+                }
                 decoded += character;
             }
         }
@@ -300,13 +321,17 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
     }
 
     function scalar(): Scalar {
-        if (text[cursor] === '"') return string();
+        if (text[cursor] === '"') {
+            return string();
+        }
         let token = '';
-        // deno-lint-ignore no-non-null-assertion -- scan calls scalar only while cursor is within the string bounds.
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- scan calls scalar only while cursor is within the string bounds.
         const character = text[cursor]!;
         const numeric = digit(character) || character === '-';
         const literal = text[cursor] === 't' ? 'true' : text[cursor] === 'f' ? 'false' : 'null';
-        if (!numeric && text[cursor] !== literal[0]) fail('Invalid literal');
+        if (!numeric && text[cursor] !== literal[0]) {
+            fail('Invalid literal');
+        }
         let state:
             | 'start'
             | 'sign'
@@ -317,14 +342,20 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
             | 'fraction'
             | 'fractionSeparator' = 'start';
         for (; cursor < text.length; cursor++) {
-            // deno-lint-ignore no-non-null-assertion -- cursor is within the string bounds.
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- cursor is within the string bounds.
             const character = text[cursor]!;
             if (
-                horizontal(character) || character === '#' || character === ',' || character === ']'
-            ) break;
+                horizontal(character) ||
+                character === '#' ||
+                character === ',' ||
+                character === ']'
+            ) {
+                break;
+            }
             if (numeric) {
-                if (state === 'start' && character === '-') state = 'sign';
-                else if ((state === 'start' || state === 'sign') && digit(character)) {
+                if (state === 'start' && character === '-') {
+                    state = 'sign';
+                } else if ((state === 'start' || state === 'sign') && digit(character)) {
                     state = character === '0' ? 'zero' : 'integer';
                 } else if ((state === 'integer' || state === 'separator') && digit(character)) {
                     state = 'integer';
@@ -339,10 +370,16 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                     state = 'fraction';
                 } else if (state === 'fraction' && character === '_') {
                     state = 'fractionSeparator';
-                } else fail('Invalid number');
-                if (character !== '_') token += character;
+                } else {
+                    fail('Invalid number');
+                }
+                if (character !== '_') {
+                    token += character;
+                }
             } else {
-                if (character !== literal[token.length]) fail('Invalid literal');
+                if (character !== literal[token.length]) {
+                    fail('Invalid literal');
+                }
                 token += character;
             }
         }
@@ -351,12 +388,20 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                 fail('Unfinished number');
             }
             const number = Number(token);
-            if (!Number.isFinite(number)) fail('Nonfinite number');
+            if (!Number.isFinite(number)) {
+                fail('Nonfinite number');
+            }
             return number;
         }
-        if (token === 'true') return true;
-        if (token === 'false') return false;
-        if (token === 'null') return null;
+        if (token === 'true') {
+            return true;
+        }
+        if (token === 'false') {
+            return false;
+        }
+        if (token === 'null') {
+            return null;
+        }
         fail('Invalid literal');
     }
 
@@ -384,7 +429,9 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                 const start = position();
                 cursor++;
                 const element = text[cursor] === '[';
-                if (element) cursor++;
+                if (element) {
+                    cursor++;
+                }
                 whitespace();
                 const path = [name()];
                 for (; text[cursor] === '.';) {
@@ -392,10 +439,14 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                     path.push(name());
                 }
                 whitespace();
-                if (text[cursor] !== ']') fail('Expected closing header');
+                if (text[cursor] !== ']') {
+                    fail('Expected closing header');
+                }
                 cursor++;
                 if (element) {
-                    if (text[cursor] !== ']') fail('Expected closing element header');
+                    if (text[cursor] !== ']') {
+                        fail('Expected closing element header');
+                    }
                     cursor++;
                 }
                 header = {
@@ -406,28 +457,38 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
             } else {
                 key = name();
                 whitespace();
-                if (text[cursor] !== '=') fail('Expected assignment');
+                if (text[cursor] !== '=') {
+                    fail('Expected assignment');
+                }
                 cursor++;
                 complete = false;
             }
         }
         let comment = false;
         for (; cursor < text.length; cursor++) {
-            // deno-lint-ignore no-non-null-assertion -- cursor is within the string bounds.
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- cursor is within the string bounds.
             const character = text[cursor]!;
-            if (character === '\r') fail('Bare carriage return');
-            if (comment || horizontal(character)) continue;
+            if (character === '\r') {
+                fail('Bare carriage return');
+            }
+            if (comment || horizontal(character)) {
+                continue;
+            }
             if (character === '#') {
                 comment = true;
                 continue;
             }
-            if (header || complete) fail('Unexpected trailing text');
+            if (header || complete) {
+                fail('Unexpected trailing text');
+            }
             const frame = arrays[arrays.length - 1];
             if (frame && character === ']') {
                 arrays.pop();
                 accept(frame.node);
             } else if (frame && frame.needsComma) {
-                if (character !== ',') fail('Expected comma');
+                if (character !== ',') {
+                    fail('Expected comma');
+                }
                 frame.needsComma = false;
             } else if (character === '[') {
                 arrays.push({
@@ -448,10 +509,14 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
         if (header) {
             namespace(header);
         } else if (key !== undefined && arrays.length === 0) {
-            if (!complete || value === undefined) fail('Expected value');
+            if (!complete || value === undefined) {
+                fail('Expected value');
+            }
             const properties = members(target);
             const propertyName = camelCase(key.name);
-            if (properties.has(propertyName)) fail('Duplicate assignment');
+            if (properties.has(propertyName)) {
+                fail('Duplicate assignment');
+            }
             const property = { keys: [key], value };
             target.properties.push(property);
             properties.set(propertyName, property);
@@ -493,14 +558,19 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
     try {
         for (;;) {
             const chunk = await reader.read();
-            if (chunk.done) break;
+            if (chunk.done) {
+                break;
+            }
             const bytes = chunk.value;
             let start = 0;
             for (let index = 0; index < bytes.length; index++) {
-                if (bytes[index] !== 10) continue;
+                if (bytes[index] !== 10) {
+                    continue;
+                }
                 const part = bytes.subarray(start, index);
-                if (pending.length === 0) line(part, true);
-                else {
+                if (pending.length === 0) {
+                    line(part, true);
+                } else {
                     pending.push(part);
                     length += part.length;
                     flush(true);
@@ -513,8 +583,12 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                 length += part.length;
             }
         }
-        if (length > 0) flush(false);
-        if (arrays.length > 0) fail('Unfinished array');
+        if (length > 0) {
+            flush(false);
+        }
+        if (arrays.length > 0) {
+            fail('Unfinished array');
+        }
     } catch (error) {
         try {
             reader.releaseLock();
@@ -529,24 +603,30 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
         part: 'value' | 'key' = 'value',
     ): Meta | undefined {
         const segments = typeof path === 'string' ? path.split('.') : path;
-        if (segments.length === 0) return undefined;
-        let property: PropertyNode | undefined = indexes.get(result)?.get(
-            camelCase(String(segments[0])),
-        );
-        if (property === undefined) return undefined;
-        // deno-lint-ignore no-non-null-assertion -- Every property is created with at least one key.
+        if (segments.length === 0) {
+            return undefined;
+        }
+        let property: PropertyNode | undefined = indexes
+            .get(result)
+            ?.get(camelCase(String(segments[0])));
+        if (property === undefined) {
+            return undefined;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Every property is created with at least one key.
         const sourcePath: (string | number)[] = [property.keys[0]!.name];
         let node: ValueNode = property.value;
-        // deno-lint-ignore no-non-null-assertion -- Every property is created with at least one key.
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Every property is created with at least one key.
         let location = property.keys[0]!.range.start;
         for (const segment of segments.slice(1)) {
             if (node.kind === 'object') {
                 property = indexes.get(node)?.get(camelCase(String(segment)));
-                if (property === undefined) return undefined;
-                // deno-lint-ignore no-non-null-assertion -- Every property is created with at least one key.
+                if (property === undefined) {
+                    return undefined;
+                }
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Every property is created with at least one key.
                 sourcePath.push(property.keys[0]!.name);
                 node = property.value;
-                // deno-lint-ignore no-non-null-assertion -- Every property is created with at least one key.
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Every property is created with at least one key.
                 location = property.keys[0]!.range.start;
             } else if (node.kind === 'array' || node.kind === 'object-array') {
                 if (typeof segment === 'string' && !/^(0|[1-9][0-9]*)$/.test(segment)) {
@@ -556,7 +636,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                 if (!Number.isSafeInteger(index) || index < 0 || index >= node.items.length) {
                     return undefined;
                 }
-                // deno-lint-ignore no-non-null-assertion -- The index was checked above, and parser-created arrays are dense.
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The index was checked above, and parser-created arrays are dense.
                 node = node.items[index]!;
                 property = undefined;
                 sourcePath.push(index);
@@ -565,12 +645,15 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
             }
         }
         if (part === 'key') {
-            if (property === undefined) return undefined;
-            location = node.kind === 'object' && node.header !== undefined
-                // deno-lint-ignore no-non-null-assertion -- Headers are parsed with at least one path segment.
-                ? node.header.path[node.header.path.length - 1]!.range.start
-                // deno-lint-ignore no-non-null-assertion -- Every property is created with at least one key.
-                : property.keys[0]!.range.start;
+            if (property === undefined) {
+                return undefined;
+            }
+            location =
+                node.kind === 'object' && node.header !== undefined
+                    ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Headers are parsed with at least one path segment.
+                      node.header.path[node.header.path.length - 1]!.range.start
+                    : // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Every property is created with at least one key.
+                      property.keys[0]!.range.start;
         } else {
             switch (node.kind) {
                 case 'scalar':
@@ -581,14 +664,14 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                     location = node.header?.range.start ?? location;
                     break;
                 case 'object-array':
-                    // deno-lint-ignore no-non-null-assertion -- Object arrays always contain their first parsed element.
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Object arrays always contain their first parsed element.
                     location = node.items[0]!.header.range.start;
                     break;
             }
         }
         let type: MetaType;
         if (node.kind === 'scalar') {
-            type = node.value === null ? 'null' : typeof node.value as MetaType;
+            type = node.value === null ? 'null' : (typeof node.value as MetaType);
         } else {
             type = node.kind === 'object' ? 'object' : 'array';
         }

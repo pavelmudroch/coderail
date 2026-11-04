@@ -1,5 +1,6 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
+
 import { selectFiles } from '../../../src/commands/verify/select-files.ts';
 
 Deno.test('selectFiles selects recursive explicit paths safely and deterministically', async () => {
@@ -12,12 +13,16 @@ Deno.test('selectFiles selects recursive explicit paths safely and deterministic
         await Deno.symlink(join(root, 'nested'), join(root, 'link'));
         await Deno.symlink(join(root, 'absent'), join(root, 'dangling'));
         const signal = new AbortController().signal;
-        expect(await selectFiles(root, join(root, 'nested'), ['..', '../z'], false, signal))
-            .toEqual(['..inside', '.gitignore', '.hidden', 'ignored', 'nested/a', 'z']);
-        expect(await selectFiles(root, root, ['link', 'link/a', 'dangling'], false, signal))
-            .toEqual([]);
-        expect(await selectFiles(root, root, ['..inside', 'z', 'z'], false, signal))
-            .toEqual(['..inside', 'z']);
+        expect(
+            await selectFiles(root, join(root, 'nested'), ['..', '../z'], false, signal),
+        ).toEqual(['..inside', '.gitignore', '.hidden', 'ignored', 'nested/a', 'z']);
+        expect(
+            await selectFiles(root, root, ['link', 'link/a', 'dangling'], false, signal),
+        ).toEqual([]);
+        expect(await selectFiles(root, root, ['..inside', 'z', 'z'], false, signal)).toEqual([
+            '..inside',
+            'z',
+        ]);
         for (const path of ['absent', '..']) {
             await expect(selectFiles(root, root, ['z', path], false, signal)).rejects.toThrow();
         }
@@ -29,8 +34,9 @@ Deno.test('selectFiles selects recursive explicit paths safely and deterministic
             return info;
         };
         try {
-            await expect(selectFiles(root, root, ['.'], false, controller.signal))
-                .rejects.toThrow();
+            await expect(
+                selectFiles(root, root, ['.'], false, controller.signal),
+            ).rejects.toThrow();
         } finally {
             Deno.lstat = originalLstat;
         }
@@ -45,16 +51,18 @@ Deno.test('selectFiles ignores non-regular entries and propagates filesystem err
     try {
         await Deno.writeTextFile(join(root, 'special'), '');
         Deno.lstat = async (...args): Promise<Deno.FileInfo> => ({
-            ...await originalLstat(...args),
+            ...(await originalLstat(...args)),
             isFile: false,
             isDirectory: false,
         });
-        expect(await selectFiles(root, root, ['special'], false, new AbortController().signal))
-            .toEqual([]);
+        expect(
+            await selectFiles(root, root, ['special'], false, new AbortController().signal),
+        ).toEqual([]);
         Deno.lstat = (): Promise<Deno.FileInfo> =>
             Promise.reject(new Deno.errors.PermissionDenied());
-        await expect(selectFiles(root, root, ['special'], false, new AbortController().signal))
-            .rejects.toBeInstanceOf(Deno.errors.PermissionDenied);
+        await expect(
+            selectFiles(root, root, ['special'], false, new AbortController().signal),
+        ).rejects.toBeInstanceOf(Deno.errors.PermissionDenied);
     } finally {
         Deno.lstat = originalLstat;
         await Deno.remove(root, { recursive: true });
@@ -65,7 +73,9 @@ Deno.test('selectFiles merges Git changes within a nested project', async () => 
     const root = await Deno.makeTempDir();
     async function git(...args: string[]): Promise<void> {
         const result = await new Deno.Command('git', { cwd: root, args }).output();
-        if (!result.success) throw new Error(new TextDecoder().decode(result.stderr));
+        if (!result.success) {
+            throw new Error(new TextDecoder().decode(result.stderr));
+        }
     }
     try {
         await git('init');
@@ -95,16 +105,15 @@ Deno.test('selectFiles merges Git changes within a nested project', async () => 
                 true,
                 new AbortController().signal,
             ),
-        )
-            .toEqual([
-                'line\nname',
-                'quote"name',
-                'renamed',
-                'space name',
-                'staged',
-                'tab\tname',
-                'unstaged',
-            ]);
+        ).toEqual([
+            'line\nname',
+            'quote"name',
+            'renamed',
+            'space name',
+            'staged',
+            'tab\tname',
+            'unstaged',
+        ]);
     } finally {
         await Deno.remove(root, { recursive: true });
     }
@@ -131,7 +140,9 @@ Deno.test('selectFiles handles controlled Git records and subprocess failures', 
                 calls++;
             }
             override output(): Promise<Deno.CommandOutput> {
-                if (launchError) return Promise.reject(new Deno.errors.NotFound());
+                if (launchError) {
+                    return Promise.reject(new Deno.errors.NotFound());
+                }
                 const value = calls % 2 === 1 ? root + '\n' : records;
                 return Promise.resolve({
                     success: !failure,
@@ -142,25 +153,28 @@ Deno.test('selectFiles handles controlled Git records and subprocess failures', 
                 });
             }
         };
-        records = 'C  destination\0source\0 R destination\0source\0' +
+        records =
+            'C  destination\0source\0 R destination\0source\0' +
             '?? missing\0?? link/child\0?? directory\0 D source\0';
-        expect(await selectFiles(root, root, [], true, controller.signal))
-            .toEqual(['destination']);
+        expect(await selectFiles(root, root, [], true, controller.signal)).toEqual(['destination']);
         const originalLstat = Deno.lstat;
         Deno.lstat = (): Promise<Deno.FileInfo> =>
             Promise.reject(new Deno.errors.PermissionDenied());
         try {
-            await expect(selectFiles(root, root, [], true, controller.signal))
-                .rejects.toBeInstanceOf(Deno.errors.PermissionDenied);
+            await expect(
+                selectFiles(root, root, [], true, controller.signal),
+            ).rejects.toBeInstanceOf(Deno.errors.PermissionDenied);
         } finally {
             Deno.lstat = originalLstat;
         }
         failure = true;
-        await expect(selectFiles(root, root, [], true, controller.signal))
-            .rejects.toThrow('git failure');
+        await expect(selectFiles(root, root, [], true, controller.signal)).rejects.toThrow(
+            'git failure',
+        );
         launchError = true;
-        await expect(selectFiles(root, root, [], true, controller.signal))
-            .rejects.toBeInstanceOf(Deno.errors.NotFound);
+        await expect(selectFiles(root, root, [], true, controller.signal)).rejects.toBeInstanceOf(
+            Deno.errors.NotFound,
+        );
         controller.abort();
         await expect(selectFiles(root, root, [], true, controller.signal)).rejects.toThrow();
     } finally {

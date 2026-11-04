@@ -1,10 +1,11 @@
+import type { GlobalArguments } from '@commands';
+import type { RuntimeContext } from '@runtime';
+
 import type { Configuration } from './configuration.ts';
+import type { ConfFileStream } from './get-file-stream.ts';
 import { getGlobalConfigurationFile } from './get-global-configuration-file.ts';
 import { getLocalConfigurationFile } from './get-local-configuration-file.ts';
 import { parse, type ParsedConf } from './parse.ts';
-import type { ConfFileStream } from './get-file-stream.ts';
-import type { GlobalArguments } from '@commands';
-import type { RuntimeContext } from '@runtime';
 
 type EnvironmentVariables = { get(key: string): string | undefined };
 
@@ -27,9 +28,10 @@ export async function loadConfiguration(
         mergeConfiguration(configuration, parsedGlobalConfig);
     }
 
-    const localConfigurationFile = context.repositoryRoot === undefined
-        ? null
-        : await getLocalConfigurationFile(context.repositoryRoot);
+    const localConfigurationFile =
+        context.repositoryRoot === undefined
+            ? null
+            : await getLocalConfigurationFile(context.repositoryRoot);
     using localConfiguration = localConfigurationFile;
     if (localConfiguration !== null) {
         const parsedLocalConfig = await parseConfigurationFile(localConfiguration);
@@ -96,9 +98,7 @@ function parseEnvironmentVariables(env: EnvironmentVariables): Partial<Configura
     return result;
 }
 
-async function parseConfigurationFile(
-    file: ConfFileStream,
-): Promise<Partial<Configuration>> {
+async function parseConfigurationFile(file: ConfFileStream): Promise<Partial<Configuration>> {
     try {
         const parsedResult = await parse(file.stream);
         const accumulatedErrors: Error[] = [];
@@ -128,7 +128,9 @@ function validateConfigurationResult(
     }
 
     function string(value: unknown, path: Path): void {
-        if (typeof value !== 'string') report(path, 'Expected a string');
+        if (typeof value !== 'string') {
+            report(path, 'Expected a string');
+        }
     }
 
     function array(
@@ -186,7 +188,9 @@ function validateConfigurationResult(
                 break;
             case 'noColor':
             case 'nonInteractive':
-                if (typeof value !== 'boolean') report(path, 'Expected a boolean');
+                if (typeof value !== 'boolean') {
+                    report(path, 'Expected a boolean');
+                }
                 break;
             case 'verify':
                 if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -195,14 +199,15 @@ function validateConfigurationResult(
                 }
                 for (const [member, entry] of Object.entries(value)) {
                     const nested = [...path, member];
-                    if (member === 'rules') array(entry, nested, verifyRule);
-                    else if (member === 'pre' || member === 'post') {
-                        array(
-                            entry,
-                            nested,
-                            (command, commandPath) => array(command, commandPath, string),
+                    if (member === 'rules') {
+                        array(entry, nested, verifyRule);
+                    } else if (member === 'pre' || member === 'post') {
+                        array(entry, nested, (command, commandPath) =>
+                            array(command, commandPath, string),
                         );
-                    } else report(nested, 'Unknown property', 'key');
+                    } else {
+                        report(nested, 'Unknown property', 'key');
+                    }
                 }
                 break;
             default:
@@ -227,7 +232,7 @@ function mergeConfiguration(base: Configuration, override: Partial<Configuration
         base.nonInteractive = override.nonInteractive;
     }
     if (override.verify !== undefined) {
-        base.verify.rules.push(...override.verify.rules ?? []);
+        base.verify.rules.push(...(override.verify.rules ?? []));
         for (const phase of ['pre', 'post'] as const) {
             if (override.verify[phase] !== undefined) {
                 (base.verify[phase] ??= []).push(...override.verify[phase]);

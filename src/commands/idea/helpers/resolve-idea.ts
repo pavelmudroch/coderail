@@ -1,5 +1,6 @@
-import { isAbsolute, join, resolve, SEPARATOR } from '@std/path';
 import { Path } from '@path';
+import { isAbsolute, join, resolve, SEPARATOR } from '@std/path';
+
 import { getIdeaTree, type IdeaTree, type IdeaTreeItem } from './get-idea-tree.ts';
 
 /**
@@ -22,28 +23,35 @@ export async function resolveIdea(cwd: string, reference: string): Promise<IdeaT
     collect(tree);
 
     const plansPrefix = join(Path.CODERAIL_DIR, Path.PLANS_DIR);
-    const explicitPath = isAbsolute(reference) || reference === '.' || reference === '..' ||
-        reference.startsWith(`.${SEPARATOR}`) || reference.startsWith(`..${SEPARATOR}`) ||
-        reference === plansPrefix || reference.startsWith(`${plansPrefix}${SEPARATOR}`);
+    const explicitPath =
+        isAbsolute(reference) ||
+        reference === '.' ||
+        reference === '..' ||
+        reference.startsWith(`.${SEPARATOR}`) ||
+        reference.startsWith(`..${SEPARATOR}`) ||
+        reference === plansPrefix ||
+        reference.startsWith(`${plansPrefix}${SEPARATOR}`);
     const matchers: ((idea: IdeaTreeItem) => boolean)[] = explicitPath
         ? [(idea) => idea.path === resolve(cwd, reference)]
         : [
-            (idea) => idea.id === reference,
-            (idea) => idea.slug === reference,
-            (idea) => idea.frontmatter.title === reference,
-        ];
+              (idea) => idea.id === reference,
+              (idea) => idea.slug === reference,
+              (idea) => idea.frontmatter.title === reference,
+          ];
 
     for (const matchesReference of matchers) {
         const matches = ideas.filter(matchesReference);
         if (matches.length > 1) {
             throw new Error(
-                `Ambiguous idea reference "${reference}". Use one of these IDs: ${
-                    matches.map((idea) => idea.id).join(', ')
-                }`,
+                `Ambiguous idea reference "${reference}". Use one of these IDs: ${matches
+                    .map((idea) => idea.id)
+                    .join(', ')}`,
             );
         }
         const match = matches[0];
-        if (match !== undefined) return match;
+        if (match !== undefined) {
+            return match;
+        }
     }
     throw new Error(`Idea not found: ${reference}`);
 }

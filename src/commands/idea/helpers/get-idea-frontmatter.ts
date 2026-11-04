@@ -1,5 +1,6 @@
 import { Fs } from '@fs';
 import { Md } from '@md';
+
 import { IdeaFrontmatter } from './idea-frontmatter.ts';
 
 export async function getIdeaFrontmatter(filePath: string): Promise<IdeaFrontmatter> {

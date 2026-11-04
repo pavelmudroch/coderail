@@ -1,9 +1,10 @@
-import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Cli } from '@cli';
+import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Fs } from '@fs';
 import { Log } from '@log';
 import { Md } from '@md';
 import { join } from '@std/path';
+
 import { formatJson, formatText } from './helpers/format.ts';
 import { IDEA_STATUS } from './helpers/idea-frontmatter.ts';
 import { resolveIdea } from './helpers/resolve-idea.ts';
@@ -26,7 +27,9 @@ export class Reopen implements Command<ReopenArguments> {
         const rest: string[] = [];
         for (let i = 0; i < originalArgs.length; i++) {
             const arg = originalArgs[i];
-            if (arg === undefined) continue;
+            if (arg === undefined) {
+                continue;
+            }
             if (arg === '-h' || arg === '--help') {
                 args.help = true;
                 return { args, rest };

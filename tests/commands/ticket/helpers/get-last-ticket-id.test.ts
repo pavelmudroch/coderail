@@ -1,5 +1,6 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
+
 import { getLastTicketId } from '../../../../src/commands/ticket/helpers/get-last-ticket-id.ts';
 
 Deno.test('getLastTicketId returns null when ticket directories are missing or empty', async () => {
@@ -19,13 +20,11 @@ Deno.test('getLastTicketId returns the numeric maximum from each status director
     const cwd = await Deno.makeTempDir();
     try {
         const tickets = join(cwd, '.coderail', 'tickets');
-        for (
-            const [status, ids] of [
-                ['open', ['0010', '0002']],
-                ['active', ['9999', '0005']],
-                ['closed', ['10000', '0009']],
-            ] as const
-        ) {
+        for (const [status, ids] of [
+            ['open', ['0010', '0002']],
+            ['active', ['9999', '0005']],
+            ['closed', ['10000', '0009']],
+        ] as const) {
             const directory = join(tickets, status);
             await Deno.mkdir(directory, { recursive: true });
             for (const id of ids) {

@@ -10,7 +10,7 @@ export function registerSignalHandlers(): SignalHandlers {
         signal,
         [Symbol.dispose]: () => {},
     };
-    const handleSignal = () => controller.abort();
+    const handleSignal = (): void => controller.abort();
     Deno.addSignalListener('SIGINT', handleSignal);
     if (Deno.build.os === 'windows') {
         Deno.addSignalListener('SIGBREAK', handleSignal);

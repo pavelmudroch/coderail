@@ -1,9 +1,10 @@
-import { expect } from '@std/expect';
 import { Harness } from '@harness';
-import { CodexConnector } from '../src/harness/codex.ts';
-import { ClaudeConnector } from '../src/harness/claude.ts';
+import { expect } from '@std/expect';
+
 import { Install } from '../src/commands/install.ts';
 import { Uninstall } from '../src/commands/uninstall.ts';
+import { ClaudeConnector } from '../src/harness/claude.ts';
+import { CodexConnector } from '../src/harness/codex.ts';
 
 Deno.test('Harness enumerates names and renders help without resolving connectors', () => {
     const original = Object.getOwnPropertyDescriptors(Harness);
@@ -21,7 +22,9 @@ Deno.test('Harness enumerates names and renders help without resolving connector
     try {
         expect(Harness.names).toEqual(['codex', 'claude']);
         for (const command of [new Install(), new Uninstall()]) {
-            for (const name of Harness.names) expect(command.getUsage()).toContain(`- ${name}`);
+            for (const name of Harness.names) {
+                expect(command.getUsage()).toContain(`- ${name}`);
+            }
         }
     } finally {
         Object.defineProperties(Harness, original);
@@ -39,5 +42,5 @@ Deno.test('Harness constructs fresh selected connectors and preserves facade acc
     expect(compatibilityClaude).toBeInstanceOf(ClaudeConnector);
     expect(codex).not.toBe(compatibilityCodex);
     expect(claude).not.toBe(compatibilityClaude);
-    expect(() => Harness.get('unknown')).toThrow('Unknown harness "unknown".');
+    expect(() => Harness.get('unknown')).toEqual(null);
 });

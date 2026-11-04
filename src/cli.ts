@@ -1,5 +1,6 @@
-import { UsageError } from './cli/usage-error.ts';
 import type { Command } from '@commands';
+
+import { UsageError } from './cli/usage-error.ts';
 import { CODERAIL_VERSION } from './cli/version.ts';
 
 export interface Cli {

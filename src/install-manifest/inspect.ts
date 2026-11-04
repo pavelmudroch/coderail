@@ -1,4 +1,5 @@
 import { resolve } from '@std/path';
+
 import type { Inspection, Manifest, ManifestFile } from '../install-manifest.ts';
 import { canonicalRoot, descendantPath, fingerprint } from './capture.ts';
 import { validate } from './validate.ts';
@@ -13,13 +14,19 @@ async function inspectFile(root: string, file: ManifestFile): Promise<Inspection
         try {
             info = await Deno.lstat(current);
         } catch (error) {
-            if (error instanceof Deno.errors.NotFound) return 'missing';
+            if (error instanceof Deno.errors.NotFound) {
+                return 'missing';
+            }
             throw error;
         }
         if (index === parts.length - 1) {
-            if (!info.isFile) return 'modified';
+            if (!info.isFile) {
+                return 'modified';
+            }
         } else {
-            if (info.isSymlink) throw new Error('Install manifest path contains a symlink');
+            if (info.isSymlink) {
+                throw new Error('Install manifest path contains a symlink');
+            }
             if (!info.isDirectory) {
                 throw new Error('Install manifest ancestor must be a directory');
             }

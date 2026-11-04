@@ -1,10 +1,11 @@
-import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Cli } from '@cli';
+import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Fs } from '@fs';
 import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
+
 import { formatJson, formatText } from './helpers/format.ts';
 import { resolveTicket, TICKET_STATUS } from './helpers/resolve-ticket.ts';
 
@@ -23,7 +24,9 @@ export class Reopen implements Command<ReopenArguments> {
         const rest: string[] = [];
         for (let i = 0; i < originalArgs.length; i++) {
             const arg = originalArgs[i];
-            if (arg === undefined) continue;
+            if (arg === undefined) {
+                continue;
+            }
             if (arg === '-h' || arg === '--help') {
                 args.help = true;
                 return { args, rest };
@@ -52,7 +55,9 @@ export class Reopen implements Command<ReopenArguments> {
                         this,
                     );
                 }
-                if (!args.dependsOn.includes(value)) args.dependsOn.push(value);
+                if (!args.dependsOn.includes(value)) {
+                    args.dependsOn.push(value);
+                }
                 continue;
             }
             if (arg === '--json') {
@@ -125,11 +130,13 @@ export class Reopen implements Command<ReopenArguments> {
             const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'open');
             const path = join(directory, `${id}-${ticket.slug}.md`);
             const moving = ticket.status !== TICKET_STATUS.OPEN;
-            if (moving && await Fs.exists(path)) {
+            if (moving && (await Fs.exists(path))) {
                 throw new Error(`Ticket with "${path}" already exists.`);
             }
             const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
-            let changed = moving || Object.hasOwn(markdown.frontmatter, 'reason') ||
+            let changed =
+                moving ||
+                Object.hasOwn(markdown.frontmatter, 'reason') ||
                 Object.hasOwn(markdown.frontmatter, 'duplicate-of');
             delete markdown.frontmatter.reason;
             delete markdown.frontmatter['duplicate-of'];
@@ -141,14 +148,18 @@ export class Reopen implements Command<ReopenArguments> {
                         changed = true;
                     }
                 }
-                if (changed) markdown.frontmatter.dependencies = merged;
+                if (changed) {
+                    markdown.frontmatter.dependencies = merged;
+                }
             }
             if (changed) {
                 markdown.frontmatter.status = TICKET_STATUS.OPEN;
                 markdown.frontmatter.updated_at = new Date().toISOString();
                 await Fs.makeDirectory(directory);
                 await Fs.write(path, Md.toStream(markdown));
-                if (moving) await Deno.remove(ticket.path);
+                if (moving) {
+                    await Deno.remove(ticket.path);
+                }
             } else {
                 await markdown.content.cancel();
             }

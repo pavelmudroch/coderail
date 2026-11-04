@@ -9,19 +9,17 @@ export const TICKET_STATUS = {
     CLOSED: 'closed',
 } as const;
 
-export type Ticket =
-    & {
-        path: string;
-        id: string;
-        slug: string;
-        title: string;
-        dependencies: string[];
-    }
-    & (
-        | { status: typeof TICKET_STATUS.OPEN | typeof TICKET_STATUS.ACTIVE }
-        | { status: typeof TICKET_STATUS.CLOSED; reason: 'done' | 'dismissed' }
-        | { status: typeof TICKET_STATUS.CLOSED; reason: 'duplicate'; 'duplicate-of': string }
-    );
+export type Ticket = {
+    path: string;
+    id: string;
+    slug: string;
+    title: string;
+    dependencies: string[];
+} & (
+    | { status: typeof TICKET_STATUS.OPEN | typeof TICKET_STATUS.ACTIVE }
+    | { status: typeof TICKET_STATUS.CLOSED; reason: 'done' | 'dismissed' }
+    | { status: typeof TICKET_STATUS.CLOSED; reason: 'duplicate'; 'duplicate-of': string }
+);
 
 export async function resolveTicket(cwd: string, id: string): Promise<Ticket> {
     const ticketsDirectory = resolve(cwd, Path.CODERAIL_DIR, 'tickets');
@@ -29,14 +27,20 @@ export async function resolveTicket(cwd: string, id: string): Promise<Ticket> {
     for (const status of ['open', 'active', 'closed']) {
         try {
             for await (const entry of Deno.readDir(join(ticketsDirectory, status))) {
-                if (!entry.isFile) continue;
+                if (!entry.isFile) {
+                    continue;
+                }
                 const match = /^(\d{4,})-(.+)\.md$/.exec(entry.name);
                 const slug = match?.[2];
-                if (match?.[1] !== id || slug === undefined) continue;
+                if (match?.[1] !== id || slug === undefined) {
+                    continue;
+                }
                 matches.push({ path: join(ticketsDirectory, status, entry.name), slug });
             }
         } catch (error) {
-            if (!(error instanceof Deno.errors.NotFound)) throw error;
+            if (!(error instanceof Deno.errors.NotFound)) {
+                throw error;
+            }
         }
     }
     if (matches.length > 1) {
@@ -48,8 +52,13 @@ export async function resolveTicket(cwd: string, id: string): Promise<Ticket> {
     }
     const markdown = await Md.parse(await Fs.read(match.path, { text: true }));
     await markdown.content.cancel();
-    const { title, dependencies, status, reason, 'duplicate-of': duplicateOf } =
-        markdown.frontmatter;
+    const {
+        title,
+        dependencies,
+        status,
+        reason,
+        'duplicate-of': duplicateOf,
+    } = markdown.frontmatter;
     if (typeof title !== 'string' || title.trim() === '') {
         throw new Error(`Invalid ticket title: ${match.path}`);
     }

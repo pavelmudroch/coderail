@@ -1,8 +1,9 @@
-import { expect } from '@std/expect';
-import { join } from '@std/path';
 import { Fs } from '@fs';
 import { Log } from '@log';
 import { type Frontmatter, Md } from '@md';
+import { expect } from '@std/expect';
+import { join } from '@std/path';
+
 import { UsageError } from '../../../src/cli/usage-error.ts';
 import { Next } from '../../../src/commands/ticket/next.ts';
 
@@ -16,13 +17,11 @@ Deno.test('Ticket next parses help, JSON output, and positive integer limits', (
     for (const args of [['-h', '--unknown'], ['--help'], ['--json', '--help']]) {
         expect(command.shouldHandleHelp(command.parseArguments(args))).toBe(true);
     }
-    for (
-        const args of [['-l', '2', '--json'], ['--json', '--limit', '2'], [
-            '--limit=2',
-            '--json',
-            '--',
-        ]]
-    ) {
+    for (const args of [
+        ['-l', '2', '--json'],
+        ['--json', '--limit', '2'],
+        ['--limit=2', '--json', '--'],
+    ]) {
         expect(command.parseArguments(args)).toEqual({
             args: { help: false, json: true, limit: 2 },
             rest: [],
@@ -39,37 +38,33 @@ Deno.test('Ticket next parses help, JSON output, and positive integer limits', (
 
 Deno.test('Ticket next rejects invalid limits, unknown options, and positional arguments', () => {
     const command = new Next();
-    for (
-        const value of [
-            '0',
-            '-1',
-            '1.5',
-            'NaN',
-            'Infinity',
-            '1e2',
-            '+1',
-            ' 2',
-            '2 ',
-            '9007199254740992',
-            'abc',
-        ]
-    ) {
+    for (const value of [
+        '0',
+        '-1',
+        '1.5',
+        'NaN',
+        'Infinity',
+        '1e2',
+        '+1',
+        ' 2',
+        '2 ',
+        '9007199254740992',
+        'abc',
+    ]) {
         expect(() => command.parseArguments(['--limit', value])).toThrow(UsageError);
         expect(() => command.parseArguments([`--limit=${value}`])).toThrow(UsageError);
     }
-    for (
-        const args of [
-            ['-l'],
-            ['--limit'],
-            ['--limit='],
-            ['--limit', '--json'],
-            ['--help=value'],
-            ['--json=true'],
-            ['-x'],
-            ['0001'],
-            ['--', '--help'],
-        ]
-    ) {
+    for (const args of [
+        ['-l'],
+        ['--limit'],
+        ['--limit='],
+        ['--limit', '--json'],
+        ['--help=value'],
+        ['--json=true'],
+        ['-x'],
+        ['0001'],
+        ['--', '--help'],
+    ]) {
         expect(() => command.parseArguments(args)).toThrow(UsageError);
     }
 });
@@ -129,21 +124,24 @@ async function jsonTickets(
     return JSON.parse(output[0]?.[0] as string);
 }
 
-Deno.test('Ticket next returns no tickets for missing, empty, or ineligible open directories', async () => {
-    await withWorkspace(async (cwd, tickets) => {
-        expect(await next(cwd)).toEqual([]);
-        expect(await jsonTickets(cwd)).toEqual([]);
-        await Deno.mkdir(join(tickets, 'open'), { recursive: true });
-        await Deno.mkdir(join(tickets, 'open', '0001-directory.md'));
-        await Deno.writeTextFile(join(tickets, 'open', 'notes.md'), 'Ignored');
-        await writeTicket(tickets, '0002', { status: 'active' });
-        await writeTicket(tickets, '0003', { status: 'closed', reason: 'done' });
-        const misplaced = await writeTicket(tickets, '0004', { status: 'active' });
-        await Deno.rename(misplaced, join(tickets, 'open', '0004-ticket.md'));
-        expect(await next(cwd)).toEqual([]);
-        expect(await jsonTickets(cwd)).toEqual([]);
-    });
-});
+Deno.test(
+    'Ticket next returns no tickets for missing, empty, or ineligible open directories',
+    async () => {
+        await withWorkspace(async (cwd, tickets) => {
+            expect(await next(cwd)).toEqual([]);
+            expect(await jsonTickets(cwd)).toEqual([]);
+            await Deno.mkdir(join(tickets, 'open'), { recursive: true });
+            await Deno.mkdir(join(tickets, 'open', '0001-directory.md'));
+            await Deno.writeTextFile(join(tickets, 'open', 'notes.md'), 'Ignored');
+            await writeTicket(tickets, '0002', { status: 'active' });
+            await writeTicket(tickets, '0003', { status: 'closed', reason: 'done' });
+            const misplaced = await writeTicket(tickets, '0004', { status: 'active' });
+            await Deno.rename(misplaced, join(tickets, 'open', '0004-ticket.md'));
+            expect(await next(cwd)).toEqual([]);
+            expect(await jsonTickets(cwd)).toEqual([]);
+        });
+    },
+);
 
 Deno.test('Ticket next filters all dependencies and follows duplicate chains', async () => {
     await withWorkspace(async (cwd, tickets) => {
@@ -210,27 +208,27 @@ Deno.test('Ticket next limits eligible tickets in numeric ID order', async () =>
         await writeTicket(tickets, '0001', { status: 'open', dependencies: ['0002'] });
         await writeTicket(tickets, '0002', { status: 'active' });
         await writeTicket(tickets, '0003', { status: 'open' });
-        for (
-            const [limit, expected] of [
-                ['1', ['0003']],
-                ['2', ['0003', '9999']],
-                ['10', ['0003', '9999', '10000']],
-            ] as const
-        ) {
+        for (const [limit, expected] of [
+            ['1', ['0003']],
+            ['2', ['0003', '9999']],
+            ['10', ['0003', '9999', '10000']],
+        ] as const) {
             expect((await jsonTickets(cwd, ['--limit', limit])).map((ticket) => ticket.id)).toEqual(
                 expected,
             );
         }
-        expect(await next(cwd, ['-l', '2'])).toEqual([[
+        expect(await next(cwd, ['-l', '2'])).toEqual([
             [
-                `${Log.color.yellow('0003')} ${Log.color.cyan('Ticket')} ${
-                    Log.color.gray(join(tickets, 'open', '0003-ticket.md'))
-                }`,
-                `${Log.color.yellow('9999')} ${Log.color.cyan('Ticket')} ${
-                    Log.color.gray(join(tickets, 'open', '9999-ticket.md'))
-                }`,
-            ].join('\n'),
-        ]]);
+                [
+                    `${Log.color.yellow('0003')} ${Log.color.cyan('Ticket')} ${Log.color.gray(
+                        join(tickets, 'open', '0003-ticket.md'),
+                    )}`,
+                    `${Log.color.yellow('9999')} ${Log.color.cyan('Ticket')} ${Log.color.gray(
+                        join(tickets, 'open', '9999-ticket.md'),
+                    )}`,
+                ].join('\n'),
+            ],
+        ]);
         await Deno.writeTextFile(join(tickets, 'open', '10000-ticket.md'), 'Invalid metadata');
         expect((await jsonTickets(cwd, ['-l', '1'])).map((ticket) => ticket.id)).toEqual(['0003']);
     });

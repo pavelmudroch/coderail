@@ -1,14 +1,15 @@
-import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Cli } from '@cli';
-import { Text } from '@utils';
+import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Fs } from '@fs';
 import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
+import { Text } from '@utils';
+
+import { formatTicketId } from './helpers/format-ticket-id.ts';
 import { formatJson, formatText } from './helpers/format.ts';
 import { getLastTicketId } from './helpers/get-last-ticket-id.ts';
-import { formatTicketId } from './helpers/format-ticket-id.ts';
 import { resolveTicket, type Ticket } from './helpers/resolve-ticket.ts';
 
 type CreateArguments = {
@@ -31,7 +32,9 @@ export class Create implements Command<CreateArguments> {
         const rest: string[] = [];
         for (let i = 0; i < originalArgs.length; i++) {
             const arg = originalArgs[i];
-            if (arg === undefined) continue;
+            if (arg === undefined) {
+                continue;
+            }
             if (arg === '-h' || arg === '--help') {
                 args.help = true;
                 return { args, rest };
@@ -60,7 +63,9 @@ export class Create implements Command<CreateArguments> {
                         this,
                     );
                 }
-                if (!args.dependsOn.includes(value)) args.dependsOn.push(value);
+                if (!args.dependsOn.includes(value)) {
+                    args.dependsOn.push(value);
+                }
                 continue;
             }
             if (arg === '--json') {
@@ -132,7 +137,7 @@ export class Create implements Command<CreateArguments> {
         const ticketsDirectory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR);
 
         try {
-            const nextId = (await getLastTicketId(cwd) ?? 0) + 1;
+            const nextId = ((await getLastTicketId(cwd)) ?? 0) + 1;
             if (!Number.isSafeInteger(nextId)) {
                 throw new Error('Cannot allocate a safe ticket ID.');
             }

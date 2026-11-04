@@ -1,7 +1,7 @@
-import { writeSync } from './helpers/write-sync.ts';
 import { clear, gray } from './helpers/ansi.ts';
 import { context } from './helpers/context.ts';
 import { stringifyMessages } from './helpers/stringifyMessages.ts';
+import { writeSync } from './helpers/write-sync.ts';
 
 export function notice(...messages: unknown[]): void {
     if (context.logLevel !== 'verbose') {

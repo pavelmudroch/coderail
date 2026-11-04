@@ -1,5 +1,6 @@
-import type { Ticket } from './resolve-ticket.ts';
 import { Log } from '@log';
+
+import type { Ticket } from './resolve-ticket.ts';
 
 export function formatText(tickets: Ticket[]): string {
     const lines: string[] = [];

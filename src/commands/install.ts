@@ -1,20 +1,21 @@
-import type { Command, ParsedArguments } from '@commands';
-import type { RunContext } from './helpers/command.ts';
-import { type ConnectorFile, Harness, type HarnessConnector } from '@harness';
 import { Cli } from '@cli';
-import { getInstructionFiles, type InstructionFiles } from './helpers/get-instruction-files.ts';
-import { Log } from '@log';
-import { dirname, join, resolve } from '@std/path';
-import { Path } from '@path';
+import type { Command, ParsedArguments } from '@commands';
+import { Fs } from '@fs';
+import { type ConnectorFile, Harness, type HarnessConnector } from '@harness';
 import {
     type Inspection,
     InstallManifest,
     type Manifest,
     type ManifestFile,
 } from '@install-manifest';
-import { validatePath } from '../install-manifest/validate.ts';
+import { Log } from '@log';
+import { Path } from '@path';
+import { dirname, join, resolve } from '@std/path';
+
 import { descendantPath } from '../install-manifest/capture.ts';
-import { Fs } from '@fs';
+import { validatePath } from '../install-manifest/validate.ts';
+import type { RunContext } from './helpers/command.ts';
+import { getInstructionFiles, type InstructionFiles } from './helpers/get-instruction-files.ts';
 
 type InstallArguments = {
     help: boolean;
@@ -129,7 +130,8 @@ export class Install implements Command<InstallArguments> {
             );
         }
         if (harnesses.length === 0) {
-            const defaultHarness = context.configuration.defaultHarness ??
+            const defaultHarness =
+                context.configuration.defaultHarness ??
                 Cli.raiseUsageError('No harness specified and no default harness set.', this);
             harnesses.push(
                 Harness.get(defaultHarness) ??
@@ -283,7 +285,8 @@ async function planInstallation(
                 continue;
             }
             if (
-                !args.yes && !Log.confirm(
+                !args.yes &&
+                !Log.confirm(
                     `File "${file.path}" already exists or has been modified. Do you want to overwrite it?`,
                 )
             ) {

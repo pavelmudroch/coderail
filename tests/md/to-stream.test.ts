@@ -1,10 +1,13 @@
-import { expect } from '@std/expect';
-import { toStream } from '../../src/md/to-stream.ts';
 import type { Frontmatter } from '@md';
+import { expect } from '@std/expect';
+
+import { toStream } from '../../src/md/to-stream.ts';
 function stream(...chunks: string[]): ReadableStream<string> {
     return new ReadableStream({
         start(controller): void {
-            for (const chunk of chunks) controller.enqueue(chunk);
+            for (const chunk of chunks) {
+                controller.enqueue(chunk);
+            }
             controller.close();
         },
     });
@@ -12,15 +15,15 @@ function stream(...chunks: string[]): ReadableStream<string> {
 
 async function text(content: ReadableStream<string>): Promise<string> {
     let result = '';
-    for await (const chunk of content) result += chunk;
+    for await (const chunk of content) {
+        result += chunk;
+    }
     return result;
 }
 
 Deno.test('Md::toStream serializes frontmatter and preserves the body', async () => {
     const frontmatter: Frontmatter = { title: 'Idea', tags: ['cli', 'parser'], ready: true };
-    const serialized = await text(
-        toStream({ frontmatter, content: stream('\n# Body\n', 'end') }),
-    );
+    const serialized = await text(toStream({ frontmatter, content: stream('\n# Body\n', 'end') }));
     expect(serialized).toBe(
         '---\ntitle: "Idea"\ntags:\n  - "cli"\n  - "parser"\nready: true\n---\n\n# Body\nend',
     );
@@ -47,12 +50,17 @@ Deno.test('Md::toStream forwards cancellation and releases the source lock', asy
         const source = new ReadableStream<string>({
             cancel(value): void {
                 reason = value;
-                if (fails) throw failure;
+                if (fails) {
+                    throw failure;
+                }
             },
         });
         const result = toStream({ frontmatter: {}, content: source });
-        if (fails) await expect(result.cancel('stop')).rejects.toBe(failure);
-        else await result.cancel('stop');
+        if (fails) {
+            await expect(result.cancel('stop')).rejects.toBe(failure);
+        } else {
+            await result.cancel('stop');
+        }
         expect(reason).toBe('stop');
         expect(source.locked).toBe(false);
     }

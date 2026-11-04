@@ -22,10 +22,12 @@ export async function getInstructionFiles(installRoot: string): Promise<Instruct
     const skillsRoot = join(root, 'skills');
     const skillEntries = await Array.fromAsync(Deno.readDir(skillsRoot));
     const [skills, subagents, globalInstructionFile] = await Promise.all([
-        Promise.all(skillEntries.map(async (entry): Promise<Skill> => ({
-            name: entry.name,
-            files: await readFiles(join(skillsRoot, entry.name)),
-        }))),
+        Promise.all(
+            skillEntries.map(async (entry): Promise<Skill> => ({
+                name: entry.name,
+                files: await readFiles(join(skillsRoot, entry.name)),
+            })),
+        ),
         readFiles(join(root, 'agents')),
         readFile(root, 'AGENTS.md'),
     ]);
@@ -34,10 +36,12 @@ export async function getInstructionFiles(installRoot: string): Promise<Instruct
 
 async function readFiles(root: string, prefix = ''): Promise<InstructionFile[]> {
     const entries = await Array.fromAsync(Deno.readDir(join(root, prefix)));
-    const files = await Promise.all(entries.map((entry) => {
-        const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-        return entry.isDirectory ? readFiles(root, path) : readFile(root, path);
-    }));
+    const files = await Promise.all(
+        entries.map((entry) => {
+            const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+            return entry.isDirectory ? readFiles(root, path) : readFile(root, path);
+        }),
+    );
     return files.flat();
 }
 

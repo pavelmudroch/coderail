@@ -1,8 +1,9 @@
-import { expect } from '@std/expect';
-import { join } from '@std/path';
 import { Fs } from '@fs';
 import { Md } from '@md';
 import type { Frontmatter } from '@md';
+import { expect } from '@std/expect';
+import { join } from '@std/path';
+
 import { areDependenciesSatisfied } from '../../../../src/commands/ticket/helpers/are-dependencies-satisfied.ts';
 
 async function withWorkspace(run: (cwd: string) => Promise<void>): Promise<void> {
@@ -82,22 +83,25 @@ Deno.test('areDependenciesSatisfied rejects self references and duplicate cycles
     });
 });
 
-Deno.test('areDependenciesSatisfied propagates missing ticket and invalid metadata errors', async () => {
-    await withWorkspace(async (cwd) => {
-        await expect(areDependenciesSatisfied(cwd, '0001')).rejects.toThrow(
-            'Ticket not found: 0001',
-        );
-        await writeTicket(cwd, '0001', {
-            status: 'closed',
-            reason: 'duplicate',
-            'duplicate-of': '0002',
+Deno.test(
+    'areDependenciesSatisfied propagates missing ticket and invalid metadata errors',
+    async () => {
+        await withWorkspace(async (cwd) => {
+            await expect(areDependenciesSatisfied(cwd, '0001')).rejects.toThrow(
+                'Ticket not found: 0001',
+            );
+            await writeTicket(cwd, '0001', {
+                status: 'closed',
+                reason: 'duplicate',
+                'duplicate-of': '0002',
+            });
+            await expect(areDependenciesSatisfied(cwd, '0001')).rejects.toThrow(
+                'Ticket not found: 0002',
+            );
+            await writeTicket(cwd, '0002', { status: 'closed', reason: 'unknown' });
+            await expect(areDependenciesSatisfied(cwd, '0001')).rejects.toThrow(
+                'Invalid ticket closure reason',
+            );
         });
-        await expect(areDependenciesSatisfied(cwd, '0001')).rejects.toThrow(
-            'Ticket not found: 0002',
-        );
-        await writeTicket(cwd, '0002', { status: 'closed', reason: 'unknown' });
-        await expect(areDependenciesSatisfied(cwd, '0001')).rejects.toThrow(
-            'Invalid ticket closure reason',
-        );
-    });
-});
+    },
+);

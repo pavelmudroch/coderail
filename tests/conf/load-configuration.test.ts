@@ -1,7 +1,8 @@
+import type { GlobalArguments } from '@commands';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
+
 import { loadConfiguration } from '../../src/conf/load-configuration.ts';
-import type { GlobalArguments } from '@commands';
 
 const configurationEnvironmentVariables = [
     'DEFAULT_HARNESS',
@@ -35,16 +36,23 @@ async function withConfigurationEnvironment<T>(
     const original = new Map(
         configurationEnvironmentVariables.map((name) => [name, Deno.env.get(name)]),
     );
-    for (const name of configurationEnvironmentVariables) Deno.env.delete(name);
-    for (const [name, value] of Object.entries(environment)) Deno.env.set(name, value);
+    for (const name of configurationEnvironmentVariables) {
+        Deno.env.delete(name);
+    }
+    for (const [name, value] of Object.entries(environment)) {
+        Deno.env.set(name, value);
+    }
 
     try {
         return await callback();
     } finally {
         for (const name of configurationEnvironmentVariables) {
             const value = original.get(name);
-            if (value === undefined) Deno.env.delete(name);
-            else Deno.env.set(name, value);
+            if (value === undefined) {
+                Deno.env.delete(name);
+            } else {
+                Deno.env.set(name, value);
+            }
         }
     }
 }
@@ -71,7 +79,8 @@ async function read(
             loadConfiguration(
                 { currentWorkingDirectory: root, installRoot, repositoryRoot },
                 globalArguments(arguments_),
-            ));
+            ),
+        );
     } finally {
         await Deno.remove(root, { recursive: true });
     }
@@ -88,7 +97,8 @@ async function readWithoutRepository(
             loadConfiguration(
                 { currentWorkingDirectory: root, installRoot: root },
                 globalArguments(arguments_),
-            ));
+            ),
+        );
     } finally {
         await Deno.remove(root, { recursive: true });
     }
@@ -101,7 +111,9 @@ async function errors(text: string): Promise<Error[]> {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toContain('coderail.conf');
         let cause: unknown = error;
-        while (cause instanceof Error) cause = cause.cause;
+        while (cause instanceof Error) {
+            cause = cause.cause;
+        }
         expect(Array.isArray(cause)).toBe(true);
         return cause as Error[];
     }
@@ -109,8 +121,7 @@ async function errors(text: string): Promise<Error[]> {
 }
 
 Deno.test({
-    name:
-        'Conf::loadConfiguration accepts partial configuration and merges valid verification rules',
+    name: 'Conf::loadConfiguration accepts partial configuration and merges valid verification rules',
     permissions: { env: true, read: true, write: true },
     fn: async () => {
         expect(await read('')).toEqual({
@@ -154,8 +165,7 @@ commands = []
 });
 
 Deno.test({
-    name:
-        'Conf::loadConfiguration gives command-line overrides precedence over environment and files',
+    name: 'Conf::loadConfiguration gives command-line overrides precedence over environment and files',
     permissions: { env: true, read: true, write: true },
     fn: async () => {
         expect(
@@ -186,12 +196,17 @@ Deno.test({
     permissions: { env: true, read: true, write: true },
     fn: async () => {
         expect(
-            await read('', undefined, {}, {
-                DEFAULT_HARNESS: 'environment-harness',
-                LOG_LEVEL: 'quiet',
-                NO_COLOR: '1',
-                NON_INTERACTIVE: 'true',
-            }),
+            await read(
+                '',
+                undefined,
+                {},
+                {
+                    DEFAULT_HARNESS: 'environment-harness',
+                    LOG_LEVEL: 'quiet',
+                    NO_COLOR: '1',
+                    NON_INTERACTIVE: 'true',
+                },
+            ),
         ).toMatchObject({
             defaultHarness: 'environment-harness',
             logLevel: 'quiet',
@@ -223,29 +238,27 @@ Deno.test({
     name: 'Conf::loadConfiguration rejects invalid types and unknown properties',
     permissions: { env: true, read: true, write: true },
     fn: async () => {
-        for (
-            const text of [
-                'default_harness = null',
-                'default_harness = 1',
-                'log_level = "debug"',
-                'log_level = false',
-                'no_color = "true"',
-                'non_interactive = 0',
-                'verify = null',
-                '[[verify]]',
-                'verify = [null, false, "rule", []]',
-                'unknown = true',
-                '__proto__ = true',
-                '[[verify.rules]]\npattern = false\ncommands = []',
-                '[[verify.rules]]\npattern = "*"\ncommands = false',
-                '[[verify.rules]]\npattern = "*"\ncommands = ["deno"]',
-                '[[verify.rules]]\npattern = "*"\ncommands = [[null, ["deno"]]]',
-                '[[verify.rules]]\npattern = "*"\ncommands = []\nrequires = true',
-                '[[verify.rules]]\npattern = "*"\ncommands = []\nrequires = [1]',
-                '[[verify.rules]]\npattern = "*"\ncommands = []\nunknown = true',
-                '[[verify.rules]]',
-            ]
-        ) {
+        for (const text of [
+            'default_harness = null',
+            'default_harness = 1',
+            'log_level = "debug"',
+            'log_level = false',
+            'no_color = "true"',
+            'non_interactive = 0',
+            'verify = null',
+            '[[verify]]',
+            'verify = [null, false, "rule", []]',
+            'unknown = true',
+            '__proto__ = true',
+            '[[verify.rules]]\npattern = false\ncommands = []',
+            '[[verify.rules]]\npattern = "*"\ncommands = false',
+            '[[verify.rules]]\npattern = "*"\ncommands = ["deno"]',
+            '[[verify.rules]]\npattern = "*"\ncommands = [[null, ["deno"]]]',
+            '[[verify.rules]]\npattern = "*"\ncommands = []\nrequires = true',
+            '[[verify.rules]]\npattern = "*"\ncommands = []\nrequires = [1]',
+            '[[verify.rules]]\npattern = "*"\ncommands = []\nunknown = true',
+            '[[verify.rules]]',
+        ]) {
             expect((await errors(text)).length, text).toBeGreaterThan(0);
         }
     },
@@ -281,10 +294,12 @@ requires = []
 
 Deno.test('Conf::loadConfiguration validates and merges global actions independently', async () => {
     expect(
-        (await read(
-            '[verify]\npre = [["local"]]\npost = [["clean"]]',
-            '[verify]\npre = [\n ["global"],\n []\n]\npost = [["first"]]',
-        )).verify,
+        (
+            await read(
+                '[verify]\npre = [["local"]]\npost = [["clean"]]',
+                '[verify]\npre = [\n ["global"],\n []\n]\npost = [["first"]]',
+            )
+        ).verify,
     ).toEqual({
         rules: [],
         pre: [['global'], [], ['local']],
@@ -294,15 +309,15 @@ Deno.test('Conf::loadConfiguration validates and merges global actions independe
         rules: [],
         pre: [['global']],
     });
-    for (
-        const text of [
-            '[verify]\nrules = [null]',
-            '[verify]\npre = false',
-            '[verify]\npost = ["bad"]',
-            '[verify]\npre = [[1]]',
-            '[verify]\nunknown = []',
-        ]
-    ) expect((await errors(text)).length).toBeGreaterThan(0);
+    for (const text of [
+        '[verify]\nrules = [null]',
+        '[verify]\npre = false',
+        '[verify]\npost = ["bad"]',
+        '[verify]\npre = [[1]]',
+        '[verify]\nunknown = []',
+    ]) {
+        expect((await errors(text)).length).toBeGreaterThan(0);
+    }
     expect((await errors('[verify]\npre = [[1]]'))[0]?.message).toBe(
         'verify.pre.0.0: Expected a string at line 2, column 9',
     );

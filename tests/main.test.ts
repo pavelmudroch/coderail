@@ -1,10 +1,9 @@
-import { expect } from '@std/expect';
 import { Cli } from '@cli';
 import { type Command, Commands, type GlobalArguments } from '@commands';
 import { Conf } from '@conf';
 import { Log } from '@log';
 import { Runtime } from '@runtime';
-import { Harness } from '@harness';
+import { expect } from '@std/expect';
 
 let runId = 0;
 
@@ -114,8 +113,11 @@ function setupCommands(realCommands = false): Fixture {
         events.push('context');
         expect(Log.level).toBe(global.verbose ? 'verbose' : global.quiet ? 'quiet' : 'normal');
         globals.push(global);
-        if (realCommands) expect(command.requiresInit).toBe(false);
-        else expect(command).toBe(create);
+        if (realCommands) {
+            expect(command.requiresInit).toBe(false);
+        } else {
+            expect(command).toBe(create);
+        }
         return Promise.resolve({
             currentWorkingDirectory: '/project',
             installRoot: '/install',
@@ -174,17 +176,11 @@ function setupCommands(realCommands = false): Fixture {
 
 Deno.test('main shows help at each level without runtime setup', async () => {
     using fixture = setupCommands();
-    for (
-        const [args, usage, events] of [
-            [['--help'], Commands.cr().getUsage(), []],
-            [['ticket', '--help'], 'Ticket usage', ['parse:ticket']],
-            [
-                ['ticket', 'create', '--help'],
-                'Create usage',
-                ['parse:ticket', 'parse:create'],
-            ],
-        ] as const
-    ) {
+    for (const [args, usage, events] of [
+        [['--help'], Commands.cr().getUsage(), []],
+        [['ticket', '--help'], 'Ticket usage', ['parse:ticket']],
+        [['ticket', 'create', '--help'], 'Create usage', ['parse:ticket', 'parse:create']],
+    ] as const) {
         fixture.events.length = 0;
         fixture.output.length = 0;
         await run(args);
@@ -268,3 +264,30 @@ Deno.test('main does not execute when aborted', async () => {
     expect(Deno.exitCode).toBe(3);
     expect(fixture.events.at(-1)).toBe('cleanup');
 });
+
+Deno.test(
+    'main reports unexpected failures and preserves an existing failure exit code',
+    async () => {
+        using fixture = setupCommands();
+        const error = new Error('Context failed');
+        const traces: unknown[][] = [];
+        Log.trace = (...messages) => {
+            traces.push(messages);
+        };
+        for (const exitCode of [0, 7]) {
+            Runtime.createContext = () => {
+                Deno.exitCode = exitCode;
+                throw error;
+            };
+            fixture.errors.length = 0;
+            fixture.events.length = 0;
+            traces.length = 0;
+            await run(['ticket', 'create']);
+            expect(Deno.exitCode).toBe(exitCode === 0 ? 1 : exitCode);
+            expect(fixture.errors).toEqual([[error]]);
+            expect(traces).toEqual([[error]]);
+            expect(fixture.executions).toEqual([]);
+            expect(fixture.events.at(-1)).toBe('cleanup');
+        }
+    },
+);

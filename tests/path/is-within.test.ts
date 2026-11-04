@@ -1,4 +1,5 @@
 import { expect } from '@std/expect';
+
 import { isWithin } from '../../src/path/is-within.ts';
 
 Deno.test({ name: 'Path::isWithin' }, async (test) => {
@@ -41,8 +42,7 @@ Deno.test({ name: 'Path::isWithin' }, async (test) => {
             expect(isWithin(path, root), 'No trailing path + root').toBe(true);
             expect(isWithin(`${path}/`, root), 'Trailing path, no trailing root').toBe(true);
             expect(isWithin(path, `${root}/`), 'No trailing path, trailing root').toBe(true);
-            expect(isWithin(`${path}/`, `${root}/`), 'Trailing path + trailing root')
-                .toBe(true);
+            expect(isWithin(`${path}/`, `${root}/`), 'Trailing path + trailing root').toBe(true);
         }
 
         {

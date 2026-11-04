@@ -1,16 +1,17 @@
-import type { Command, ParsedArguments, RunContext } from '@commands';
-import { ensurePlansDir } from './helpers/ensure-plans-dir.ts';
-import { Text } from '@utils';
 import { Cli } from '@cli';
-import { resolveIdea } from './helpers/resolve-idea.ts';
-import { join } from '@std/path';
-import { Path } from '@path';
+import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Fs } from '@fs';
+import { Log } from '@log';
 import { Md } from '@md';
-import { IDEA_STATUS } from './helpers/idea-frontmatter.ts';
+import { Path } from '@path';
+import { join } from '@std/path';
+import { Text } from '@utils';
+
+import { ensurePlansDir } from './helpers/ensure-plans-dir.ts';
 import { formatJson, formatText } from './helpers/format.ts';
 import type { IdeaTree } from './helpers/get-idea-tree.ts';
-import { Log } from '@log';
+import { IDEA_STATUS } from './helpers/idea-frontmatter.ts';
+import { resolveIdea } from './helpers/resolve-idea.ts';
 
 type CreateArguments = {
     help: boolean;
@@ -32,7 +33,9 @@ export class Create implements Command<CreateArguments> {
         const rest: string[] = [];
         for (let i = 0; i < originalArgs.length; i++) {
             const arg = originalArgs[i];
-            if (arg === undefined) continue;
+            if (arg === undefined) {
+                continue;
+            }
             if (arg === '-h' || arg === '--help') {
                 args.help = true;
                 return { args, rest };
@@ -151,17 +154,19 @@ export class Create implements Command<CreateArguments> {
             const ideaDir = await Fs.makeTempDirectory();
             await ideaDir.addFile('IDEA.md', Md.toStream(markdown));
             await Fs.replace(ideaDir.path, ideaDirectory);
-            const newIdeaTree: IdeaTree = [{
-                path: ideaDirectory,
-                id: ideaId,
-                slug: slug,
-                frontmatter: {
-                    title,
-                    status: IDEA_STATUS.OPEN,
+            const newIdeaTree: IdeaTree = [
+                {
+                    path: ideaDirectory,
+                    id: ideaId,
+                    slug: slug,
+                    frontmatter: {
+                        title,
+                        status: IDEA_STATUS.OPEN,
+                    },
+                    files: ['IDEA.md'],
+                    children: [],
                 },
-                files: ['IDEA.md'],
-                children: [],
-            }];
+            ];
             if (context.parsedArguments.args.json) {
                 Log.output(formatJson(newIdeaTree));
                 return;

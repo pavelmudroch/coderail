@@ -1,6 +1,7 @@
 import { expect } from '@std/expect';
-import { trace } from '../../src/log/trace.ts';
+
 import { context } from '../../src/log/helpers/context.ts';
+import { trace } from '../../src/log/trace.ts';
 import { captureOutput } from './helpers.ts';
 
 Deno.test('trace writes stack traces and error details to stderr before redrawing', () => {
@@ -25,8 +26,8 @@ Deno.test('trace writes stack traces and error details to stderr before redrawin
         trace('hello', error, noStack);
         expect(captured.stderr).toEqual([
             'trace: hello: broken: no stack\n\x1b[0K > at task (file:///task.ts:12:3)' +
-            '\n\x1b[0K > at native\n\x1b[0K   Error: broken' +
-            '\n\x1b[0K    > at file:///task.ts:2:1\x1b[0K\n',
+                '\n\x1b[0K > at native\n\x1b[0K   Error: broken' +
+                '\n\x1b[0K    > at file:///task.ts:2:1\x1b[0K\n',
         ]);
         expect(redraws).toBe(1);
         expect(captured.stdout).toEqual([]);

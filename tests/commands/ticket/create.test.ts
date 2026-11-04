@@ -1,10 +1,11 @@
-import { expect } from '@std/expect';
-import { Create } from '../../../src/commands/ticket/create.ts';
-import { UsageError } from '../../../src/cli/usage-error.ts';
-import { join } from '@std/path';
 import { Fs } from '@fs';
 import { Log } from '@log';
 import { Md } from '@md';
+import { expect } from '@std/expect';
+import { join } from '@std/path';
+
+import { UsageError } from '../../../src/cli/usage-error.ts';
+import { Create } from '../../../src/commands/ticket/create.ts';
 
 Deno.test('Ticket create requires initialization and supports help', () => {
     const command = new Create();
@@ -55,12 +56,14 @@ async function writeTicket(tickets: string, status: string, name: string): Promi
     await Deno.mkdir(join(tickets, status), { recursive: true });
     await Fs.write(
         join(tickets, status, name),
-        Md.toStream(Md.create('Existing ticket\n', {
-            title: 'Existing ticket',
-            status,
-            dependencies: [],
-            ...(status === 'closed' ? { reason: 'done' } : {}),
-        })),
+        Md.toStream(
+            Md.create('Existing ticket\n', {
+                title: 'Existing ticket',
+                status,
+                dependencies: [],
+                ...(status === 'closed' ? { reason: 'done' } : {}),
+            }),
+        ),
     );
 }
 
@@ -97,62 +100,69 @@ Deno.test('Ticket create writes an open ticket and prints its ID, title, and pat
             dependencies: [],
         });
         let content = '';
-        for await (const chunk of markdown.content) content += chunk;
+        for await (const chunk of markdown.content) {
+            content += chunk;
+        }
         expect(content.trim()).toBe('');
     });
 });
 
-Deno.test('Ticket create allocates IDs across statuses and preserves dependency tickets', async () => {
-    await withWorkspace(async (cwd, tickets) => {
-        await writeTicket(tickets, 'open', '0002-first.md');
-        await writeTicket(tickets, 'active', '0005-second.md');
-        await writeTicket(tickets, 'closed', '0009-third.md');
-        await writeTicket(tickets, 'open', 'notes.md');
-        await Deno.mkdir(join(tickets, 'open', '9999-directory.md'));
-        const existingTickets = [
-            ['open', '0002-first.md'],
-            ['active', '0005-second.md'],
-            ['closed', '0009-third.md'],
-        ];
-        const originals = await Promise.all(
-            existingTickets.map(([status, name]) =>
-                Deno.readTextFile(join(tickets, status as string, name as string))
-            ),
-        );
-        const output = await create(cwd, [
-            '--json',
-            'New ticket',
-            '-d',
-            '0002',
-            '-d',
-            '0005',
-            '-d',
-            '0009',
-            '-d',
-            '0002',
-        ]);
-        const path = join(tickets, 'open', '0010-new-ticket.md');
-        const markdown = await Md.parse(await Fs.read(path, { text: true }));
-        await markdown.content.cancel();
-        expect(markdown.frontmatter.id).toBe('0010');
-        expect(markdown.frontmatter.dependencies).toEqual(['0002', '0005', '0009']);
-        expect(output).toHaveLength(1);
-        expect(output[0]).toHaveLength(1);
-        expect(JSON.parse(output[0]?.[0] as string)).toEqual([{
-            path,
-            id: '0010',
-            slug: 'new-ticket',
-            title: 'New ticket',
-            dependencies: ['0002', '0005', '0009'],
-            status: 'open',
-        }]);
-        for (const [index, [status, name]] of existingTickets.entries()) {
-            expect(await Deno.readTextFile(join(tickets, status as string, name as string))).toBe(
-                originals[index],
+Deno.test(
+    'Ticket create allocates IDs across statuses and preserves dependency tickets',
+    async () => {
+        await withWorkspace(async (cwd, tickets) => {
+            await writeTicket(tickets, 'open', '0002-first.md');
+            await writeTicket(tickets, 'active', '0005-second.md');
+            await writeTicket(tickets, 'closed', '0009-third.md');
+            await writeTicket(tickets, 'open', 'notes.md');
+            await Deno.mkdir(join(tickets, 'open', '9999-directory.md'));
+            const existingTickets = [
+                ['open', '0002-first.md'],
+                ['active', '0005-second.md'],
+                ['closed', '0009-third.md'],
+            ];
+            const originals = await Promise.all(
+                existingTickets.map(([status, name]) =>
+                    Deno.readTextFile(join(tickets, status as string, name as string)),
+                ),
             );
-        }
-    });
-});
+            const output = await create(cwd, [
+                '--json',
+                'New ticket',
+                '-d',
+                '0002',
+                '-d',
+                '0005',
+                '-d',
+                '0009',
+                '-d',
+                '0002',
+            ]);
+            const path = join(tickets, 'open', '0010-new-ticket.md');
+            const markdown = await Md.parse(await Fs.read(path, { text: true }));
+            await markdown.content.cancel();
+            expect(markdown.frontmatter.id).toBe('0010');
+            expect(markdown.frontmatter.dependencies).toEqual(['0002', '0005', '0009']);
+            expect(output).toHaveLength(1);
+            expect(output[0]).toHaveLength(1);
+            expect(JSON.parse(output[0]?.[0] as string)).toEqual([
+                {
+                    path,
+                    id: '0010',
+                    slug: 'new-ticket',
+                    title: 'New ticket',
+                    dependencies: ['0002', '0005', '0009'],
+                    status: 'open',
+                },
+            ]);
+            for (const [index, [status, name]] of existingTickets.entries()) {
+                expect(
+                    await Deno.readTextFile(join(tickets, status as string, name as string)),
+                ).toBe(originals[index]);
+            }
+        });
+    },
+);
 
 Deno.test('Ticket create supports IDs beyond four digits and repeated titles', async () => {
     await withWorkspace(async (cwd, tickets) => {
@@ -215,12 +225,10 @@ Deno.test('Ticket create parses a title, repeated dependencies, and JSON output'
         args: { help: false, ticketTitle: 'New ticket', dependsOn: [], json: false },
         rest: [],
     });
-    for (
-        const args of [
-            ['-d', '0001', 'New ticket', '--depends-on', '0002', '--json', '-d', '0001'],
-            ['--json', '--depends-on=0001', '--depends-on=0002', '--', 'New ticket'],
-        ]
-    ) {
+    for (const args of [
+        ['-d', '0001', 'New ticket', '--depends-on', '0002', '--json', '-d', '0001'],
+        ['--json', '--depends-on=0001', '--depends-on=0002', '--', 'New ticket'],
+    ]) {
         expect(command.parseArguments(args)).toEqual({
             args: {
                 help: false,
@@ -243,35 +251,33 @@ Deno.test('Ticket create parses a title, repeated dependencies, and JSON output'
 
 Deno.test('Ticket create rejects invalid arguments with usage', () => {
     const command = new Create();
-    for (
-        const args of [
-            [],
-            [''],
-            ['   '],
-            ['--'],
-            ['one', 'two'],
-            ['one', '--', 'two'],
-            ['--', 'one', 'two'],
-            ['-d'],
-            ['--depends-on'],
-            ['--depends-on='],
-            ['--depends-on', '--help'],
-            ['--depends-on', '0001'],
-            ['-d', '../0001', 'New ticket'],
-            ['-d', 'invalid', 'New ticket'],
-            ['--json'],
-            ['--json=true', 'New ticket'],
-            ['-x'],
-            ['--help=value'],
-            ['.'],
-            ['..'],
-            ['!!!'],
-            ['../outside'],
-            ['/absolute'],
-            ['nested/title'],
-            ['nested\\title'],
-        ]
-    ) {
+    for (const args of [
+        [],
+        [''],
+        ['   '],
+        ['--'],
+        ['one', 'two'],
+        ['one', '--', 'two'],
+        ['--', 'one', 'two'],
+        ['-d'],
+        ['--depends-on'],
+        ['--depends-on='],
+        ['--depends-on', '--help'],
+        ['--depends-on', '0001'],
+        ['-d', '../0001', 'New ticket'],
+        ['-d', 'invalid', 'New ticket'],
+        ['--json'],
+        ['--json=true', 'New ticket'],
+        ['-x'],
+        ['--help=value'],
+        ['.'],
+        ['..'],
+        ['!!!'],
+        ['../outside'],
+        ['/absolute'],
+        ['nested/title'],
+        ['nested\\title'],
+    ]) {
         try {
             command.parseArguments(args);
             throw new Error('Expected a usage error.');

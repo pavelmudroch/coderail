@@ -1,4 +1,5 @@
 import { basename, dirname, join } from '@std/path';
+
 import { registerTempResource } from './temp/register-temp-resource.ts';
 import { unregisterTempResource } from './temp/unregister-temp-resource.ts';
 

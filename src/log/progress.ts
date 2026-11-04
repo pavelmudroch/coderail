@@ -1,11 +1,11 @@
-import { writeSync } from './helpers/write-sync.ts';
+import { erase } from './helpers/ansi.ts';
 import {
     context,
     type LiveUI,
     registerLiveUiItem,
     unregisterLiveUiItem,
 } from './helpers/context.ts';
-import { erase } from './helpers/ansi.ts';
+import { writeSync } from './helpers/write-sync.ts';
 
 export interface Progress extends Disposable {
     /**
@@ -71,8 +71,12 @@ export class ProgressImpl implements Progress, LiveUI {
         const percentage = this.#currentProgress.toFixed(2).padStart(7, ' ') + '%';
         const progressSpace = Math.floor(terminalWidth - (2 + percentage.length));
         const progressAdvanced = Math.round((this.#currentProgress / 100) * progressSpace);
-        const progressBar = '[' + '='.repeat(progressAdvanced) +
-            ' '.repeat(progressSpace - progressAdvanced) + ']' + percentage;
+        const progressBar =
+            '[' +
+            '='.repeat(progressAdvanced) +
+            ' '.repeat(progressSpace - progressAdvanced) +
+            ']' +
+            percentage;
         lines.push(progressBar);
         const returnToStart = lines.length > 1 ? `\x1b[${lines.length - 1}F` : '\r';
         writeSync(Deno.stderr, `\r${erase()}${lines.join('\r\n')}${returnToStart}`);

@@ -1,10 +1,11 @@
-import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Cli } from '@cli';
+import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Log } from '@log';
 import { Path } from '@path';
 import { join } from '@std/path';
-import { formatJson, formatText } from './helpers/format.ts';
+
 import { areDependenciesSatisfied } from './helpers/are-dependencies-satisfied.ts';
+import { formatJson, formatText } from './helpers/format.ts';
 import { resolveTicket, type Ticket, TICKET_STATUS } from './helpers/resolve-ticket.ts';
 
 type NextArguments = {
@@ -21,7 +22,9 @@ export class Next implements Command<NextArguments> {
         const rest: string[] = [];
         for (let i = 0; i < originalArgs.length; i++) {
             const arg = originalArgs[i];
-            if (arg === undefined) continue;
+            if (arg === undefined) {
+                continue;
+            }
             if (arg === '-h' || arg === '--help') {
                 args.help = true;
                 return { args, rest };
@@ -41,7 +44,8 @@ export class Next implements Command<NextArguments> {
                     Cli.raiseUsageError('Option "--limit" requires a value.', this);
                 }
                 if (
-                    !/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) ||
+                    !/^\d+$/.test(value) ||
+                    !Number.isSafeInteger(Number(value)) ||
                     Number(value) < 1
                 ) {
                     Cli.raiseUsageError('Limit must be a positive integer.', this);
@@ -99,29 +103,41 @@ export class Next implements Command<NextArguments> {
             const ids: string[] = [];
             try {
                 for await (const entry of Deno.readDir(directory)) {
-                    if (!entry.isFile) continue;
+                    if (!entry.isFile) {
+                        continue;
+                    }
                     const match = /^(\d{4,})-.+\.md$/.exec(entry.name);
                     const id = match?.[1];
-                    if (id !== undefined) ids.push(id);
+                    if (id !== undefined) {
+                        ids.push(id);
+                    }
                 }
             } catch (error) {
-                if (!(error instanceof Deno.errors.NotFound)) throw error;
+                if (!(error instanceof Deno.errors.NotFound)) {
+                    throw error;
+                }
             }
             ids.sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
             const tickets: Ticket[] = [];
             for (const id of ids) {
                 const ticket = await resolveTicket(cwd, id);
-                if (ticket.status !== TICKET_STATUS.OPEN) continue;
+                if (ticket.status !== TICKET_STATUS.OPEN) {
+                    continue;
+                }
                 let satisfied = true;
                 for (const dependency of ticket.dependencies) {
-                    if (!await areDependenciesSatisfied(cwd, dependency)) {
+                    if (!(await areDependenciesSatisfied(cwd, dependency))) {
                         satisfied = false;
                         break;
                     }
                 }
-                if (!satisfied) continue;
+                if (!satisfied) {
+                    continue;
+                }
                 tickets.push(ticket);
-                if (tickets.length === context.parsedArguments.args.limit) break;
+                if (tickets.length === context.parsedArguments.args.limit) {
+                    break;
+                }
             }
             if (context.parsedArguments.args.json) {
                 Log.output(formatJson(tickets));

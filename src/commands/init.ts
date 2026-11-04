@@ -1,9 +1,10 @@
-import type { Command, ParsedArguments } from '@commands';
-import type { RunContext } from './helpers/command.ts';
-import { Fs } from '@fs';
-import { join } from '@std/path';
 import { Cli } from '@cli';
+import type { Command, ParsedArguments } from '@commands';
+import { Fs } from '@fs';
 import { Log } from '@log';
+import { join } from '@std/path';
+
+import type { RunContext } from './helpers/command.ts';
 
 type InitArguments = {
     help: boolean;

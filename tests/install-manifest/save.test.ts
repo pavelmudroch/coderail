@@ -1,19 +1,21 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
-import { InstallManifest, type Manifest } from '../../src/install-manifest.ts';
+
 import { Fs } from '../../src/fs.ts';
 import { tempContext } from '../../src/fs/temp/ctx.ts';
+import { InstallManifest, type Manifest } from '../../src/install-manifest.ts';
 
 Deno.test('InstallManifest.save round trips ordered entries and empty manifests', async () => {
     const root = await Deno.makeTempDir();
     const path = join(root, 'manifest.json');
     try {
-        for (
-            const files of [[
+        for (const files of [
+            [
                 { path: 'z/é.md', checksum: 'abcdef0123456789'.repeat(4), size: 4 },
                 { path: 'a', checksum: '0'.repeat(64), size: 0 },
-            ], []]
-        ) {
+            ],
+            [],
+        ]) {
             const manifest: Manifest = { version: 1, files };
             await InstallManifest.save(path, manifest);
             expect(JSON.parse(await Deno.readTextFile(path))).toEqual(manifest);
@@ -87,8 +89,10 @@ Deno.test('InstallManifest.save validates runtime inputs before writing', async 
             null,
             1,
         ].map((checksum) => ({ version: 1, files: [{ ...file, checksum }] })),
-        ...[-1, 0.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, '0', null]
-            .map((size) => ({ version: 1, files: [{ ...file, size }] })),
+        ...[-1, 0.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity, '0', null].map((size) => ({
+            version: 1,
+            files: [{ ...file, size }],
+        })),
     ];
     const root = await Deno.makeTempDir();
     const path = join(root, 'manifest.json');
@@ -108,37 +112,43 @@ Deno.test('InstallManifest.save validates runtime inputs before writing', async 
     }
 });
 
-Deno.test('InstallManifest.save preserves lock failures and cleans up failed staged writes', async () => {
-    const root = await Deno.makeTempDir();
-    const path = join(root, 'manifest.json');
-    const lock = join(root, '.~manifest.json.lock');
-    const manifest: Manifest = { version: 1, files: [] };
-    try {
-        await expect(InstallManifest.save(join(root, 'missing', 'manifest.json'), manifest))
-            .rejects.toBeInstanceOf(Deno.errors.NotFound);
-        await expect(Deno.stat(join(root, 'missing'))).rejects.toBeInstanceOf(Deno.errors.NotFound);
-        await Deno.writeTextFile(path, 'original');
-        await Deno.writeTextFile(lock, 'other writer');
-        await expect(InstallManifest.save(path, manifest)).rejects.toBeInstanceOf(
-            Deno.errors.AlreadyExists,
-        );
-        await Fs.cleanup();
-        expect(await Deno.readTextFile(path)).toBe('original');
-        expect(await Deno.readTextFile(lock)).toBe('other writer');
-        await Deno.remove(lock);
-        await Deno.remove(path);
-        await Deno.mkdir(path);
-        await expect(InstallManifest.save(path, manifest)).rejects.toBeInstanceOf(Error);
-        expect((await Deno.stat(path)).isDirectory).toBe(true);
-        expect(JSON.parse(await Deno.readTextFile(lock))).toEqual(manifest);
-        expect(tempContext.registeredResourcePaths).toContain(lock);
-        await Fs.cleanup();
-        await expect(Deno.stat(lock)).rejects.toBeInstanceOf(Deno.errors.NotFound);
-    } finally {
-        await Fs.cleanup();
-        await Deno.remove(root, { recursive: true });
-    }
-});
+Deno.test(
+    'InstallManifest.save preserves lock failures and cleans up failed staged writes',
+    async () => {
+        const root = await Deno.makeTempDir();
+        const path = join(root, 'manifest.json');
+        const lock = join(root, '.~manifest.json.lock');
+        const manifest: Manifest = { version: 1, files: [] };
+        try {
+            await expect(
+                InstallManifest.save(join(root, 'missing', 'manifest.json'), manifest),
+            ).rejects.toBeInstanceOf(Deno.errors.NotFound);
+            await expect(Deno.stat(join(root, 'missing'))).rejects.toBeInstanceOf(
+                Deno.errors.NotFound,
+            );
+            await Deno.writeTextFile(path, 'original');
+            await Deno.writeTextFile(lock, 'other writer');
+            await expect(InstallManifest.save(path, manifest)).rejects.toBeInstanceOf(
+                Deno.errors.AlreadyExists,
+            );
+            await Fs.cleanup();
+            expect(await Deno.readTextFile(path)).toBe('original');
+            expect(await Deno.readTextFile(lock)).toBe('other writer');
+            await Deno.remove(lock);
+            await Deno.remove(path);
+            await Deno.mkdir(path);
+            await expect(InstallManifest.save(path, manifest)).rejects.toBeInstanceOf(Error);
+            expect((await Deno.stat(path)).isDirectory).toBe(true);
+            expect(JSON.parse(await Deno.readTextFile(lock))).toEqual(manifest);
+            expect(tempContext.registeredResourcePaths).toContain(lock);
+            await Fs.cleanup();
+            await expect(Deno.stat(lock)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+        } finally {
+            await Fs.cleanup();
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
 
 Deno.test('InstallManifest.save propagates underlying write failures', async () => {
     const originalWrite = Fs.write;
@@ -147,8 +157,9 @@ Deno.test('InstallManifest.save propagates underlying write failures', async () 
         Fs.write = (): never => {
             throw failure;
         };
-        await expect(InstallManifest.save('manifest.json', { version: 1, files: [] }))
-            .rejects.toBe(failure);
+        await expect(InstallManifest.save('manifest.json', { version: 1, files: [] })).rejects.toBe(
+            failure,
+        );
     } finally {
         Fs.write = originalWrite;
     }

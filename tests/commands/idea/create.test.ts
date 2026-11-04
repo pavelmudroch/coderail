@@ -1,8 +1,9 @@
-import { expect } from '@std/expect';
-import { join } from '@std/path';
-import { Md } from '@md';
 import { Fs } from '@fs';
 import { Log } from '@log';
+import { Md } from '@md';
+import { expect } from '@std/expect';
+import { join } from '@std/path';
+
 import { UsageError } from '../../../src/cli/usage-error.ts';
 import { Create } from '../../../src/commands/idea/create.ts';
 
@@ -24,14 +25,12 @@ Deno.test('Idea create parses a title and optional parent path', () => {
         args: { help: false, ideaTitle: 'New idea', parent: undefined, json: false },
         rest: [],
     });
-    for (
-        const args of [
-            ['-p', 'ideas/parent', 'New idea'],
-            ['New idea', '--parent', 'ideas/parent'],
-            ['--parent=ideas/parent', 'New idea'],
-            ['--parent', 'ideas/parent', '--', 'New idea'],
-        ]
-    ) {
+    for (const args of [
+        ['-p', 'ideas/parent', 'New idea'],
+        ['New idea', '--parent', 'ideas/parent'],
+        ['--parent=ideas/parent', 'New idea'],
+        ['--parent', 'ideas/parent', '--', 'New idea'],
+    ]) {
         expect(command.parseArguments(args)).toEqual({
             args: { help: false, ideaTitle: 'New idea', parent: 'ideas/parent', json: false },
             rest: [],
@@ -53,7 +52,10 @@ Deno.test('Idea create parses a title and optional parent path', () => {
 
 Deno.test('Idea create parses JSON output before or after the title and parent', () => {
     const command = new Create();
-    for (const args of [['--json', 'New idea'], ['New idea', '--json']]) {
+    for (const args of [
+        ['--json', 'New idea'],
+        ['New idea', '--json'],
+    ]) {
         expect(command.parseArguments(args)).toEqual({
             args: { help: false, ideaTitle: 'New idea', parent: undefined, json: true },
             rest: [],
@@ -71,34 +73,32 @@ Deno.test('Idea create parses JSON output before or after the title and parent',
 
 Deno.test('Idea create rejects invalid options, titles, and extra arguments with usage', () => {
     const command = new Create();
-    for (
-        const args of [
-            [],
-            [''],
-            ['   '],
-            ['--'],
-            ['one', 'two'],
-            ['one', '--', 'two'],
-            ['--', 'one', 'two'],
-            ['-p'],
-            ['--parent'],
-            ['--parent='],
-            ['--parent', '--help'],
-            ['--parent', 'idea'],
-            ['--json'],
-            ['--json=true', 'New idea'],
-            ['New idea', '--json='],
-            ['-x'],
-            ['--help=value'],
-            ['.'],
-            ['..'],
-            ['!!!'],
-            ['../outside'],
-            ['/absolute'],
-            ['nested/title'],
-            ['nested\\title'],
-        ]
-    ) {
+    for (const args of [
+        [],
+        [''],
+        ['   '],
+        ['--'],
+        ['one', 'two'],
+        ['one', '--', 'two'],
+        ['--', 'one', 'two'],
+        ['-p'],
+        ['--parent'],
+        ['--parent='],
+        ['--parent', '--help'],
+        ['--parent', 'idea'],
+        ['--json'],
+        ['--json=true', 'New idea'],
+        ['New idea', '--json='],
+        ['-x'],
+        ['--help=value'],
+        ['.'],
+        ['..'],
+        ['!!!'],
+        ['../outside'],
+        ['/absolute'],
+        ['nested/title'],
+        ['nested\\title'],
+    ]) {
         try {
             command.parseArguments(args);
             throw new Error('Expected a usage error.');
@@ -150,10 +150,14 @@ async function expectIdea(directory: string, title: string): Promise<void> {
     const markdown = await Md.parse(await Fs.read(join(directory, 'IDEA.md'), { text: true }));
     expect(markdown.frontmatter).toEqual({ title, status: 'open' });
     let content = '';
-    for await (const chunk of markdown.content) content += chunk;
+    for await (const chunk of markdown.content) {
+        content += chunk;
+    }
     expect(content.trim()).toBe('');
     const files = [];
-    for await (const entry of Deno.readDir(directory)) files.push(entry.name);
+    for await (const entry of Deno.readDir(directory)) {
+        files.push(entry.name);
+    }
     expect(files).toEqual(['IDEA.md']);
 }
 
@@ -184,10 +188,9 @@ async function expectFailure(
 Deno.test('Idea create writes an open idea in the supplied working directory', async () => {
     await withWorkspace(async (cwd, plans) => {
         const title = 'Příliš : "New idea"';
-        expect(await create(cwd, [title])).toEqual([[[
-            `└── ${title} ◌ open [IDEA.md]`,
-            `    ${join(plans, 'prilis-new-idea')}`,
-        ].join('\n')]]);
+        expect(await create(cwd, [title])).toEqual([
+            [[`└── ${title} ◌ open [IDEA.md]`, `    ${join(plans, 'prilis-new-idea')}`].join('\n')],
+        ]);
         await expectIdea(join(plans, 'prilis-new-idea'), title);
     });
 });
@@ -197,14 +200,16 @@ Deno.test('Idea create outputs a root artifact as JSON', async () => {
         const output = await create(cwd, ['New idea', '--json']);
         expect(output).toHaveLength(1);
         expect(output[0]).toHaveLength(1);
-        expect(JSON.parse(output[0]?.[0] as string)).toEqual([{
-            path: join(plans, 'new-idea'),
-            id: 'new-idea',
-            title: 'New idea',
-            status: 'open',
-            parent: null,
-            files: ['IDEA.md'],
-        }]);
+        expect(JSON.parse(output[0]?.[0] as string)).toEqual([
+            {
+                path: join(plans, 'new-idea'),
+                id: 'new-idea',
+                title: 'New idea',
+                status: 'open',
+                parent: null,
+                files: ['IDEA.md'],
+            },
+        ]);
         await expectIdea(join(plans, 'new-idea'), 'New idea');
     });
 });
@@ -226,32 +231,37 @@ Deno.test('Idea create resolves split parents by path, ID, slug, and title', asy
             const output = await create(cwd, ['--json', '--parent', reference, `Child ${index}`]);
             expect(output).toHaveLength(1);
             expect(output[0]).toHaveLength(1);
-            expect(JSON.parse(output[0]?.[0] as string)).toEqual([{
-                path: join(parent, `child-${index}`),
-                id: `root/parent/child-${index}`,
-                title: `Child ${index}`,
-                status: 'open',
-                parent: 'root/parent',
-                files: ['IDEA.md'],
-            }]);
+            expect(JSON.parse(output[0]?.[0] as string)).toEqual([
+                {
+                    path: join(parent, `child-${index}`),
+                    id: `root/parent/child-${index}`,
+                    title: `Child ${index}`,
+                    status: 'open',
+                    parent: 'root/parent',
+                    files: ['IDEA.md'],
+                },
+            ]);
             await expectIdea(join(parent, `child-${index}`), `Child ${index}`);
         }
         expect(await Deno.readTextFile(join(parent, 'IDEA.md'))).toBe(original);
     });
 });
 
-Deno.test('Idea create rejects existing directories and files without overwriting them', async () => {
-    await withWorkspace(async (cwd, plans) => {
-        await create(cwd, ['New idea']);
-        const ideaPath = join(plans, 'new-idea');
-        const original = await Deno.readTextFile(join(ideaPath, 'IDEA.md'));
-        await expectFailure(create(cwd, ['New idea']), 'New idea', 'already exists');
-        expect(await Deno.readTextFile(join(ideaPath, 'IDEA.md'))).toBe(original);
-        await Deno.writeTextFile(join(plans, 'occupied'), 'Keep me');
-        await expectFailure(create(cwd, ['Occupied']), 'Occupied', 'already exists');
-        expect(await Deno.readTextFile(join(plans, 'occupied'))).toBe('Keep me');
-    });
-});
+Deno.test(
+    'Idea create rejects existing directories and files without overwriting them',
+    async () => {
+        await withWorkspace(async (cwd, plans) => {
+            await create(cwd, ['New idea']);
+            const ideaPath = join(plans, 'new-idea');
+            const original = await Deno.readTextFile(join(ideaPath, 'IDEA.md'));
+            await expectFailure(create(cwd, ['New idea']), 'New idea', 'already exists');
+            expect(await Deno.readTextFile(join(ideaPath, 'IDEA.md'))).toBe(original);
+            await Deno.writeTextFile(join(plans, 'occupied'), 'Keep me');
+            await expectFailure(create(cwd, ['Occupied']), 'Occupied', 'already exists');
+            expect(await Deno.readTextFile(join(plans, 'occupied'))).toBe('Keep me');
+        });
+    },
+);
 
 Deno.test('Idea create rejects missing and unsplit parents', async () => {
     await withWorkspace(async (cwd, plans) => {

@@ -1,9 +1,9 @@
-import { replace } from './fs/replace.ts';
-import { write } from './fs/write.ts';
-import { read, type ReadBinaryOptions, type ReadTextOptions } from './fs/read.ts';
-import { cleanupTempResources } from './fs/temp/cleanup-temp-resources.ts';
 import { makeDirectory } from './fs/make-directory.ts';
 import { makeTempDirectory, type TempDirectory } from './fs/make-temp-directory.ts';
+import { read, type ReadBinaryOptions, type ReadTextOptions } from './fs/read.ts';
+import { replace } from './fs/replace.ts';
+import { cleanupTempResources } from './fs/temp/cleanup-temp-resources.ts';
+import { write } from './fs/write.ts';
 
 export interface Fs {
     makeTempDirectory(): Promise<TempDirectory>;

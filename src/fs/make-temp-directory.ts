@@ -1,4 +1,5 @@
 import { dirname, join } from '@std/path';
+
 import { registerTempResource } from './temp/register-temp-resource.ts';
 
 export interface TempDirectory {
@@ -42,7 +43,9 @@ export async function makeTempDirectory(): Promise<TempDirectory> {
             const encoder = new TextEncoder();
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    break;
+                }
 
                 if (typeof value === 'string') {
                     await writer.write(encoder.encode(value));

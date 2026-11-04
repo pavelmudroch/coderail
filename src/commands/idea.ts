@@ -1,14 +1,15 @@
-import type { Command, ParsedArguments } from '@commands';
-import type { RunContext } from './helpers/command.ts';
 import { Cli } from '@cli';
+import type { Command, ParsedArguments } from '@commands';
+import { Log } from '@log';
+
+import type { RunContext } from './helpers/command.ts';
 import { Create } from './idea/create.ts';
-import { Split } from './idea/split.ts';
+import { ensurePlansDir } from './idea/helpers/ensure-plans-dir.ts';
+import { formatJson, formatText } from './idea/helpers/format.ts';
+import { getIdeaTree } from './idea/helpers/get-idea-tree.ts';
 import { Ready } from './idea/ready.ts';
 import { Reopen } from './idea/reopen.ts';
-import { ensurePlansDir } from './idea/helpers/ensure-plans-dir.ts';
-import { getIdeaTree } from './idea/helpers/get-idea-tree.ts';
-import { Log } from '@log';
-import { formatJson, formatText } from './idea/helpers/format.ts';
+import { Split } from './idea/split.ts';
 
 type IdeaArguments = {
     help: boolean;

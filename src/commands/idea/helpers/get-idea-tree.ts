@@ -1,7 +1,8 @@
-import { isAbsolute, join } from '@std/path';
 import { Path } from '@path';
-import type { IdeaFrontmatter } from './idea-frontmatter.ts';
+import { isAbsolute, join } from '@std/path';
+
 import { getIdeaFrontmatter } from './get-idea-frontmatter.ts';
+import type { IdeaFrontmatter } from './idea-frontmatter.ts';
 
 export interface IdeaTreeItem {
     path: string;
@@ -34,9 +35,7 @@ export async function getIdeaTree(cwd: string): Promise<IdeaTree> {
         itemPromises.push(itemPromise);
     }
     const items = await Promise.all(itemPromises);
-    return items
-        .filter((item) => item !== undefined)
-        .sort((a, b) => a.id.localeCompare(b.id));
+    return items.filter((item) => item !== undefined).sort((a, b) => a.id.localeCompare(b.id));
 }
 
 async function getIdeaTreeItem(
@@ -61,7 +60,9 @@ async function getIdeaTreeItem(
         }
     }
 
-    if (!files.includes('IDEA.md')) return undefined;
+    if (!files.includes('IDEA.md')) {
+        return undefined;
+    }
     const frontmatter = await getIdeaFrontmatter(join(path, 'IDEA.md'));
     const childrenPromises: Promise<IdeaTreeItem | undefined>[] = [];
     for (const directory of directories.sort()) {

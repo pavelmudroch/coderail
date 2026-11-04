@@ -1,8 +1,8 @@
 import { Cli } from '@cli';
 import { type Command, Commands, type ParsedArguments } from '@commands';
+import { Conf } from '@conf';
 import { Log } from '@log';
 import { Runtime } from '@runtime';
-import { Conf } from '@conf';
 
 async function main(): Promise<void> {
     using signalHandlers = Runtime.registerSignalHandlers();
@@ -14,8 +14,8 @@ async function main(): Promise<void> {
         Log.level = globalArguments.args.verbose
             ? 'verbose'
             : globalArguments.args.quiet
-            ? 'quiet'
-            : 'normal';
+              ? 'quiet'
+              : 'normal';
         Log.noColor = globalArguments.args.noColor;
 
         let command: Command = globalCommand;

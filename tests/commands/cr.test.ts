@@ -1,16 +1,17 @@
-import { expect } from '@std/expect';
 import { Commands, type GlobalArguments, type ParsedArguments } from '@commands';
+import { expect } from '@std/expect';
+
 import { UsageError } from '../../src/cli/usage-error.ts';
-import { Template } from '../../src/commands/template.ts';
+import { Doctor } from '../../src/commands/doctor.ts';
+import { Idea } from '../../src/commands/idea.ts';
 import { Init } from '../../src/commands/init.ts';
 import { Install } from '../../src/commands/install.ts';
+import { Loop } from '../../src/commands/loop.ts';
+import { Template } from '../../src/commands/template.ts';
+import { Ticket } from '../../src/commands/ticket.ts';
 import { Uninstall } from '../../src/commands/uninstall.ts';
 import { Upgrade } from '../../src/commands/upgrade.ts';
-import { Ticket } from '../../src/commands/ticket.ts';
-import { Idea } from '../../src/commands/idea.ts';
 import { Verify } from '../../src/commands/verify.ts';
-import { Doctor } from '../../src/commands/doctor.ts';
-import { Loop } from '../../src/commands/loop.ts';
 
 function parse(args: readonly string[]): ParsedArguments<GlobalArguments> {
     return Commands.cr().parseArguments(args);
@@ -29,20 +30,18 @@ function defaults(): GlobalArguments {
     };
 }
 
-for (
-    const [name, Child] of [
-        ['init', Init],
-        ['install', Install],
-        ['uninstall', Uninstall],
-        ['upgrade', Upgrade],
-        ['ticket', Ticket],
-        ['idea', Idea],
-        ['verify', Verify],
-        ['doctor', Doctor],
-        ['loop', Loop],
-        ['template', Template],
-    ] as const
-) {
+for (const [name, Child] of [
+    ['init', Init],
+    ['install', Install],
+    ['uninstall', Uninstall],
+    ['upgrade', Upgrade],
+    ['ticket', Ticket],
+    ['idea', Idea],
+    ['verify', Verify],
+    ['doctor', Doctor],
+    ['loop', Loop],
+    ['template', Template],
+] as const) {
     Deno.test(`Cr resolves the ${name} subcommand`, () => {
         const command = Commands.cr();
         expect(command.getSubcommand(command.parseArguments([name]))).toBeInstanceOf(Child);
@@ -75,12 +74,10 @@ Deno.test('Cr handles global help and exposes root usage', () => {
 
 Deno.test('Cr rejects missing and unknown root commands', () => {
     const command = Commands.cr();
-    for (
-        const [args, message] of [
-            [[], 'Required command is missing.'],
-            [['unknown'], 'Unknown command "unknown".'],
-        ] as const
-    ) {
+    for (const [args, message] of [
+        [[], 'Required command is missing.'],
+        [['unknown'], 'Unknown command "unknown".'],
+    ] as const) {
         try {
             command.getSubcommand(command.parseArguments(args));
             throw new Error('Expected getSubcommand to throw.');
@@ -96,32 +93,36 @@ Deno.test('Cr runs without initialization', async () => {
     const command = Commands.cr();
     const parsedArguments = command.parseArguments([]);
     expect(command.requiresInit).toBe(false);
-    await expect(command.run({
-        context: { currentWorkingDirectory: '/project', installRoot: '/install' },
-        configuration: {
-            logLevel: 'normal',
-            noColor: false,
-            nonInteractive: false,
-            verify: { rules: [] },
-        },
-        parsedArguments,
-        signal: new AbortController().signal,
-    })).resolves.toBeUndefined();
+    await expect(
+        command.run({
+            context: { currentWorkingDirectory: '/project', installRoot: '/install' },
+            configuration: {
+                logLevel: 'normal',
+                noColor: false,
+                nonInteractive: false,
+                verify: { rules: [] },
+            },
+            parsedArguments,
+            signal: new AbortController().signal,
+        }),
+    ).resolves.toBeUndefined();
 });
 
 Deno.test('Cr::parseArguments parses global options and commands', () => {
     expect(parse([])).toEqual({ args: defaults(), rest: [] });
 
-    expect(parse([
-        '--version',
-        '--non-interactive',
-        '--no-color',
-        '-v',
-        '--cwd',
-        'project',
-        'status',
-        'argument',
-    ])).toEqual({
+    expect(
+        parse([
+            '--version',
+            '--non-interactive',
+            '--no-color',
+            '-v',
+            '--cwd',
+            'project',
+            'status',
+            'argument',
+        ]),
+    ).toEqual({
         args: {
             command: 'status',
             cwd: 'project',
@@ -207,63 +208,39 @@ Deno.test('Cr::parseArguments expands grouped short options', () => {
 });
 
 Deno.test('Cr::parseArguments rejects invalid global option values', () => {
-    for (
-        const [args, message] of [
-            [['--help=value'], 'Option "--help" does not take a value.'],
-            [['--version=value'], 'Option "--version" does not take a value.'],
-            [['--non-interactive=value'], 'Option "--non-interactive" does not take a value.'],
-            [['--no-color=value'], 'Option "--no-color" does not take a value.'],
-            [['--verbose=value'], 'Option "--verbose" does not take a value.'],
-            [['--quiet=value'], 'Option "--quiet" does not take a value.'],
-            [['--cwd'], 'Option "--cwd" requires a value.'],
-            [['--cwd', '-v'], 'Option "--cwd" requires a value.'],
-        ] as const
-    ) {
+    for (const [args, message] of [
+        [['--help=value'], 'Option "--help" does not take a value.'],
+        [['--version=value'], 'Option "--version" does not take a value.'],
+        [['--non-interactive=value'], 'Option "--non-interactive" does not take a value.'],
+        [['--no-color=value'], 'Option "--no-color" does not take a value.'],
+        [['--verbose=value'], 'Option "--verbose" does not take a value.'],
+        [['--quiet=value'], 'Option "--quiet" does not take a value.'],
+        [['--cwd'], 'Option "--cwd" requires a value.'],
+        [['--cwd', '-v'], 'Option "--cwd" requires a value.'],
+    ] as const) {
         expectUsageError(args, message);
     }
 });
 
 Deno.test('Cr::parseArguments rejects unknown options before the command', () => {
-    for (
-        const [args, message] of [
-            [['--unknown', 'command'], 'Unknown option "--unknown".'],
-            [['-x', 'command'], 'Unknown option "-x".'],
-            [['-xv', 'command'], 'Unknown option "-x".'],
-        ] as const
-    ) {
+    for (const [args, message] of [
+        [['--unknown', 'command'], 'Unknown option "--unknown".'],
+        [['-x', 'command'], 'Unknown option "-x".'],
+        [['-xv', 'command'], 'Unknown option "-x".'],
+    ] as const) {
         expectUsageError(args, message);
     }
 });
 
 Deno.test('Cr::parseArguments rejects verbose and quiet together', () => {
-    for (
-        const [args, message] of [
-            [
-                ['--verbose', '--quiet'],
-                'Cannot use "--quiet" when "--verbose" is enabled.',
-            ],
-            [
-                ['--quiet', '--verbose'],
-                'Cannot use "--verbose" when "--quiet" is enabled.',
-            ],
-            [
-                ['-v', '-q'],
-                'Cannot use "--quiet" when "--verbose" is enabled.',
-            ],
-            [
-                ['-q', '-v'],
-                'Cannot use "--verbose" when "--quiet" is enabled.',
-            ],
-            [
-                ['-vqh'],
-                'Cannot use "--quiet" when "--verbose" is enabled.',
-            ],
-            [
-                ['-qvh'],
-                'Cannot use "--verbose" when "--quiet" is enabled.',
-            ],
-        ] as const
-    ) {
+    for (const [args, message] of [
+        [['--verbose', '--quiet'], 'Cannot use "--quiet" when "--verbose" is enabled.'],
+        [['--quiet', '--verbose'], 'Cannot use "--verbose" when "--quiet" is enabled.'],
+        [['-v', '-q'], 'Cannot use "--quiet" when "--verbose" is enabled.'],
+        [['-q', '-v'], 'Cannot use "--verbose" when "--quiet" is enabled.'],
+        [['-vqh'], 'Cannot use "--quiet" when "--verbose" is enabled.'],
+        [['-qvh'], 'Cannot use "--verbose" when "--quiet" is enabled.'],
+    ] as const) {
         expectUsageError(args, message);
     }
 });

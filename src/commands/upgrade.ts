@@ -1,8 +1,9 @@
-import type { Command, ParsedArguments } from '@commands';
-import type { RunContext } from './helpers/command.ts';
 import { Cli } from '@cli';
+import type { Command, ParsedArguments } from '@commands';
 import { Log } from '@log';
 import { join } from '@std/path';
+
+import type { RunContext } from './helpers/command.ts';
 import { activateDistribution } from './upgrade/activation.ts';
 import { AssetApplyError, type AssetPlan, type AssetProgress } from './upgrade/assets.ts';
 import { cleanupStaleExecutablesWithinLock, retireExecutables } from './upgrade/cleanup.ts';
@@ -44,7 +45,9 @@ export class Upgrade implements Command<UpgradeArguments> {
                 args.help = true;
                 return { args, rest: [] };
             }
-            if (arg === undefined) continue;
+            if (arg === undefined) {
+                continue;
+            }
             for (const option of ['--help', '--canary', '--force', '--yes', '--no']) {
                 if (arg.startsWith(`${option}=`)) {
                     Cli.raiseUsageError(`Option "${option}" does not take a value.`, this);
@@ -168,13 +171,11 @@ export class Upgrade implements Command<UpgradeArguments> {
                 }.`,
             );
             report(
-                `Skipped (kept): ${
-                    list(
-                        plan.actions.filter((action) => !action.approved).map((action) =>
-                            action.file.path
-                        ),
-                    )
-                }.`,
+                `Skipped (kept): ${list(
+                    plan.actions
+                        .filter((action) => !action.approved)
+                        .map((action) => action.file.path),
+                )}.`,
             );
         };
         const fetcher: typeof fetch = (input, init) => {
@@ -189,68 +190,75 @@ export class Upgrade implements Command<UpgradeArguments> {
                 fetcher,
             );
             report(`Selected ${release.version} (${release.commit}) for ${release.target}.`);
-            await withStagedDistribution(release, async (stage) => {
-                signal.throwIfAborted();
-                const activation = await activateDistribution(root, stage, {
-                    ...args,
-                    runningExecutable: this.options.runningExecutable,
-                    interactive: this.options.interactive ??
-                        (!Log.nonInteractive && Deno.stdin.isTerminal()),
-                    confirm: async (action) => {
-                        signal.throwIfAborted();
-                        const approved = await confirm(
-                            `${action.kind === 'write' ? 'Overwrite' : 'Remove'} "${
-                                join(root, action.file.path)
-                            }"?`,
-                        );
-                        signal.throwIfAborted();
-                        return approved;
-                    },
-                    beforeMutation: async (lockedRoot, plan) => {
-                        signal.throwIfAborted();
-                        assetPlan = plan;
-                        const removed = await cleanupStaleExecutablesWithinLock(lockedRoot, {
-                            runningExecutable: this.options.runningExecutable,
-                            report: (path, error) =>
-                                warn(`Residual executable ${path}: ${String(error)}`),
-                        });
-                        // Cleanup saved a newer manifest. Do not resurrect its removed ownership records.
-                        plan.manifest.files = plan.manifest.files.filter((file) =>
-                            !removed.includes(join(lockedRoot, file.path))
-                        );
-                        for (const path of removed) {
-                            report(`Removed stale executable ${path}.`);
-                        }
-                        for (const action of plan.actions) {
-                            if (!action.approved) {
-                                report(
-                                    `Declined ${action.kind}: "${join(root, action.file.path)}".`,
-                                );
+            await withStagedDistribution(
+                release,
+                async (stage) => {
+                    signal.throwIfAborted();
+                    const activation = await activateDistribution(root, stage, {
+                        ...args,
+                        runningExecutable: this.options.runningExecutable,
+                        interactive:
+                            this.options.interactive ??
+                            (!Log.nonInteractive && Deno.stdin.isTerminal()),
+                        confirm: async (action) => {
+                            signal.throwIfAborted();
+                            const approved = await confirm(
+                                `${action.kind === 'write' ? 'Overwrite' : 'Remove'} "${join(
+                                    root,
+                                    action.file.path,
+                                )}"?`,
+                            );
+                            signal.throwIfAborted();
+                            return approved;
+                        },
+                        beforeMutation: async (lockedRoot, plan) => {
+                            signal.throwIfAborted();
+                            assetPlan = plan;
+                            const removed = await cleanupStaleExecutablesWithinLock(lockedRoot, {
+                                runningExecutable: this.options.runningExecutable,
+                                report: (path, error) =>
+                                    warn(`Residual executable ${path}: ${String(error)}`),
+                            });
+                            // Cleanup saved a newer manifest. Do not resurrect its removed ownership records.
+                            plan.manifest.files = plan.manifest.files.filter(
+                                (file) => !removed.includes(join(lockedRoot, file.path)),
+                            );
+                            for (const path of removed) {
+                                report(`Removed stale executable ${path}.`);
                             }
-                        }
-                    },
-                });
-                activated = true;
-                if (assetPlan) {
-                    progress = {
-                        written: assetPlan.actions.filter((action) =>
-                            action.approved && action.kind === 'write'
-                        ).map((action) => action.file.path),
-                        removed: assetPlan.actions.filter((action) =>
-                            action.approved && action.kind === 'remove'
-                        ).map((action) => action.file.path),
-                        manifestSaved: true,
-                    };
-                    reportProgress(assetPlan);
-                }
-                output(
-                    `Assets reconciled and manifest saved. Activated ${activation.selectedExecutable}.`,
-                );
-                await retireExecutables(root, activation, {
-                    runningExecutable: this.options.runningExecutable,
-                    report: (path, error) => warn(`Residual executable ${path}: ${String(error)}`),
-                });
-            }, fetcher);
+                            for (const action of plan.actions) {
+                                if (!action.approved) {
+                                    report(
+                                        `Declined ${action.kind}: "${join(root, action.file.path)}".`,
+                                    );
+                                }
+                            }
+                        },
+                    });
+                    activated = true;
+                    if (assetPlan) {
+                        progress = {
+                            written: assetPlan.actions
+                                .filter((action) => action.approved && action.kind === 'write')
+                                .map((action) => action.file.path),
+                            removed: assetPlan.actions
+                                .filter((action) => action.approved && action.kind === 'remove')
+                                .map((action) => action.file.path),
+                            manifestSaved: true,
+                        };
+                        reportProgress(assetPlan);
+                    }
+                    output(
+                        `Assets reconciled and manifest saved. Activated ${activation.selectedExecutable}.`,
+                    );
+                    await retireExecutables(root, activation, {
+                        runningExecutable: this.options.runningExecutable,
+                        report: (path, error) =>
+                            warn(`Residual executable ${path}: ${String(error)}`),
+                    });
+                },
+                fetcher,
+            );
         } catch (error) {
             if (assetPlan) {
                 if (error instanceof AssetApplyError) {
@@ -258,18 +266,18 @@ export class Upgrade implements Command<UpgradeArguments> {
                 }
                 reportProgress(assetPlan);
                 reportError(
-                    `Upgrade partially changed installation "${root}": ${
-                        String(error)
-                    }. Activation ${activated ? 'completed' : 'did not complete'}.`,
+                    `Upgrade partially changed installation "${root}": ${String(
+                        error,
+                    )}. Activation ${activated ? 'completed' : 'did not complete'}.`,
                 );
                 reportError(
                     `Preserve user templates first: removing "${root}" also removes user templates. Manually remove this root and rebootstrap using curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh -o install.sh, then run install.sh selecting "${root}".`,
                 );
             } else {
                 reportError(
-                    `Upgrade preflight failed for installation "${root}"; installed files were not changed: ${
-                        String(error)
-                    }`,
+                    `Upgrade preflight failed for installation "${root}"; installed files were not changed: ${String(
+                        error,
+                    )}`,
                 );
             }
             throw error;

@@ -1,6 +1,7 @@
+import { Log } from '@log';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
-import { Log } from '@log';
+
 import { UsageError } from '../../../src/cli/usage-error.ts';
 import { Reopen } from '../../../src/commands/idea/reopen.ts';
 
@@ -21,7 +22,10 @@ Deno.test('Idea reopen parses one reference and optional JSON output', () => {
         args: { help: false, ideaReference: 'ideas/example', json: false },
         rest: [],
     });
-    for (const args of [['--json', 'idea'], ['idea', '--json']]) {
+    for (const args of [
+        ['--json', 'idea'],
+        ['idea', '--json'],
+    ]) {
         expect(command.parseArguments(args)).toEqual({
             args: { help: false, ideaReference: 'idea', json: true },
             rest: [],
@@ -42,23 +46,21 @@ Deno.test('Idea reopen parses one reference and optional JSON output', () => {
 
 Deno.test('Idea reopen rejects invalid arguments with usage', () => {
     const command = new Reopen();
-    for (
-        const args of [
-            [],
-            [''],
-            ['   '],
-            ['--'],
-            ['one', 'two'],
-            ['one', '--', 'two'],
-            ['--', 'one', 'two'],
-            ['--json'],
-            ['--parent', 'idea'],
-            ['--unknown'],
-            ['-x'],
-            ['--help=value'],
-            ['--json=true', 'idea'],
-        ]
-    ) {
+    for (const args of [
+        [],
+        [''],
+        ['   '],
+        ['--'],
+        ['one', 'two'],
+        ['one', '--', 'two'],
+        ['--', 'one', 'two'],
+        ['--json'],
+        ['--parent', 'idea'],
+        ['--unknown'],
+        ['-x'],
+        ['--help=value'],
+        ['--json=true', 'idea'],
+    ]) {
         try {
             command.parseArguments(args);
             throw new Error('Expected a usage error.');
@@ -97,56 +99,66 @@ async function reopen(cwd: string, args: string[]): Promise<unknown[][]> {
     }
 }
 
-Deno.test('Idea reopen resolves references and preserves content, metadata, and other files', async () => {
-    const cwd = await Deno.makeTempDir();
-    const parent = join(cwd, '.coderail', 'plans', 'parent');
-    const directory = join(parent, 'example');
-    const filePath = join(directory, 'IDEA.md');
-    try {
-        await Deno.mkdir(directory, { recursive: true });
-        const parentContent = '---\ntitle: Parent\nstatus: split\n---\nParent content\n';
-        await Deno.writeTextFile(join(parent, 'IDEA.md'), parentContent);
-        await Deno.writeTextFile(join(directory, 'SPEC.md'), 'Keep specification');
-        const references = [
-            directory,
-            '.coderail/plans/parent/example/IDEA.md',
-            'parent/example',
-            'example',
-            'Example idea',
-        ];
-        for (const [index, reference] of references.entries()) {
-            await Deno.writeTextFile(
-                filePath,
-                `---\ntitle: Example idea\nstatus: ${
-                    index === 0 ? 'open' : 'ready'
-                }\ncustom: keep\n---\n# Content\n\nKeep me\n`,
-            );
-            const output = await reopen(cwd, index === 0 ? [reference] : ['--json', reference]);
-            if (index === 0) {
-                expect(output).toEqual([[[
-                    '└── Example idea ◌ open [IDEA.md, SPEC.md]',
-                    `    ${directory}`,
-                ].join('\n')]]);
-            } else {
-                expect(JSON.parse(output[0]?.[0] as string)).toEqual([{
-                    path: directory,
-                    id: 'parent/example',
-                    title: 'Example idea',
-                    status: 'open',
-                    parent: 'parent',
-                    files: ['IDEA.md', 'SPEC.md'],
-                }]);
+Deno.test(
+    'Idea reopen resolves references and preserves content, metadata, and other files',
+    async () => {
+        const cwd = await Deno.makeTempDir();
+        const parent = join(cwd, '.coderail', 'plans', 'parent');
+        const directory = join(parent, 'example');
+        const filePath = join(directory, 'IDEA.md');
+        try {
+            await Deno.mkdir(directory, { recursive: true });
+            const parentContent = '---\ntitle: Parent\nstatus: split\n---\nParent content\n';
+            await Deno.writeTextFile(join(parent, 'IDEA.md'), parentContent);
+            await Deno.writeTextFile(join(directory, 'SPEC.md'), 'Keep specification');
+            const references = [
+                directory,
+                '.coderail/plans/parent/example/IDEA.md',
+                'parent/example',
+                'example',
+                'Example idea',
+            ];
+            for (const [index, reference] of references.entries()) {
+                await Deno.writeTextFile(
+                    filePath,
+                    `---\ntitle: Example idea\nstatus: ${
+                        index === 0 ? 'open' : 'ready'
+                    }\ncustom: keep\n---\n# Content\n\nKeep me\n`,
+                );
+                const output = await reopen(cwd, index === 0 ? [reference] : ['--json', reference]);
+                if (index === 0) {
+                    expect(output).toEqual([
+                        [
+                            ['└── Example idea ◌ open [IDEA.md, SPEC.md]', `    ${directory}`].join(
+                                '\n',
+                            ),
+                        ],
+                    ]);
+                } else {
+                    expect(JSON.parse(output[0]?.[0] as string)).toEqual([
+                        {
+                            path: directory,
+                            id: 'parent/example',
+                            title: 'Example idea',
+                            status: 'open',
+                            parent: 'parent',
+                            files: ['IDEA.md', 'SPEC.md'],
+                        },
+                    ]);
+                }
+                expect(await Deno.readTextFile(filePath)).toBe(
+                    '---\ntitle: "Example idea"\nstatus: "open"\ncustom: "keep"\n---\n# Content\n\nKeep me\n',
+                );
+                expect(await Deno.readTextFile(join(directory, 'SPEC.md'))).toBe(
+                    'Keep specification',
+                );
+                expect(await Deno.readTextFile(join(parent, 'IDEA.md'))).toBe(parentContent);
             }
-            expect(await Deno.readTextFile(filePath)).toBe(
-                '---\ntitle: "Example idea"\nstatus: "open"\ncustom: "keep"\n---\n# Content\n\nKeep me\n',
-            );
-            expect(await Deno.readTextFile(join(directory, 'SPEC.md'))).toBe('Keep specification');
-            expect(await Deno.readTextFile(join(parent, 'IDEA.md'))).toBe(parentContent);
+        } finally {
+            await Deno.remove(cwd, { recursive: true });
         }
-    } finally {
-        await Deno.remove(cwd, { recursive: true });
-    }
-});
+    },
+);
 
 Deno.test('Idea reopen rejects split and missing ideas without changing files', async () => {
     const cwd = await Deno.makeTempDir();
@@ -161,9 +173,7 @@ Deno.test('Idea reopen rejects split and missing ideas without changing files', 
             throw new Error('Expected status transition to fail.');
         } catch (error) {
             expect((error as Error).message).toBe('Cannot reopen idea "example"');
-            expect(((error as Error).cause as Error).message).toBe(
-                'Idea "example" is split.',
-            );
+            expect(((error as Error).cause as Error).message).toBe('Idea "example" is split.');
         }
         expect(await Deno.readTextFile(filePath)).toBe(original);
         try {

@@ -1,6 +1,6 @@
-import { writeSync } from './helpers/write-sync.ts';
-import { context } from './helpers/context.ts';
 import { clear } from './helpers/ansi.ts';
+import { context } from './helpers/context.ts';
+import { writeSync } from './helpers/write-sync.ts';
 import { warn } from './warn.ts';
 
 export type ConfirmOptions = {

@@ -1,6 +1,6 @@
 import type { Command, GlobalArguments } from '@commands';
-import { dirname, fromFileUrl, join, resolve } from '@std/path';
 import { Log } from '@log';
+import { dirname, fromFileUrl, join, resolve } from '@std/path';
 
 export type RuntimeContext = {
     currentWorkingDirectory: string;

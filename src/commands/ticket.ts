@@ -1,11 +1,12 @@
-import type { Command, ParsedArguments } from '@commands';
-import type { RunContext } from './helpers/command.ts';
 import { Cli } from '@cli';
+import type { Command, ParsedArguments } from '@commands';
 import { Log } from '@log';
-import { Next } from './ticket/next.ts';
-import { Create } from './ticket/create.ts';
-import { Close } from './ticket/close.ts';
+
+import type { RunContext } from './helpers/command.ts';
 import { Activate } from './ticket/activate.ts';
+import { Close } from './ticket/close.ts';
+import { Create } from './ticket/create.ts';
+import { Next } from './ticket/next.ts';
 import { Reopen } from './ticket/reopen.ts';
 
 type TicketArguments = {

@@ -1,9 +1,10 @@
+import { Conf } from '@conf';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
-import { Init } from '../../src/commands/init.ts';
-import type { RunContext } from '../../src/commands/helpers/command.ts';
+
 import { UsageError } from '../../src/cli/usage-error.ts';
-import { Conf } from '@conf';
+import type { RunContext } from '../../src/commands/helpers/command.ts';
+import { Init } from '../../src/commands/init.ts';
 
 const defaultConfiguration = [
     '# Coderail configuration file, lines starting with "#" are comments.',
@@ -25,9 +26,10 @@ const defaultConfiguration = [
     '',
 ].join('\n');
 
-function context(root: string, args: string[] = []): RunContext<
-    ReturnType<Init['parseArguments']>['args']
-> {
+function context(
+    root: string,
+    args: string[] = [],
+): RunContext<ReturnType<Init['parseArguments']>['args']> {
     return {
         context: { currentWorkingDirectory: root, installRoot: root },
         configuration: {
@@ -158,8 +160,9 @@ Deno.test('Init rejects a directory blocking the configuration file', async () =
     const path = join(root, '.coderail', 'coderail.conf');
     try {
         await Deno.mkdir(path, { recursive: true });
-        await expect(new Init().run(context(root)))
-            .rejects.toThrow(`Expected "${path}" to be a file or a symlink.`);
+        await expect(new Init().run(context(root))).rejects.toThrow(
+            `Expected "${path}" to be a file or a symlink.`,
+        );
         expect((await Deno.stat(path)).isDirectory).toBe(true);
     } finally {
         await Deno.remove(root, { recursive: true });

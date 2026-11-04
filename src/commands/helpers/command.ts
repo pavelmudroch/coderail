@@ -1,5 +1,5 @@
-import type { RuntimeContext } from '@runtime';
 import type { Configuration } from '@conf';
+import type { RuntimeContext } from '@runtime';
 
 export type ParsedArguments<TArgs extends Record<string, unknown> = Record<string, unknown>> = {
     args: TArgs;

@@ -1,4 +1,5 @@
 import { expect } from '@std/expect';
+
 import {
     type Frontmatter,
     parseFrontmatter,
@@ -6,20 +7,24 @@ import {
 } from '../../../src/md/helpers/frontmatter.ts';
 
 Deno.test('Md frontmatter parses scalars and both array forms', () => {
-    expect(parseFrontmatter([
-        'title: A simple idea',
-        'quoted: "true"',
-        "single: 'it''s ready'",
-        'count: -2.5e2',
-        'ready: false',
-        'tags: ["cli, tools", parser, true, 2, "a\\"b"]',
-        'empty: []',
-        'items:',
-        '  - one',
-        '  - "2"',
-        '  - 3',
-        '  - true',
-    ].join('\r\n'))).toEqual({
+    expect(
+        parseFrontmatter(
+            [
+                'title: A simple idea',
+                'quoted: "true"',
+                "single: 'it''s ready'",
+                'count: -2.5e2',
+                'ready: false',
+                'tags: ["cli, tools", parser, true, 2, "a\\"b"]',
+                'empty: []',
+                'items:',
+                '  - one',
+                '  - "2"',
+                '  - 3',
+                '  - true',
+            ].join('\r\n'),
+        ),
+    ).toEqual({
         title: 'A simple idea',
         quoted: 'true',
         single: "it's ready",
@@ -51,33 +56,31 @@ Deno.test('Md frontmatter stringify quotes strings and emits block arrays', () =
 });
 
 Deno.test('Md frontmatter rejects malformed or unsupported syntax with line numbers', () => {
-    for (
-        const source of [
-            'value: 1\nvalue: 2',
-            'value: [1,]',
-            'value: [1',
-            'value: [[1]]',
-            'value: ["unfinished]',
-            'value: {nested: true}',
-            'value: |\n  multiline',
-            'value: >',
-            'value: "line\\nline"',
-            "value: 'unfinished",
-            'value: "unfinished',
-            'value: 1e999',
-            'value:\nnext: true',
-            'value:',
-            'value:\n  - one\n   - two',
-            '  - orphan',
-            'value:\n  - [nested]',
-            'value:\n  -',
-            'value:\n  nested: true',
-            'value: one\rtwo',
-            'value: one # comment',
-            'value: &anchor',
-            'invalid property',
-        ]
-    ) {
+    for (const source of [
+        'value: 1\nvalue: 2',
+        'value: [1,]',
+        'value: [1',
+        'value: [[1]]',
+        'value: ["unfinished]',
+        'value: {nested: true}',
+        'value: |\n  multiline',
+        'value: >',
+        'value: "line\\nline"',
+        "value: 'unfinished",
+        'value: "unfinished',
+        'value: 1e999',
+        'value:\nnext: true',
+        'value:',
+        'value:\n  - one\n   - two',
+        '  - orphan',
+        'value:\n  - [nested]',
+        'value:\n  -',
+        'value:\n  nested: true',
+        'value: one\rtwo',
+        'value: one # comment',
+        'value: &anchor',
+        'invalid property',
+    ]) {
         expect(() => parseFrontmatter(source), source).toThrow(/line \d+/);
     }
 });
@@ -98,11 +101,12 @@ Deno.test('Md frontmatter treats prototype property names as ordinary keys', () 
 });
 
 Deno.test('Md frontmatter parses quoted inline items and bare apostrophes', () => {
-    expect(parseFrontmatter(`items: ['it''s', 'a,b', "[]{}", don't, a"b, false]\n\nnext: yes\n`))
-        .toEqual({
-            items: ["it's", 'a,b', '[]{}', "don't", 'a"b', false],
-            next: 'yes',
-        });
+    expect(
+        parseFrontmatter(`items: ['it''s', 'a,b', "[]{}", don't, a"b, false]\n\nnext: yes\n`),
+    ).toEqual({
+        items: ["it's", 'a,b', '[]{}', "don't", 'a"b', false],
+        next: 'yes',
+    });
     expect(parseFrontmatter("'it''s': value\nspaces: [ ]\nlist:\n  - one\n\nnext: end")).toEqual({
         "it's": 'value',
         spaces: [],

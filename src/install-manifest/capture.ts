@@ -1,4 +1,5 @@
 import { isAbsolute, relative, resolve, SEPARATOR } from '@std/path';
+
 import type { Manifest, ManifestFile } from '../install-manifest.ts';
 import { validatePath } from './validate.ts';
 
@@ -26,9 +27,13 @@ export async function regularFile(root: string, path: string): Promise<string> {
     for (const [index, part] of parts.entries()) {
         current = resolve(current, part);
         const info = await Deno.lstat(current);
-        if (info.isSymlink) throw new Error('Install manifest path contains a symlink');
+        if (info.isSymlink) {
+            throw new Error('Install manifest path contains a symlink');
+        }
         if (index === parts.length - 1) {
-            if (!info.isFile) throw new Error('Install manifest leaf must be a regular file');
+            if (!info.isFile) {
+                throw new Error('Install manifest leaf must be a regular file');
+            }
         } else if (!info.isDirectory) {
             throw new Error('Install manifest ancestor must be a directory');
         }
@@ -49,13 +54,15 @@ export async function capture(root: string, paths: string[]): Promise<Manifest> 
     const selected = new Set<string>();
     for (const path of paths) {
         validatePath(path);
-        if (selected.has(path)) throw new Error('Duplicate install manifest path');
+        if (selected.has(path)) {
+            throw new Error('Duplicate install manifest path');
+        }
         selected.add(path);
     }
     const canonical = await canonicalRoot(root);
     const files: ManifestFile[] = [];
     for (const path of paths) {
-        files.push({ path, ...await fingerprint(await regularFile(canonical, path)) });
+        files.push({ path, ...(await fingerprint(await regularFile(canonical, path))) });
     }
     return { version: 1, files };
 }

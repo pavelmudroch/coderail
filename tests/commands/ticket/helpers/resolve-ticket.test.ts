@@ -1,8 +1,9 @@
-import { expect } from '@std/expect';
-import { join, relative } from '@std/path';
 import { Fs } from '@fs';
 import { Md } from '@md';
 import type { Frontmatter } from '@md';
+import { expect } from '@std/expect';
+import { join, relative } from '@std/path';
+
 import { resolveTicket } from '../../../../src/commands/ticket/helpers/resolve-ticket.ts';
 
 async function withWorkspace(run: (cwd: string, tickets: string) => Promise<void>): Promise<void> {
@@ -55,7 +56,9 @@ Deno.test('resolveTicket returns closure reasons and duplicate references', asyn
     await withWorkspace(async (cwd, tickets) => {
         for (const reason of ['done', 'dismissed', 'duplicate']) {
             const frontmatter: Frontmatter = { title: 'New ticket', reason };
-            if (reason === 'duplicate') frontmatter['duplicate-of'] = '10000';
+            if (reason === 'duplicate') {
+                frontmatter['duplicate-of'] = '10000';
+            }
             const path = await writeTicket(tickets, 'closed', frontmatter);
             expect(await resolveTicket(cwd, '0001')).toEqual({
                 path,
@@ -71,57 +74,71 @@ Deno.test('resolveTicket returns closure reasons and duplicate references', asyn
     });
 });
 
-Deno.test('resolveTicket rejects invalid statuses, closure reasons, and duplicate references', async () => {
-    await withWorkspace(async (cwd, tickets) => {
-        for (const status of ['', 'unknown', 1]) {
-            const path = await writeTicket(tickets, 'open', { title: 'New ticket', status });
-            await expect(resolveTicket(cwd, '0001')).rejects.toThrow(
-                `Invalid ticket status: ${path}`,
-            );
-        }
-        await Deno.remove(join(tickets, 'open'), { recursive: true });
-        const reasons: Frontmatter[] = [{}, { reason: 'deferred' }, { reason: 1 }];
-        for (const frontmatter of reasons) {
-            const path = await writeTicket(tickets, 'closed', {
-                title: 'New ticket',
-                ...frontmatter,
-            });
-            await expect(resolveTicket(cwd, '0001')).rejects.toThrow(
-                `Invalid ticket closure reason: ${path}`,
-            );
-        }
-        const duplicates: Frontmatter[] = [{}, { 'duplicate-of': '' }, { 'duplicate-of': 2 }, {
-            'duplicate-of': 'invalid',
-        }];
-        for (const frontmatter of duplicates) {
-            const path = await writeTicket(tickets, 'closed', {
-                title: 'New ticket',
-                reason: 'duplicate',
-                ...frontmatter,
-            });
-            await expect(resolveTicket(cwd, '0001')).rejects.toThrow(
-                `Invalid duplicate-of ticket ID: ${path}`,
-            );
-        }
-    });
-});
+Deno.test(
+    'resolveTicket rejects invalid statuses, closure reasons, and duplicate references',
+    async () => {
+        await withWorkspace(async (cwd, tickets) => {
+            for (const status of ['', 'unknown', 1]) {
+                const path = await writeTicket(tickets, 'open', { title: 'New ticket', status });
+                await expect(resolveTicket(cwd, '0001')).rejects.toThrow(
+                    `Invalid ticket status: ${path}`,
+                );
+            }
+            await Deno.remove(join(tickets, 'open'), { recursive: true });
+            const reasons: Frontmatter[] = [{}, { reason: 'deferred' }, { reason: 1 }];
+            for (const frontmatter of reasons) {
+                const path = await writeTicket(tickets, 'closed', {
+                    title: 'New ticket',
+                    ...frontmatter,
+                });
+                await expect(resolveTicket(cwd, '0001')).rejects.toThrow(
+                    `Invalid ticket closure reason: ${path}`,
+                );
+            }
+            const duplicates: Frontmatter[] = [
+                {},
+                { 'duplicate-of': '' },
+                { 'duplicate-of': 2 },
+                {
+                    'duplicate-of': 'invalid',
+                },
+            ];
+            for (const frontmatter of duplicates) {
+                const path = await writeTicket(tickets, 'closed', {
+                    title: 'New ticket',
+                    reason: 'duplicate',
+                    ...frontmatter,
+                });
+                await expect(resolveTicket(cwd, '0001')).rejects.toThrow(
+                    `Invalid duplicate-of ticket ID: ${path}`,
+                );
+            }
+        });
+    },
+);
 
-Deno.test('resolveTicket returns an empty dependency array for empty or absent dependencies', async () => {
-    await withWorkspace(async (cwd, tickets) => {
-        const examples: Frontmatter[] = [{ title: 'New ticket', dependencies: [] }, {
-            title: 'New ticket',
-        }];
-        for (const frontmatter of examples) {
-            await writeTicket(tickets, 'open', frontmatter);
-            expect((await resolveTicket(cwd, '0001')).dependencies).toEqual([]);
-        }
-        await Deno.rename(
-            join(tickets, 'open', '0001-new-ticket.md'),
-            join(tickets, 'open', '10000-new-ticket.md'),
-        );
-        expect((await resolveTicket(cwd, '10000')).id).toBe('10000');
-    });
-});
+Deno.test(
+    'resolveTicket returns an empty dependency array for empty or absent dependencies',
+    async () => {
+        await withWorkspace(async (cwd, tickets) => {
+            const examples: Frontmatter[] = [
+                { title: 'New ticket', dependencies: [] },
+                {
+                    title: 'New ticket',
+                },
+            ];
+            for (const frontmatter of examples) {
+                await writeTicket(tickets, 'open', frontmatter);
+                expect((await resolveTicket(cwd, '0001')).dependencies).toEqual([]);
+            }
+            await Deno.rename(
+                join(tickets, 'open', '0001-new-ticket.md'),
+                join(tickets, 'open', '10000-new-ticket.md'),
+            );
+            expect((await resolveTicket(cwd, '10000')).id).toBe('10000');
+        });
+    },
+);
 
 Deno.test('resolveTicket rejects missing and ambiguous IDs', async () => {
     await withWorkspace(async (cwd, tickets) => {

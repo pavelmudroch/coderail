@@ -1,11 +1,12 @@
-import type { Command, ParsedArguments } from '@commands';
-import type { RunContext } from './helpers/command.ts';
-import { Harness, type HarnessConnector } from '@harness';
 import { Cli } from '@cli';
-import { dirname, join } from '@std/path';
-import { Path } from '@path';
-import { Log } from '@log';
+import type { Command, ParsedArguments } from '@commands';
+import { Harness, type HarnessConnector } from '@harness';
 import { InstallManifest, type Manifest } from '@install-manifest';
+import { Log } from '@log';
+import { Path } from '@path';
+import { dirname, join } from '@std/path';
+
+import type { RunContext } from './helpers/command.ts';
 
 type UninstallArguments = {
     help: boolean;
@@ -144,10 +145,12 @@ export class Uninstall implements Command<UninstallArguments> {
         }
         const errors: Error[] = [];
         for (const name of names) {
-            if (context.signal.aborted) break;
+            if (context.signal.aborted) {
+                break;
+            }
             try {
-                using harness = Harness.get(name) ??
-                    Cli.raiseUsageError(`Unknown harness "${name}".`, this);
+                using harness =
+                    Harness.get(name) ?? Cli.raiseUsageError(`Unknown harness "${name}".`, this);
                 await performHarnessUninstallation(harness, context);
             } catch (cause) {
                 const error = new Error(
@@ -158,7 +161,9 @@ export class Uninstall implements Command<UninstallArguments> {
                 errors.push(error);
             }
         }
-        if (errors.length) throw new AggregateError(errors, errors.map(message).join('\n'));
+        if (errors.length) {
+            throw new AggregateError(errors, errors.map(message).join('\n'));
+        }
         context.signal.throwIfAborted();
     }
 }
@@ -181,11 +186,14 @@ async function performHarnessUninstallation(
     let persistence = 'unchanged';
     const persist = async (baseline: Manifest): Promise<void> => {
         await inspectDestination(root, Path.INSTALL_MANIFEST_NAME);
-        const files = baseline.files.filter((file) =>
-            !removed.has(file.path) && !missing.has(file.path)
+        const files = baseline.files.filter(
+            (file) => !removed.has(file.path) && !missing.has(file.path),
         );
-        if (files.length) await InstallManifest.save(path, { ...baseline, files });
-        else await removeIfExists(path);
+        if (files.length) {
+            await InstallManifest.save(path, { ...baseline, files });
+        } else {
+            await removeIfExists(path);
+        }
         persistence = 'updated to track remaining files';
     };
     try {
@@ -207,10 +215,15 @@ async function performHarnessUninstallation(
         const inspections = await InstallManifest.inspect(root, manifest);
         for (const file of inspections) {
             context.signal.throwIfAborted();
-            if (file.status !== 'modified') continue;
-            if (!args.force) throw new Error(`Modified file "${file.path}" requires --force.`);
+            if (file.status !== 'modified') {
+                continue;
+            }
+            if (!args.force) {
+                throw new Error(`Modified file "${file.path}" requires --force.`);
+            }
             if (
-                !args.yes && !args.no &&
+                !args.yes &&
+                !args.no &&
                 (context.configuration.nonInteractive || !Deno.stdin.isTerminal())
             ) {
                 throw new Error('Confirmation requires an interactive terminal');
@@ -224,10 +237,12 @@ async function performHarnessUninstallation(
         }
         for (const file of inspections) {
             context.signal.throwIfAborted();
-            if (skipped.has(file.path)) continue;
+            if (skipped.has(file.path)) {
+                continue;
+            }
             if (
-                await inspectDestination(root, file.path) &&
-                await removeIfExists(join(root, file.path))
+                (await inspectDestination(root, file.path)) &&
+                (await removeIfExists(join(root, file.path)))
             ) {
                 removed.add(file.path);
                 let parent = dirname(join(root, file.path));
@@ -235,7 +250,9 @@ async function performHarnessUninstallation(
                     await removeIfEmpty(parent);
                     parent = dirname(parent);
                 }
-            } else missing.add(file.path);
+            } else {
+                missing.add(file.path);
+            }
         }
         await persist(manifest);
     } catch (cause) {
@@ -250,13 +267,16 @@ async function performHarnessUninstallation(
         }
         const list = (paths: Iterable<string>): string =>
             [...paths].map((item) => `"${join(root, item)}"`).join(', ') || 'none';
-        const pending = manifest?.files.filter((file) =>
-            !removed.has(file.path) && !missing.has(file.path) && !skipped.has(file.path)
-        ).map((file) => file.path);
+        const pending = manifest?.files
+            .filter(
+                (file) =>
+                    !removed.has(file.path) && !missing.has(file.path) && !skipped.has(file.path),
+            )
+            .map((file) => file.path);
         throw new Error(
-            `${message(cause)}\nRemoved: ${list(removed)}.\nAlready missing: ${
-                list(missing)
-            }.\nSkipped (kept): ${list(skipped)}.\nRemaining files: ${
+            `${message(cause)}\nRemoved: ${list(removed)}.\nAlready missing: ${list(
+                missing,
+            )}.\nSkipped (kept): ${list(skipped)}.\nRemaining files: ${
                 pending ? list(pending) : 'unknown; inspect the installation manifest'
             }.\nManifest "${path}": ${persistence}.${persistenceError}`,
             { cause },

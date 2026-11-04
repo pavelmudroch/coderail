@@ -1,7 +1,7 @@
+import { create } from './md/create.ts';
 import type { Frontmatter } from './md/helpers/frontmatter.ts';
 import { type Markdown, parse } from './md/parse.ts';
 import { toStream } from './md/to-stream.ts';
-import { create } from './md/create.ts';
 
 export type { Markdown };
 export type { Frontmatter, Scalar } from './md/helpers/frontmatter.ts';

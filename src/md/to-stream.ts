@@ -17,7 +17,9 @@ export function toStream(markdown: Markdown): ReadableStream<string> {
                 if (chunk.done) {
                     controller.close();
                     reader.releaseLock();
-                } else controller.enqueue(chunk.value);
+                } else {
+                    controller.enqueue(chunk.value);
+                }
             } catch (error) {
                 controller.error(error);
                 reader.releaseLock();

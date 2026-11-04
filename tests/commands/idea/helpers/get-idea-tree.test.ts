@@ -1,5 +1,6 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
+
 import { getIdeaTree } from '../../../../src/commands/idea/helpers/get-idea-tree.ts';
 
 async function withPlans(run: (plans: string, cwd: string) => Promise<void>): Promise<void> {
@@ -19,72 +20,75 @@ async function writeIdea(plans: string, path: string, metadata: string): Promise
     await Deno.writeTextFile(join(directory, 'IDEA.md'), `---\n${metadata}\n---\n# Body`);
 }
 
-Deno.test('getIdeaTree reads nested ideas, metadata, direct files, and sorted siblings', async () => {
-    await withPlans(async (plans, cwd) => {
-        await writeIdea(plans, 'z-root', 'title: Last\nstatus: ready');
-        await writeIdea(plans, 'a-root', 'title: "Parent: idea"\nstatus: split');
-        await writeIdea(plans, 'a-root/z-child', 'title: Last child\nstatus: open');
-        await writeIdea(plans, 'a-root/a-child', 'title: First child\nstatus: ready');
-        await writeIdea(plans, 'a-root/a-child/leaf', 'title: Leaf\nstatus: open');
-        await Deno.writeTextFile(join(plans, 'a-root', 'SPEC.md'), 'Specification');
-        await Deno.writeTextFile(join(plans, 'a-root', 'A.txt'), 'Attachment');
-        await Deno.writeTextFile(join(plans, 'README.md'), 'Not an idea');
-        await Deno.mkdir(join(plans, 'a-root', 'attachments'));
-        await writeIdea(plans, 'not-an-idea/hidden', 'title: Hidden\nstatus: ready');
-        await Deno.symlink(join(plans, 'a-root'), join(plans, 'linked-root'));
-        await Deno.symlink(join(plans, 'a-root'), join(plans, 'a-root', 'cycle'));
-        await Deno.symlink(join(plans, 'a-root', 'SPEC.md'), join(plans, 'a-root', 'link.md'));
-        await Deno.mkdir(join(plans, 'linked-metadata'));
-        await Deno.symlink(
-            join(plans, 'a-root', 'IDEA.md'),
-            join(plans, 'linked-metadata', 'IDEA.md'),
-        );
+Deno.test(
+    'getIdeaTree reads nested ideas, metadata, direct files, and sorted siblings',
+    async () => {
+        await withPlans(async (plans, cwd) => {
+            await writeIdea(plans, 'z-root', 'title: Last\nstatus: ready');
+            await writeIdea(plans, 'a-root', 'title: "Parent: idea"\nstatus: split');
+            await writeIdea(plans, 'a-root/z-child', 'title: Last child\nstatus: open');
+            await writeIdea(plans, 'a-root/a-child', 'title: First child\nstatus: ready');
+            await writeIdea(plans, 'a-root/a-child/leaf', 'title: Leaf\nstatus: open');
+            await Deno.writeTextFile(join(plans, 'a-root', 'SPEC.md'), 'Specification');
+            await Deno.writeTextFile(join(plans, 'a-root', 'A.txt'), 'Attachment');
+            await Deno.writeTextFile(join(plans, 'README.md'), 'Not an idea');
+            await Deno.mkdir(join(plans, 'a-root', 'attachments'));
+            await writeIdea(plans, 'not-an-idea/hidden', 'title: Hidden\nstatus: ready');
+            await Deno.symlink(join(plans, 'a-root'), join(plans, 'linked-root'));
+            await Deno.symlink(join(plans, 'a-root'), join(plans, 'a-root', 'cycle'));
+            await Deno.symlink(join(plans, 'a-root', 'SPEC.md'), join(plans, 'a-root', 'link.md'));
+            await Deno.mkdir(join(plans, 'linked-metadata'));
+            await Deno.symlink(
+                join(plans, 'a-root', 'IDEA.md'),
+                join(plans, 'linked-metadata', 'IDEA.md'),
+            );
 
-        const leaf = {
-            path: join(plans, 'a-root', 'a-child', 'leaf'),
-            id: 'a-root/a-child/leaf',
-            slug: 'leaf',
-            frontmatter: { title: 'Leaf', status: 'open' },
-            files: ['IDEA.md'],
-            children: [],
-        };
-        expect(await getIdeaTree(cwd)).toEqual([
-            {
-                path: join(plans, 'a-root'),
-                id: 'a-root',
-                slug: 'a-root',
-                frontmatter: { title: 'Parent: idea', status: 'split' },
-                files: ['A.txt', 'IDEA.md', 'SPEC.md'],
-                children: [
-                    {
-                        path: join(plans, 'a-root', 'a-child'),
-                        id: 'a-root/a-child',
-                        slug: 'a-child',
-                        frontmatter: { title: 'First child', status: 'ready' },
-                        files: ['IDEA.md'],
-                        children: [leaf],
-                    },
-                    {
-                        path: join(plans, 'a-root', 'z-child'),
-                        id: 'a-root/z-child',
-                        slug: 'z-child',
-                        frontmatter: { title: 'Last child', status: 'open' },
-                        files: ['IDEA.md'],
-                        children: [],
-                    },
-                ],
-            },
-            {
-                path: join(plans, 'z-root'),
-                id: 'z-root',
-                slug: 'z-root',
-                frontmatter: { title: 'Last', status: 'ready' },
+            const leaf = {
+                path: join(plans, 'a-root', 'a-child', 'leaf'),
+                id: 'a-root/a-child/leaf',
+                slug: 'leaf',
+                frontmatter: { title: 'Leaf', status: 'open' },
                 files: ['IDEA.md'],
                 children: [],
-            },
-        ]);
-    });
-});
+            };
+            expect(await getIdeaTree(cwd)).toEqual([
+                {
+                    path: join(plans, 'a-root'),
+                    id: 'a-root',
+                    slug: 'a-root',
+                    frontmatter: { title: 'Parent: idea', status: 'split' },
+                    files: ['A.txt', 'IDEA.md', 'SPEC.md'],
+                    children: [
+                        {
+                            path: join(plans, 'a-root', 'a-child'),
+                            id: 'a-root/a-child',
+                            slug: 'a-child',
+                            frontmatter: { title: 'First child', status: 'ready' },
+                            files: ['IDEA.md'],
+                            children: [leaf],
+                        },
+                        {
+                            path: join(plans, 'a-root', 'z-child'),
+                            id: 'a-root/z-child',
+                            slug: 'z-child',
+                            frontmatter: { title: 'Last child', status: 'open' },
+                            files: ['IDEA.md'],
+                            children: [],
+                        },
+                    ],
+                },
+                {
+                    path: join(plans, 'z-root'),
+                    id: 'z-root',
+                    slug: 'z-root',
+                    frontmatter: { title: 'Last', status: 'ready' },
+                    files: ['IDEA.md'],
+                    children: [],
+                },
+            ]);
+        });
+    },
+);
 
 Deno.test('getIdeaTree returns an empty tree for an empty plans directory', async () => {
     await withPlans(async (_plans, cwd) => {
@@ -104,10 +108,11 @@ Deno.test('getIdeaTree rejects relative paths and propagates filesystem errors',
     });
 });
 
-Deno.test('getIdeaTree rejects missing or invalid title and status with the idea filename', async () => {
-    await withPlans(async (plans, cwd) => {
-        for (
-            const metadata of [
+Deno.test(
+    'getIdeaTree rejects missing or invalid title and status with the idea filename',
+    async () => {
+        await withPlans(async (plans, cwd) => {
+            for (const metadata of [
                 '',
                 'status: ready',
                 'title: 42\nstatus: ready',
@@ -115,17 +120,17 @@ Deno.test('getIdeaTree rejects missing or invalid title and status with the idea
                 'title: Valid',
                 'title: Valid\nstatus: unknown',
                 'title: Valid\nstatus: null',
-            ]
-        ) {
-            await writeIdea(plans, 'invalid', metadata);
-            await expect(getIdeaTree(cwd)).rejects.toThrow(
-                `Invalid idea title or status: ${join(plans, 'invalid', 'IDEA.md')}`,
-            );
-        }
-        await Deno.writeTextFile(join(plans, 'invalid', 'IDEA.md'), '# No front matter');
-        await expect(getIdeaTree(cwd)).rejects.toThrow(join(plans, 'invalid', 'IDEA.md'));
-    });
-});
+            ]) {
+                await writeIdea(plans, 'invalid', metadata);
+                await expect(getIdeaTree(cwd)).rejects.toThrow(
+                    `Invalid idea title or status: ${join(plans, 'invalid', 'IDEA.md')}`,
+                );
+            }
+            await Deno.writeTextFile(join(plans, 'invalid', 'IDEA.md'), '# No front matter');
+            await expect(getIdeaTree(cwd)).rejects.toThrow(join(plans, 'invalid', 'IDEA.md'));
+        });
+    },
+);
 
 Deno.test('getIdeaTree reports malformed YAML with its filename and original cause', async () => {
     await withPlans(async (plans, cwd) => {

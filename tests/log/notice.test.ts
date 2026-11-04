@@ -1,6 +1,7 @@
 import { expect } from '@std/expect';
-import { notice } from '../../src/log/notice.ts';
+
 import { context } from '../../src/log/helpers/context.ts';
+import { notice } from '../../src/log/notice.ts';
 import { captureOutput } from './helpers.ts';
 
 Deno.test('notice writes formatted lines to stderr and respects log levels', () => {
@@ -15,12 +16,12 @@ Deno.test('notice writes formatted lines to stderr and respects log levels', () 
                 let redraws = 0;
                 context.currentLiveUiItem = live
                     ? {
-                        redraw(): void {
-                            expect(captured.stderr).toHaveLength(1);
-                            redraws++;
-                        },
-                        [Symbol.dispose](): void {},
-                    }
+                          redraw(): void {
+                              expect(captured.stderr).toHaveLength(1);
+                              redraws++;
+                          },
+                          [Symbol.dispose](): void {},
+                      }
                     : null;
                 notice('hello', 42);
                 const enabled = level === 'verbose';

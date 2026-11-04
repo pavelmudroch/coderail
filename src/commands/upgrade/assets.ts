@@ -1,4 +1,5 @@
 import { dirname, join } from '@std/path';
+
 import type { Manifest, ManifestFile } from '../../install-manifest.ts';
 import { InstallManifest } from '../../install-manifest.ts';
 import { canonicalRoot, fingerprint, regularFile } from '../../install-manifest/capture.ts';
@@ -37,7 +38,8 @@ export type AssetOptions = {
 function ownedPath(path: string): void {
     validatePath(path);
     if (
-        !/^(instructions|templates)\/.+/.test(path) && !/^libexec\/cr-[A-Za-z0-9_.-]+$/.test(path)
+        !/^(instructions|templates)\/.+/.test(path) &&
+        !/^libexec\/cr-[A-Za-z0-9_.-]+$/.test(path)
     ) {
         throw new Error(`Invalid distribution ownership path: ${path}`);
     }
@@ -71,9 +73,9 @@ async function resources(root: string, directory: string): Promise<ManifestFile[
     for await (const entry of Deno.readDir(join(root, directory))) {
         const path = `${directory}/${entry.name}`;
         if (entry.isDirectory) {
-            result.push(...await resources(root, path));
+            result.push(...(await resources(root, path)));
         } else {
-            result.push({ path, ...await fingerprint(await regularFile(root, path)) });
+            result.push({ path, ...(await fingerprint(await regularFile(root, path))) });
         }
     }
     return result.sort((a, b) => a.path.localeCompare(b.path));
@@ -97,8 +99,10 @@ export async function planAssets(
 ): Promise<AssetPlan> {
     const root = await canonicalRoot(installation);
     await inspectDestination(root, DISTRIBUTION_MANIFEST);
-    const manifest = await InstallManifest.load(join(root, DISTRIBUTION_MANIFEST)) ??
-        { version: 1, files: [] };
+    const manifest = (await InstallManifest.load(join(root, DISTRIBUTION_MANIFEST))) ?? {
+        version: 1,
+        files: [],
+    };
     validate(manifest);
     const destinations = new Map<string, boolean>();
     for (const file of manifest.files) {
@@ -107,8 +111,8 @@ export async function planAssets(
     }
     const staged = await canonicalRoot(stage.root);
     const incoming = [
-        ...await resources(staged, 'instructions'),
-        ...await resources(staged, 'templates'),
+        ...(await resources(staged, 'instructions')),
+        ...(await resources(staged, 'templates')),
     ];
     for (const file of incoming) {
         destinations.set(file.path, await inspectDestination(root, file.path));
@@ -125,10 +129,12 @@ export async function planAssets(
             file,
             source: join(staged, file.path),
         })),
-        ...assets.filter((file) => !incomingPaths.has(file.path)).map((file) => ({
-            kind: 'remove' as const,
-            file,
-        })),
+        ...assets
+            .filter((file) => !incomingPaths.has(file.path))
+            .map((file) => ({
+                kind: 'remove' as const,
+                file,
+            })),
     ];
     const actions: AssetAction[] = [];
     const absent: string[] = [];
@@ -151,7 +157,9 @@ export async function planAssets(
         throw new Error('Distribution asset conflicts require force');
     }
     if (
-        conflicts.length && !options.yes && !options.no &&
+        conflicts.length &&
+        !options.yes &&
+        !options.no &&
         (!options.interactive || !options.confirm)
     ) {
         throw new Error('Distribution conflicts require an interactive confirmation or yes/no');
@@ -176,15 +184,18 @@ export async function planAssets(
         action.approved = options.yes
             ? true
             : options.no
-            ? false
-            : await options.confirm?.(action) === true;
+              ? false
+              : (await options.confirm?.(action)) === true;
     }
     return plan;
 }
 
 export type AssetProgress = { written: string[]; removed: string[]; manifestSaved: boolean };
 export class AssetApplyError extends Error {
-    constructor(public progress: AssetProgress, cause: unknown) {
+    constructor(
+        public progress: AssetProgress,
+        cause: unknown,
+    ) {
         super('Distribution asset application failed', { cause });
     }
 }
@@ -239,10 +250,9 @@ export async function applyAssets(
         await inspectDestination(plan.root, DISTRIBUTION_MANIFEST);
         const removed = new Set([...plan.absent, ...progress.removed]);
         const files = new Map(
-            plan.manifest.files.filter((file) => !removed.has(file.path)).map((file) => [
-                file.path,
-                file,
-            ]),
+            plan.manifest.files
+                .filter((file) => !removed.has(file.path))
+                .map((file) => [file.path, file]),
         );
         for (const file of writtenFiles) {
             files.set(file.path, file);

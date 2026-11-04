@@ -1,5 +1,6 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
+
 import { getIdeaFrontmatter } from '../../../../src/commands/idea/helpers/get-idea-frontmatter.ts';
 
 async function withIdea(run: (filePath: string) => Promise<void>): Promise<void> {
@@ -25,20 +26,18 @@ Deno.test('getIdeaFrontmatter reads title and each supported status', async () =
 
 Deno.test('getIdeaFrontmatter rejects missing or invalid metadata', async () => {
     await withIdea(async (filePath) => {
-        for (
-            const metadata of [
-                '',
-                'status: ready',
-                'title: 42\nstatus: ready',
-                'title: "  "\nstatus: ready',
-                'title: [Idea]\nstatus: ready',
-                'title: Idea',
-                'title: Idea\nstatus: unknown',
-                'title: Idea\nstatus: forging',
-                'title: Idea\nstatus: true',
-                'title: Idea\nstatus: [ready]',
-            ]
-        ) {
+        for (const metadata of [
+            '',
+            'status: ready',
+            'title: 42\nstatus: ready',
+            'title: "  "\nstatus: ready',
+            'title: [Idea]\nstatus: ready',
+            'title: Idea',
+            'title: Idea\nstatus: unknown',
+            'title: Idea\nstatus: forging',
+            'title: Idea\nstatus: true',
+            'title: Idea\nstatus: [ready]',
+        ]) {
             await Deno.writeTextFile(filePath, `---\n${metadata}\n---\n# Body`);
             await expect(getIdeaFrontmatter(filePath)).rejects.toThrow(
                 `Invalid idea title or status: ${filePath}`,
@@ -51,20 +50,23 @@ Deno.test('getIdeaFrontmatter rejects missing or invalid metadata', async () => 
     });
 });
 
-Deno.test('getIdeaFrontmatter reports malformed front matter with its filename and cause', async () => {
-    await withIdea(async (filePath) => {
-        await Deno.writeTextFile(filePath, '---\ntitle: [broken\nstatus: ready\n---');
-        try {
-            await getIdeaFrontmatter(filePath);
-            throw new Error('Expected malformed front matter to reject');
-        } catch (error) {
-            expect(error).toBeInstanceOf(Error);
-            const failure = error as Error;
-            expect(failure.message).toBe(`Invalid idea front matter: ${filePath}`);
-            expect(failure.cause).toBeInstanceOf(SyntaxError);
-        }
-    });
-});
+Deno.test(
+    'getIdeaFrontmatter reports malformed front matter with its filename and cause',
+    async () => {
+        await withIdea(async (filePath) => {
+            await Deno.writeTextFile(filePath, '---\ntitle: [broken\nstatus: ready\n---');
+            try {
+                await getIdeaFrontmatter(filePath);
+                throw new Error('Expected malformed front matter to reject');
+            } catch (error) {
+                expect(error).toBeInstanceOf(Error);
+                const failure = error as Error;
+                expect(failure.message).toBe(`Invalid idea front matter: ${filePath}`);
+                expect(failure.cause).toBeInstanceOf(SyntaxError);
+            }
+        });
+    },
+);
 
 Deno.test('getIdeaFrontmatter propagates filesystem errors', async () => {
     await withIdea(async (filePath) => {

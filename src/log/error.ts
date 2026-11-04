@@ -1,7 +1,7 @@
-import { writeSync } from './helpers/write-sync.ts';
 import { clear, red } from './helpers/ansi.ts';
 import { context } from './helpers/context.ts';
 import { stringifyMessages } from './helpers/stringifyMessages.ts';
+import { writeSync } from './helpers/write-sync.ts';
 
 export function error(...messages: unknown[]): void {
     const messageString = `${red('error:')} ${stringifyMessages(messages)}`;

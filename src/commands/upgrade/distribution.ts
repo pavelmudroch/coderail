@@ -1,3 +1,5 @@
+import { crc32, inflateRawSync } from 'node:zlib';
+
 /**
  * Release consumption contract (publisher workflows are deliberately separate).
  *
@@ -25,7 +27,6 @@
  * remove it. Consumers must finish using/copying staged files inside callback.
  */
 import { dirname, join } from '@std/path';
-import { crc32, inflateRawSync } from 'node:zlib';
 
 const API = 'https://api.github.com/repos/pavelmudroch/coderail';
 const MAX_DOWNLOAD = 512 * 1024 * 1024;
@@ -66,7 +67,9 @@ export type StagedDistribution = {
 };
 
 function requireValid(condition: unknown, message: string): asserts condition {
-    if (!condition) throw new Error(message);
+    if (!condition) {
+        throw new Error(message);
+    }
 }
 
 export function targetTriple(os: string, arch: string): string {
@@ -95,9 +98,10 @@ async function request(path: string, fetcher: typeof fetch, binary = false): Pro
 
 async function list<T>(path: string, fetcher: typeof fetch): Promise<T[]> {
     const all: T[] = [];
-    for (let page = 1;; page++) {
-        const items: unknown = await (await request(`${path}?per_page=100&page=${page}`, fetcher))
-            .json();
+    for (let page = 1; ; page++) {
+        const items: unknown = await (
+            await request(`${path}?per_page=100&page=${page}`, fetcher)
+        ).json();
         requireValid(Array.isArray(items), 'Invalid GitHub list response');
         all.push(...items);
         if (items.length < 100) {
@@ -108,9 +112,13 @@ async function list<T>(path: string, fetcher: typeof fetch): Promise<T[]> {
 
 function inspectPublication(value: Release): Release {
     requireValid(
-        value && Number.isSafeInteger(value.id) && value.id > 0 &&
-            typeof value.tag_name === 'string' && value.draft === false &&
-            typeof value.prerelease === 'boolean' && typeof value.updated_at === 'string' &&
+        value &&
+            Number.isSafeInteger(value.id) &&
+            value.id > 0 &&
+            typeof value.tag_name === 'string' &&
+            value.draft === false &&
+            typeof value.prerelease === 'boolean' &&
+            typeof value.updated_at === 'string' &&
             /^[0-9a-f]{40}$/.test(value.target_commitish),
         'Invalid release publication identity',
     );
@@ -130,9 +138,15 @@ function selectAsset(assets: Asset[], name: string): Asset {
     const matches = assets.filter((asset) => asset?.name === name);
     const asset = matches[0];
     requireValid(
-        matches.length === 1 && asset && Number.isSafeInteger(asset.id) && asset.id > 0 &&
-            Number.isSafeInteger(asset.size) && asset.size > 0 && asset.size <= MAX_DOWNLOAD &&
-            typeof asset.updated_at === 'string' && asset.state === 'uploaded',
+        matches.length === 1 &&
+            asset &&
+            Number.isSafeInteger(asset.id) &&
+            asset.id > 0 &&
+            Number.isSafeInteger(asset.size) &&
+            asset.size > 0 &&
+            asset.size <= MAX_DOWNLOAD &&
+            typeof asset.updated_at === 'string' &&
+            asset.state === 'uploaded',
         `Missing or invalid release asset: ${name}`,
     );
     return {
@@ -164,11 +178,16 @@ export async function resolveRelease(
     } else {
         const selector = selection.version ?? 'latest';
         const parts = selector.replace(/^v/, '').split('.');
-        const candidates = (await list<Release>('/releases', fetcher)).filter((release) =>
-            release && release.draft === false && release.prerelease === false &&
-            /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(release.tag_name) &&
-            (selector === 'latest' ||
-                parts.every((part, i) => release.tag_name.replace(/^v/, '').split('.')[i] === part))
+        const candidates = (await list<Release>('/releases', fetcher)).filter(
+            (release) =>
+                release &&
+                release.draft === false &&
+                release.prerelease === false &&
+                /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(release.tag_name) &&
+                (selector === 'latest' ||
+                    parts.every(
+                        (part, i) => release.tag_name.replace(/^v/, '').split('.')[i] === part,
+                    )),
         );
         candidates.sort((a, b) => {
             const left = a.tag_name.replace(/^v/, '').split('.').map(BigInt) as [
@@ -238,17 +257,25 @@ type ZipEntry = { path: string; directory: boolean; data: Uint8Array };
 function safePath(name: string): string {
     const path = name.endsWith('/') ? name.slice(0, -1) : name;
     requireValid(
-        path.split('/').every((part) =>
-            /^[A-Za-z0-9_. -]+$/.test(part) &&
-            !['.', '..'].includes(part) && !/[. ]$/.test(part) &&
-            !/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(part)
-        ),
+        path
+            .split('/')
+            .every(
+                (part) =>
+                    /^[A-Za-z0-9_. -]+$/.test(part) &&
+                    !['.', '..'].includes(part) &&
+                    !/[. ]$/.test(part) &&
+                    !/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(part),
+            ),
         'Unsafe archive path',
     );
     requireValid(
-        path === 'cr' || path === 'cr.exe' || path === 'build.json' ||
-            path === 'instructions' || path.startsWith('instructions/') ||
-            path === 'templates' || path.startsWith('templates/'),
+        path === 'cr' ||
+            path === 'cr.exe' ||
+            path === 'build.json' ||
+            path === 'instructions' ||
+            path.startsWith('instructions/') ||
+            path === 'templates' ||
+            path.startsWith('templates/'),
         'Unexpected archive root',
     );
     return path;
@@ -260,8 +287,11 @@ function readZip(bytes: Uint8Array): ZipEntry[] {
     const u32 = (at: number): number => view.getUint32(at, true);
     const end = bytes.length - 22;
     requireValid(
-        end >= 0 && u32(end) === 0x06054b50 && u16(end + 20) === 0 &&
-            u32(end + 4) === 0 && u16(end + 8) === u16(end + 10),
+        end >= 0 &&
+            u32(end) === 0x06054b50 &&
+            u16(end + 20) === 0 &&
+            u32(end + 4) === 0 &&
+            u16(end + 8) === u16(end + 10),
         'Invalid ZIP end record',
     );
     const count = u16(end + 10);
@@ -277,7 +307,8 @@ function readZip(bytes: Uint8Array): ZipEntry[] {
     const decoder = new TextDecoder('utf-8', { fatal: true });
     for (let i = 0; i < count; i++) {
         requireValid(
-            u32(central) === 0x02014b50 && u16(central + 34) === 0 &&
+            u32(central) === 0x02014b50 &&
+                u16(central + 34) === 0 &&
                 (u16(central + 8) & ~0x800) === 0,
             'Unsupported ZIP entry',
         );
@@ -297,10 +328,14 @@ function readZip(bytes: Uint8Array): ZipEntry[] {
         requireValid(!paths.has(key), 'Duplicate archive destination');
         paths.set(key, { path, directory });
         requireValid(
-            u32(central + 42) === local && u32(local) === 0x04034b50 &&
-                u16(local + 6) === u16(central + 8) && u16(local + 8) === method &&
-                u32(local + 14) === u32(central + 16) && u32(local + 18) === compressed &&
-                u32(local + 22) === size && u16(local + 26) === length &&
+            u32(central + 42) === local &&
+                u32(local) === 0x04034b50 &&
+                u16(local + 6) === u16(central + 8) &&
+                u16(local + 8) === method &&
+                u32(local + 14) === u32(central + 16) &&
+                u32(local + 18) === compressed &&
+                u32(local + 22) === size &&
+                u16(local + 26) === length &&
                 decoder.decode(bytes.subarray(local + 30, local + 30 + length)) === name,
             'Mismatched ZIP headers',
         );
@@ -313,12 +348,10 @@ function readZip(bytes: Uint8Array): ZipEntry[] {
             'Unsupported or oversized ZIP',
         );
         const input = bytes.subarray(start, local);
-        const data = method === 0
-            ? input
-            : inflateRawSync(input, { maxOutputLength: Math.max(1, size) });
+        const data =
+            method === 0 ? input : inflateRawSync(input, { maxOutputLength: Math.max(1, size) });
         requireValid(
-            data.length === size && crc32(data) === u32(central + 16) &&
-                (!directory || size === 0),
+            data.length === size && crc32(data) === u32(central + 16) && (!directory || size === 0),
             'Corrupt ZIP content',
         );
         entries.push({ path, directory, data });
@@ -346,14 +379,25 @@ function validateExecutable(bytes: Uint8Array, target: string): void {
     const x64 = target.startsWith('x86_64-');
     let valid: boolean;
     if (target.includes('linux')) {
-        valid = bytes[0] === 127 && bytes[1] === 69 && bytes[2] === 76 && bytes[3] === 70 &&
-            bytes[4] === 2 && bytes[5] === 1 && view.getUint16(18, true) === (x64 ? 62 : 183);
+        valid =
+            bytes[0] === 127 &&
+            bytes[1] === 69 &&
+            bytes[2] === 76 &&
+            bytes[3] === 70 &&
+            bytes[4] === 2 &&
+            bytes[5] === 1 &&
+            view.getUint16(18, true) === (x64 ? 62 : 183);
     } else if (target.includes('apple')) {
-        valid = view.getUint32(0, true) === 0xfeedfacf &&
+        valid =
+            view.getUint32(0, true) === 0xfeedfacf &&
             view.getUint32(4, true) === (x64 ? 0x01000007 : 0x0100000c);
     } else {
         const pe = view.getUint32(60, true);
-        valid = bytes[0] === 77 && bytes[1] === 90 && pe >= 64 && pe + 6 <= bytes.length &&
+        valid =
+            bytes[0] === 77 &&
+            bytes[1] === 90 &&
+            pe >= 64 &&
+            pe + 6 <= bytes.length &&
             view.getUint32(pe, true) === 0x4550 &&
             view.getUint16(pe + 4, true) === (x64 ? 0x8664 : 0xaa64);
     }
@@ -391,8 +435,11 @@ export async function withStagedDistribution<T>(
             new TextDecoder('utf-8', { fatal: true }).decode(metadata.data),
         );
         requireValid(
-            build && build.schemaVersion === 1 && build.version === resolved.version &&
-                build.commit === resolved.commit && build.target === resolved.target,
+            build &&
+                build.schemaVersion === 1 &&
+                build.version === resolved.version &&
+                build.commit === resolved.commit &&
+                build.target === resolved.target,
             'Build metadata mismatch',
         );
         for (const resource of ['instructions', 'templates']) {
@@ -401,16 +448,19 @@ export async function withStagedDistribution<T>(
                 `Missing ${resource} contents`,
             );
             requireValid(
-                !entries.some((entry) =>
-                    !entry.directory && (entry.path === resource ||
-                        (entry.path.startsWith(`${resource}/`) && entry.data.length === 0))
+                !entries.some(
+                    (entry) =>
+                        !entry.directory &&
+                        (entry.path === resource ||
+                            (entry.path.startsWith(`${resource}/`) && entry.data.length === 0)),
                 ),
                 'Invalid resource content',
             );
         }
         const current = inspectPublication(
-            await (await request(`/releases/tags/${resolved.publication.tag_name}`, fetcher))
-                .json(),
+            await (
+                await request(`/releases/tags/${resolved.publication.tag_name}`, fetcher)
+            ).json(),
         );
         const assets = await list<Asset>(`/releases/${current.id}/assets`, fetcher);
         requireValid(

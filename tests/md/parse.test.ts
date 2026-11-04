@@ -1,9 +1,12 @@
 import { expect } from '@std/expect';
+
 import { parse } from '../../src/md/parse.ts';
 function stream(...chunks: string[]): ReadableStream<string> {
     return new ReadableStream({
         start(controller): void {
-            for (const chunk of chunks) controller.enqueue(chunk);
+            for (const chunk of chunks) {
+                controller.enqueue(chunk);
+            }
             controller.close();
         },
     });
@@ -11,7 +14,9 @@ function stream(...chunks: string[]): ReadableStream<string> {
 
 async function text(content: ReadableStream<string>): Promise<string> {
     let result = '';
-    for await (const chunk of content) result += chunk;
+    for await (const chunk of content) {
+        result += chunk;
+    }
     return result;
 }
 
@@ -63,8 +68,11 @@ Deno.test('Md::parse preserves source failures and releases the reader', async (
     let reads = 0;
     const body = new ReadableStream<string>({
         pull(controller): void {
-            if (reads++ === 0) controller.enqueue('---\n---\n');
-            else controller.error(failure);
+            if (reads++ === 0) {
+                controller.enqueue('---\n---\n');
+            } else {
+                controller.error(failure);
+            }
         },
     });
     const markdown = await parse(body);
@@ -98,12 +106,17 @@ Deno.test('Md::parse forwards cancellation and releases the source lock', async 
             },
             cancel(value): void {
                 reason = value;
-                if (fails) throw failure;
+                if (fails) {
+                    throw failure;
+                }
             },
         });
         const markdown = await parse(source);
-        if (fails) await expect(markdown.content.cancel('stop')).rejects.toBe(failure);
-        else await markdown.content.cancel('stop');
+        if (fails) {
+            await expect(markdown.content.cancel('stop')).rejects.toBe(failure);
+        } else {
+            await markdown.content.cancel('stop');
+        }
         expect(reason).toBe('stop');
         expect(source.locked).toBe(false);
     }

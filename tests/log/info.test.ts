@@ -1,6 +1,7 @@
 import { expect } from '@std/expect';
-import { info } from '../../src/log/info.ts';
+
 import { context } from '../../src/log/helpers/context.ts';
+import { info } from '../../src/log/info.ts';
 import { captureOutput } from './helpers.ts';
 
 Deno.test('info writes formatted lines to stderr and respects log levels', () => {
@@ -15,12 +16,12 @@ Deno.test('info writes formatted lines to stderr and respects log levels', () =>
                 let redraws = 0;
                 context.currentLiveUiItem = live
                     ? {
-                        redraw(): void {
-                            expect(captured.stderr).toHaveLength(1);
-                            redraws++;
-                        },
-                        [Symbol.dispose](): void {},
-                    }
+                          redraw(): void {
+                              expect(captured.stderr).toHaveLength(1);
+                              redraws++;
+                          },
+                          [Symbol.dispose](): void {},
+                      }
                     : null;
                 info('hello', 42);
                 const enabled = level !== 'quiet';

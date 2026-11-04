@@ -1,5 +1,6 @@
 import { expect } from '@std/expect';
 import { dirname, join } from '@std/path';
+
 import {
     applyAssets,
     AssetApplyError,
@@ -38,7 +39,9 @@ async function fixture(
 }
 async function manifest(root: string): Promise<Manifest> {
     const value = await InstallManifest.load(join(root, DISTRIBUTION_MANIFEST));
-    if (!value) throw new Error('Missing manifest');
+    if (!value) {
+        throw new Error('Missing manifest');
+    }
     return value;
 }
 const io: AssetIO = {
@@ -50,137 +53,154 @@ const io: AssetIO = {
     save: InstallManifest.save,
 };
 
-Deno.test('bootstrap recognizes running binary and restores same-version missing assets', async () => {
-    await fixture(async (root, stage) => {
-        await put(root, 'libexec/cr-1.0.0', 'binary');
-        await put(root, 'templates/personal.md', 'personal');
-        const plan = await planAssets(root, stage, {
-            runningExecutable: join(root, 'libexec/cr-1.0.0'),
+Deno.test(
+    'bootstrap recognizes running binary and restores same-version missing assets',
+    async () => {
+        await fixture(async (root, stage) => {
+            await put(root, 'libexec/cr-1.0.0', 'binary');
+            await put(root, 'templates/personal.md', 'personal');
+            const plan = await planAssets(root, stage, {
+                runningExecutable: join(root, 'libexec/cr-1.0.0'),
+            });
+            expect(plan.bootstrap?.path).toBe('libexec/cr-1.0.0');
+            await applyAssets(plan);
+            expect((await manifest(root)).files.length).toBe(2);
+            await Deno.remove(join(root, 'instructions/a.md'));
+            await applyAssets(await planAssets(root, stage));
+            expect(await Deno.readTextFile(join(root, 'instructions/a.md'))).toBe('release');
+            expect(await Deno.readTextFile(join(root, 'templates/personal.md'))).toBe('personal');
         });
-        expect(plan.bootstrap?.path).toBe('libexec/cr-1.0.0');
-        await applyAssets(plan);
-        expect((await manifest(root)).files.length).toBe(2);
-        await Deno.remove(join(root, 'instructions/a.md'));
-        await applyAssets(await planAssets(root, stage));
-        expect(await Deno.readTextFile(join(root, 'instructions/a.md'))).toBe('release');
-        expect(await Deno.readTextFile(join(root, 'templates/personal.md'))).toBe('personal');
-    });
-});
+    },
+);
 
-Deno.test('conflicts, noninteractive prompts and late unsafe paths never mutate installation', async () => {
-    await fixture(async (root, stage) => {
-        await put(root, 'templates/default.md', 'user');
-        await expect(planAssets(root, stage)).rejects.toThrow('force');
-        await expect(planAssets(root, stage, { force: true })).rejects.toThrow('interactive');
-        expect(await Deno.readTextFile(join(root, 'templates/default.md'))).toBe('user');
-        await expect(Deno.stat(join(root, 'instructions'))).rejects.toThrow();
-        await Deno.symlink(stage.instructions, join(root, 'instructions'));
-        let prompts = 0;
-        await expect(planAssets(root, stage, {
-            force: true,
-            interactive: true,
-            confirm: () => {
-                prompts++;
-                return true;
-            },
-        })).rejects.toThrow('Unsafe');
-        expect(prompts).toBe(0);
-    });
-});
-
-Deno.test('declined untracked collisions remain unowned; yes claims only approved destinations', async () => {
-    await fixture(async (root, stage) => {
-        await put(root, 'templates/default.md', 'user');
-        await applyAssets(await planAssets(root, stage, { force: true, no: true }));
-        expect((await manifest(root)).files.map((file) => file.path)).toEqual([
-            'instructions/a.md',
-        ]);
-        expect(await Deno.readTextFile(join(root, 'templates/default.md'))).toBe('user');
-        await applyAssets(await planAssets(root, stage, { force: true, yes: true }));
-        expect((await manifest(root)).files.length).toBe(2);
-        expect(await Deno.readTextFile(join(root, 'templates/default.md'))).toBe('release');
-    });
-});
-
-Deno.test('all per-file decisions precede writes; declined tracked overwrite/removal retain baselines', async () => {
-    await fixture(async (root, stage) => {
-        await applyAssets(await planAssets(root, stage));
-        await put(root, 'templates/obsolete.md', 'baseline');
-        const prior = await InstallManifest.capture(root, [
-            'instructions/a.md',
-            'templates/default.md',
-            'templates/obsolete.md',
-        ]);
-        await InstallManifest.save(join(root, DISTRIBUTION_MANIFEST), prior);
-        await put(stage.root, 'instructions/a.md', 'new instruction');
-        await put(stage.root, 'templates/default.md', 'new template');
-        await put(root, 'instructions/a.md', 'edited instruction');
-        await put(root, 'templates/default.md', 'edited template');
-        await put(root, 'templates/obsolete.md', 'edited obsolete');
-        const decisions: string[] = [];
-        const plan = await planAssets(root, stage, {
-            force: true,
-            interactive: true,
-            async confirm(action): Promise<boolean> {
-                expect(await Deno.readTextFile(join(root, 'instructions/a.md'))).toBe(
-                    'edited instruction',
-                );
-                decisions.push(action.file.path);
-                return action.file.path === 'templates/default.md';
-            },
+Deno.test(
+    'conflicts, noninteractive prompts and late unsafe paths never mutate installation',
+    async () => {
+        await fixture(async (root, stage) => {
+            await put(root, 'templates/default.md', 'user');
+            await expect(planAssets(root, stage)).rejects.toThrow('force');
+            await expect(planAssets(root, stage, { force: true })).rejects.toThrow('interactive');
+            expect(await Deno.readTextFile(join(root, 'templates/default.md'))).toBe('user');
+            await expect(Deno.stat(join(root, 'instructions'))).rejects.toThrow();
+            await Deno.symlink(stage.instructions, join(root, 'instructions'));
+            let prompts = 0;
+            await expect(
+                planAssets(root, stage, {
+                    force: true,
+                    interactive: true,
+                    confirm: () => {
+                        prompts++;
+                        return true;
+                    },
+                }),
+            ).rejects.toThrow('Unsafe');
+            expect(prompts).toBe(0);
         });
-        expect(decisions.length).toBe(3);
-        await applyAssets(plan);
-        const actual = await manifest(root);
-        expect(actual.files.find((file) => file.path === 'instructions/a.md')).toEqual(
-            prior.files.find((file) => file.path === 'instructions/a.md'),
-        );
-        expect(actual.files.find((file) => file.path === 'templates/obsolete.md')).toEqual(
-            prior.files.find((file) => file.path === 'templates/obsolete.md'),
-        );
-        expect(actual.files.find((file) => file.path === 'templates/default.md')).not.toEqual(
-            prior.files.find((file) => file.path === 'templates/default.md'),
-        );
-        expect(await Deno.readTextFile(join(root, 'templates/obsolete.md'))).toBe(
-            'edited obsolete',
-        );
-        expect(await Deno.readTextFile(join(root, 'templates/default.md'))).toBe('new template');
-    });
-});
+    },
+);
 
-Deno.test('unchanged obsolete files and verified missing entries are removed without directory deletion', async () => {
-    await fixture(async (root, stage) => {
-        await put(root, 'templates/old.md');
-        await put(root, 'templates/missing.md');
-        await put(root, 'templates/personal.md', 'personal');
-        await InstallManifest.save(
-            join(root, DISTRIBUTION_MANIFEST),
-            await InstallManifest.capture(root, ['templates/old.md', 'templates/missing.md']),
-        );
-        await Deno.remove(join(root, 'templates/missing.md'));
-        await applyAssets(await planAssets(root, stage));
-        expect((await manifest(root)).files.length).toBe(2);
-        await expect(Deno.stat(join(root, 'templates/old.md'))).rejects.toThrow();
-        expect(await Deno.readTextFile(join(root, 'templates/personal.md'))).toBe('personal');
-    });
-});
+Deno.test(
+    'declined untracked collisions remain unowned; yes claims only approved destinations',
+    async () => {
+        await fixture(async (root, stage) => {
+            await put(root, 'templates/default.md', 'user');
+            await applyAssets(await planAssets(root, stage, { force: true, no: true }));
+            expect((await manifest(root)).files.map((file) => file.path)).toEqual([
+                'instructions/a.md',
+            ]);
+            expect(await Deno.readTextFile(join(root, 'templates/default.md'))).toBe('user');
+            await applyAssets(await planAssets(root, stage, { force: true, yes: true }));
+            expect((await manifest(root)).files.length).toBe(2);
+            expect(await Deno.readTextFile(join(root, 'templates/default.md'))).toBe('release');
+        });
+    },
+);
+
+Deno.test(
+    'all per-file decisions precede writes; declined tracked overwrite/removal retain baselines',
+    async () => {
+        await fixture(async (root, stage) => {
+            await applyAssets(await planAssets(root, stage));
+            await put(root, 'templates/obsolete.md', 'baseline');
+            const prior = await InstallManifest.capture(root, [
+                'instructions/a.md',
+                'templates/default.md',
+                'templates/obsolete.md',
+            ]);
+            await InstallManifest.save(join(root, DISTRIBUTION_MANIFEST), prior);
+            await put(stage.root, 'instructions/a.md', 'new instruction');
+            await put(stage.root, 'templates/default.md', 'new template');
+            await put(root, 'instructions/a.md', 'edited instruction');
+            await put(root, 'templates/default.md', 'edited template');
+            await put(root, 'templates/obsolete.md', 'edited obsolete');
+            const decisions: string[] = [];
+            const plan = await planAssets(root, stage, {
+                force: true,
+                interactive: true,
+                async confirm(action): Promise<boolean> {
+                    expect(await Deno.readTextFile(join(root, 'instructions/a.md'))).toBe(
+                        'edited instruction',
+                    );
+                    decisions.push(action.file.path);
+                    return action.file.path === 'templates/default.md';
+                },
+            });
+            expect(decisions.length).toBe(3);
+            await applyAssets(plan);
+            const actual = await manifest(root);
+            expect(actual.files.find((file) => file.path === 'instructions/a.md')).toEqual(
+                prior.files.find((file) => file.path === 'instructions/a.md'),
+            );
+            expect(actual.files.find((file) => file.path === 'templates/obsolete.md')).toEqual(
+                prior.files.find((file) => file.path === 'templates/obsolete.md'),
+            );
+            expect(actual.files.find((file) => file.path === 'templates/default.md')).not.toEqual(
+                prior.files.find((file) => file.path === 'templates/default.md'),
+            );
+            expect(await Deno.readTextFile(join(root, 'templates/obsolete.md'))).toBe(
+                'edited obsolete',
+            );
+            expect(await Deno.readTextFile(join(root, 'templates/default.md'))).toBe(
+                'new template',
+            );
+        });
+    },
+);
+
+Deno.test(
+    'unchanged obsolete files and verified missing entries are removed without directory deletion',
+    async () => {
+        await fixture(async (root, stage) => {
+            await put(root, 'templates/old.md');
+            await put(root, 'templates/missing.md');
+            await put(root, 'templates/personal.md', 'personal');
+            await InstallManifest.save(
+                join(root, DISTRIBUTION_MANIFEST),
+                await InstallManifest.capture(root, ['templates/old.md', 'templates/missing.md']),
+            );
+            await Deno.remove(join(root, 'templates/missing.md'));
+            await applyAssets(await planAssets(root, stage));
+            expect((await manifest(root)).files.length).toBe(2);
+            await expect(Deno.stat(join(root, 'templates/old.md'))).rejects.toThrow();
+            expect(await Deno.readTextFile(join(root, 'templates/personal.md'))).toBe('personal');
+        });
+    },
+);
 
 Deno.test('malformed and out-of-scope ownership and linked manifest fail preflight', async () => {
     await fixture(async (root, stage) => {
-        for (
-            const value of [
-                '{',
-                JSON.stringify({ version: 2, files: [] }),
-                JSON.stringify({
-                    version: 1,
-                    files: [{ path: '../outside', checksum: 'a'.repeat(64), size: 1 }],
-                }),
-                JSON.stringify({
-                    version: 1,
-                    files: [{ path: 'personal', checksum: 'a'.repeat(64), size: 1 }],
-                }),
-            ]
-        ) {
+        for (const value of [
+            '{',
+            JSON.stringify({ version: 2, files: [] }),
+            JSON.stringify({
+                version: 1,
+                files: [{ path: '../outside', checksum: 'a'.repeat(64), size: 1 }],
+            }),
+            JSON.stringify({
+                version: 1,
+                files: [{ path: 'personal', checksum: 'a'.repeat(64), size: 1 }],
+            }),
+        ]) {
             await put(root, DISTRIBUTION_MANIFEST, value);
             await expect(planAssets(root, stage)).rejects.toThrow();
             await expect(Deno.stat(join(root, 'instructions'))).rejects.toThrow();
@@ -191,41 +211,48 @@ Deno.test('malformed and out-of-scope ownership and linked manifest fail preflig
     });
 });
 
-Deno.test('write and removal failures persist completed progress and prevent successful return', async () => {
-    for (const fail of ['write', 'remove']) {
-        await fixture(async (root, stage) => {
-            await put(root, 'templates/old.md');
-            await InstallManifest.save(
-                join(root, DISTRIBUTION_MANIFEST),
-                await InstallManifest.capture(root, ['templates/old.md']),
-            );
-            let writes = 0;
-            const plan = await planAssets(root, stage);
-            try {
-                await applyAssets(plan, {
-                    ...io,
-                    async write(source, destination): Promise<void> {
-                        if (fail === 'write' && writes++ === 1) throw new Error('write failure');
-                        await io.write(source, destination);
-                    },
-                    async remove(path): Promise<void> {
-                        if (fail === 'remove') throw new Error('remove failure');
-                        await io.remove(path);
-                    },
-                });
-                throw new Error('Expected application failure');
-            } catch (error) {
-                expect(error).toBeInstanceOf(AssetApplyError);
-                const progress = (error as AssetApplyError).progress;
-                expect(progress.manifestSaved).toBe(true);
-                expect(progress.written.length).toBe(fail === 'write' ? 1 : 2);
-                const saved = await manifest(root);
-                expect(saved.files.some((file) => file.path === 'templates/old.md')).toBe(true);
-                expect(saved.files.length).toBe(progress.written.length + 1);
-            }
-        });
-    }
-});
+Deno.test(
+    'write and removal failures persist completed progress and prevent successful return',
+    async () => {
+        for (const fail of ['write', 'remove']) {
+            await fixture(async (root, stage) => {
+                await put(root, 'templates/old.md');
+                await InstallManifest.save(
+                    join(root, DISTRIBUTION_MANIFEST),
+                    await InstallManifest.capture(root, ['templates/old.md']),
+                );
+                let writes = 0;
+                const plan = await planAssets(root, stage);
+                try {
+                    await applyAssets(plan, {
+                        ...io,
+                        async write(source, destination): Promise<void> {
+                            if (fail === 'write' && writes++ === 1) {
+                                throw new Error('write failure');
+                            }
+                            await io.write(source, destination);
+                        },
+                        async remove(path): Promise<void> {
+                            if (fail === 'remove') {
+                                throw new Error('remove failure');
+                            }
+                            await io.remove(path);
+                        },
+                    });
+                    throw new Error('Expected application failure');
+                } catch (error) {
+                    expect(error).toBeInstanceOf(AssetApplyError);
+                    const progress = (error as AssetApplyError).progress;
+                    expect(progress.manifestSaved).toBe(true);
+                    expect(progress.written.length).toBe(fail === 'write' ? 1 : 2);
+                    const saved = await manifest(root);
+                    expect(saved.files.some((file) => file.path === 'templates/old.md')).toBe(true);
+                    expect(saved.files.length).toBe(progress.written.length + 1);
+                }
+            });
+        }
+    },
+);
 
 Deno.test('successful removals alone update ownership after a later removal fails', async () => {
     await fixture(async (root, stage) => {
@@ -240,7 +267,9 @@ Deno.test('successful removals alone update ownership after a later removal fail
             await applyAssets(plan, {
                 ...io,
                 async remove(path): Promise<void> {
-                    if (path.endsWith('later.md')) throw new Error('remove failure');
+                    if (path.endsWith('later.md')) {
+                        throw new Error('remove failure');
+                    }
                     await io.remove(path);
                 },
             });
@@ -333,20 +362,26 @@ Deno.test('bootstrap rejects outside paths and leaves mismatched binaries unclai
     await fixture(async (root, stage) => {
         await put(root, 'libexec/cr-1', 'different');
         expect(
-            (await planAssets(root, stage, {
-                runningExecutable: join(root, 'libexec/cr-1'),
-            })).bootstrap,
+            (
+                await planAssets(root, stage, {
+                    runningExecutable: join(root, 'libexec/cr-1'),
+                })
+            ).bootstrap,
         ).toBeUndefined();
         await put(root, 'libexec/cr-1', 'binary');
         const baseline = await InstallManifest.capture(root, ['libexec/cr-1']);
         const first = baseline.files[0];
-        if (!first) throw new Error('Missing baseline');
+        if (!first) {
+            throw new Error('Missing baseline');
+        }
         first.size++;
         await InstallManifest.save(join(root, DISTRIBUTION_MANIFEST), baseline);
         expect(
-            (await planAssets(root, stage, {
-                runningExecutable: join(root, 'libexec/cr-1'),
-            })).bootstrap,
+            (
+                await planAssets(root, stage, {
+                    runningExecutable: join(root, 'libexec/cr-1'),
+                })
+            ).bootstrap,
         ).toBeUndefined();
         await Deno.remove(join(root, DISTRIBUTION_MANIFEST));
         const outside = join(dirname(root), 'installatioX', 'libexec/cr-1');
@@ -355,59 +390,70 @@ Deno.test('bootstrap rejects outside paths and leaves mismatched binaries unclai
     });
 });
 
-Deno.test('checksum mismatch with unchanged size conflicts and tracked symlinks fail preflight', async () => {
-    await fixture(async (root, stage) => {
-        await applyAssets(await planAssets(root, stage));
-        await put(root, 'instructions/a.md', 'changed');
-        await expect(planAssets(root, stage)).rejects.toThrow('force');
-        await Deno.remove(join(root, 'instructions/a.md'));
-        await Deno.symlink(join(stage.instructions, 'a.md'), join(root, 'instructions/a.md'));
-        let prompts = 0;
-        await expect(planAssets(root, stage, {
-            force: true,
-            interactive: true,
-            confirm: () => {
-                prompts++;
-                return true;
-            },
-        })).rejects.toThrow('Unsafe');
-        expect(prompts).toBe(0);
-    });
-});
+Deno.test(
+    'checksum mismatch with unchanged size conflicts and tracked symlinks fail preflight',
+    async () => {
+        await fixture(async (root, stage) => {
+            await applyAssets(await planAssets(root, stage));
+            await put(root, 'instructions/a.md', 'changed');
+            await expect(planAssets(root, stage)).rejects.toThrow('force');
+            await Deno.remove(join(root, 'instructions/a.md'));
+            await Deno.symlink(join(stage.instructions, 'a.md'), join(root, 'instructions/a.md'));
+            let prompts = 0;
+            await expect(
+                planAssets(root, stage, {
+                    force: true,
+                    interactive: true,
+                    confirm: () => {
+                        prompts++;
+                        return true;
+                    },
+                }),
+            ).rejects.toThrow('Unsafe');
+            expect(prompts).toBe(0);
+        });
+    },
+);
 
 Deno.test('size mismatch conflicts even when checksum baseline matches', async () => {
     await fixture(async (root, stage) => {
         await applyAssets(await planAssets(root, stage));
         const baseline = await manifest(root);
         const first = baseline.files[0];
-        if (!first) throw new Error('Missing baseline');
+        if (!first) {
+            throw new Error('Missing baseline');
+        }
         first.size++;
         await InstallManifest.save(join(root, DISTRIBUTION_MANIFEST), baseline);
         await expect(planAssets(root, stage)).rejects.toThrow('force');
     });
 });
 
-Deno.test('defensive missing source and simultaneous mutation/save failure expose failures', async () => {
-    await fixture(async (root, stage) => {
-        const plan = await planAssets(root, stage);
-        const first = plan.actions[0];
-        if (!first) throw new Error('Missing action');
-        first.source = undefined;
-        await expect(applyAssets(plan)).rejects.toThrow('application failed');
-        try {
-            await applyAssets(plan, { ...io, save: () => Promise.reject(new Error('save')) });
-            throw new Error('Expected failure');
-        } catch (error) {
-            expect(error).toBeInstanceOf(AssetApplyError);
-            const cause = (error as Error).cause;
-            expect(cause).toBeInstanceOf(AggregateError);
-            expect((cause as AggregateError).errors.map((error: Error) => error.message)).toEqual([
-                'Missing staged source',
-                'save',
-            ]);
-        }
-    });
-});
+Deno.test(
+    'defensive missing source and simultaneous mutation/save failure expose failures',
+    async () => {
+        await fixture(async (root, stage) => {
+            const plan = await planAssets(root, stage);
+            const first = plan.actions[0];
+            if (!first) {
+                throw new Error('Missing action');
+            }
+            first.source = undefined;
+            await expect(applyAssets(plan)).rejects.toThrow('application failed');
+            try {
+                await applyAssets(plan, { ...io, save: () => Promise.reject(new Error('save')) });
+                throw new Error('Expected failure');
+            } catch (error) {
+                expect(error).toBeInstanceOf(AssetApplyError);
+                const cause = (error as Error).cause;
+                expect(cause).toBeInstanceOf(AggregateError);
+                expect(
+                    (cause as AggregateError).errors.map((error: Error) => error.message),
+                ).toEqual(['Missing staged source', 'save']);
+            }
+        });
+    },
+);
 
 Deno.test('destination inspection errors propagate without mutation', async () => {
     await fixture(async (root, stage) => {
@@ -426,27 +472,32 @@ Deno.test('destination inspection errors propagate without mutation', async () =
     });
 });
 
-Deno.test('modified obsolete removal requires force and affirmative per-file decision', async () => {
-    await fixture(async (root, stage) => {
-        await put(root, 'templates/old.md', 'baseline');
-        await InstallManifest.save(
-            join(root, DISTRIBUTION_MANIFEST),
-            await InstallManifest.capture(root, ['templates/old.md']),
-        );
-        await put(root, 'templates/old.md', 'modified');
-        await expect(planAssets(root, stage)).rejects.toThrow('force');
-        await expect(planAssets(root, stage, {
-            force: true,
-            interactive: true,
-            confirm: () => {
-                throw new Error('prompt failed');
-            },
-        })).rejects.toThrow('prompt failed');
-        await expect(Deno.stat(join(root, 'instructions'))).rejects.toThrow();
-        await applyAssets(await planAssets(root, stage, { force: true, yes: true }));
-        expect((await manifest(root)).files.some((file) => file.path === 'templates/old.md')).toBe(
-            false,
-        );
-        await expect(Deno.stat(join(root, 'templates/old.md'))).rejects.toThrow();
-    });
-});
+Deno.test(
+    'modified obsolete removal requires force and affirmative per-file decision',
+    async () => {
+        await fixture(async (root, stage) => {
+            await put(root, 'templates/old.md', 'baseline');
+            await InstallManifest.save(
+                join(root, DISTRIBUTION_MANIFEST),
+                await InstallManifest.capture(root, ['templates/old.md']),
+            );
+            await put(root, 'templates/old.md', 'modified');
+            await expect(planAssets(root, stage)).rejects.toThrow('force');
+            await expect(
+                planAssets(root, stage, {
+                    force: true,
+                    interactive: true,
+                    confirm: () => {
+                        throw new Error('prompt failed');
+                    },
+                }),
+            ).rejects.toThrow('prompt failed');
+            await expect(Deno.stat(join(root, 'instructions'))).rejects.toThrow();
+            await applyAssets(await planAssets(root, stage, { force: true, yes: true }));
+            expect(
+                (await manifest(root)).files.some((file) => file.path === 'templates/old.md'),
+            ).toBe(false);
+            await expect(Deno.stat(join(root, 'templates/old.md'))).rejects.toThrow();
+        });
+    },
+);

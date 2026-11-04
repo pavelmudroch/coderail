@@ -1,4 +1,5 @@
 import { expect } from '@std/expect';
+
 import { type ConnectorFile, Harness, type HarnessConnector } from '../../src/harness.ts';
 import { ClaudeConnector } from '../../src/harness/claude.ts';
 

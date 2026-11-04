@@ -27,26 +27,40 @@ export function parseFrontmatter(content: string): Frontmatter {
             return parsed;
         }
         if (value.startsWith("'")) {
-            if (!/^'(?:[^']|'')*'$/.test(value)) fail('Invalid quoted string');
+            if (!/^'(?:[^']|'')*'$/.test(value)) {
+                fail('Invalid quoted string');
+            }
             return value.slice(1, -1).replaceAll("''", "'");
         }
         if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) {
             const number = Number(value);
-            if (!Number.isFinite(number)) fail('Expected a finite number');
+            if (!Number.isFinite(number)) {
+                fail('Expected a finite number');
+            }
             return number;
         }
-        if (value === 'true' || value === 'false') return value === 'true';
+        if (value === 'true' || value === 'false') {
+            return value === 'true';
+        }
         if (
-            value === '' || /^[\[\]{}|>!&*#%@`]/.test(value) ||
-            /:\s|:$|\s#/.test(value) || /^(?:-|\?)(?:\s|$)/.test(value)
-        ) fail('Unsupported value');
+            value === '' ||
+            /^[[\]{}|>!&*#%@`]/.test(value) ||
+            /:\s|:$|\s#/.test(value) ||
+            /^(?:-|\?)(?:\s|$)/.test(value)
+        ) {
+            fail('Unsupported value');
+        }
         return value;
     }
 
     function inlineArray(source: string): Scalar[] {
-        if (!source.endsWith(']')) fail('Unfinished array');
+        if (!source.endsWith(']')) {
+            fail('Unfinished array');
+        }
         const values = source.slice(1, -1);
-        if (values.trim() === '') return [];
+        if (values.trim() === '') {
+            return [];
+        }
         const items: Scalar[] = [];
         let start = 0;
         let quote: '"' | "'" | undefined;
@@ -55,49 +69,69 @@ export function parseFrontmatter(content: string): Frontmatter {
             if (quote === '"' && character === '\\') {
                 index++;
             } else if (quote !== undefined && character === quote) {
-                if (quote === "'" && values.charAt(index + 1) === "'") index++;
-                else quote = undefined;
+                if (quote === "'" && values.charAt(index + 1) === "'") {
+                    index++;
+                } else {
+                    quote = undefined;
+                }
             } else if (quote === undefined && (character === '"' || character === "'")) {
                 // Quotes delimit a string only at the beginning of an item.
-                if (values.slice(start, index).trim() === '') quote = character;
+                if (values.slice(start, index).trim() === '') {
+                    quote = character;
+                }
             } else if (quote === undefined && character === ',') {
                 items.push(scalar(values.slice(start, index)));
                 start = index + 1;
-            } else if (quote === undefined && /[\[\]{}]/.test(character)) {
+            } else if (quote === undefined && /[[\]{}]/.test(character)) {
                 fail('Nested arrays and objects are unsupported');
             }
         }
-        if (quote !== undefined) fail('Unfinished quoted string');
+        if (quote !== undefined) {
+            fail('Unfinished quoted string');
+        }
         items.push(scalar(values.slice(start)));
         return items;
     }
 
     for (const line of content.split(/\r?\n/)) {
         lineNumber++;
-        if (line.includes('\r')) fail('Bare carriage return');
-        if (line.trim() === '') continue;
+        if (line.includes('\r')) {
+            fail('Bare carriage return');
+        }
+        if (line.trim() === '') {
+            continue;
+        }
         const item = /^( +)-[ \t]+(.*)$/.exec(line);
         if (item) {
-            if (array === undefined) fail('Unexpected array item');
+            if (array === undefined) {
+                fail('Unexpected array item');
+            }
             if (indentation !== undefined && indentation !== item[1]) {
                 fail('Inconsistent array indentation');
             }
             indentation = item[1];
-            // deno-lint-ignore no-non-null-assertion -- The item expression always captures its value.
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The item expression always captures its value.
             array.push(scalar(item[2]!));
             continue;
         }
-        if (array !== undefined && array.length === 0) fail('Expected array item');
+        if (array !== undefined && array.length === 0) {
+            fail('Expected array item');
+        }
         array = undefined;
         indentation = undefined;
         const property =
-            /^("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]+(.*)|[ \t]*)$/
-                .exec(line);
-        if (!property) fail('Expected a property');
-        // deno-lint-ignore no-non-null-assertion -- The property expression always captures its key.
+            /^("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]+(.*)|[ \t]*)$/.exec(
+                line,
+            );
+        if (!property) {
+            fail('Expected a property');
+        }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- The property expression always captures its key.
         const sourceKey = property[1]!;
-        const key = /^[\"']/.test(sourceKey) ? String(scalar(sourceKey)) : sourceKey;
-        if (Object.hasOwn(result, key)) fail('Duplicate key');
+        const key = /^["']/.test(sourceKey) ? String(scalar(sourceKey)) : sourceKey;
+        if (Object.hasOwn(result, key)) {
+            fail('Duplicate key');
+        }
         const source = (property[2] ?? '').trim();
         let value: Scalar | Scalar[];
         if (source === '') {
@@ -113,7 +147,9 @@ export function parseFrontmatter(content: string): Frontmatter {
             configurable: true,
         });
     }
-    if (array !== undefined && array.length === 0) fail('Expected array item');
+    if (array !== undefined && array.length === 0) {
+        fail('Expected array item');
+    }
     return result;
 }
 
@@ -121,10 +157,14 @@ export function parseFrontmatter(content: string): Frontmatter {
 export function stringifyFrontmatter(frontmatter: Frontmatter): string {
     function scalar(value: Scalar): string {
         if (typeof value === 'string') {
-            if (/[\r\n]/.test(value)) throw new TypeError('Multiline strings are unsupported');
+            if (/[\r\n]/.test(value)) {
+                throw new TypeError('Multiline strings are unsupported');
+            }
             return JSON.stringify(value);
         }
-        if (typeof value === 'boolean') return String(value);
+        if (typeof value === 'boolean') {
+            return String(value);
+        }
         if (typeof value === 'number' && Number.isFinite(value)) {
             return Object.is(value, -0) ? '-0' : String(value);
         }
@@ -135,12 +175,17 @@ export function stringifyFrontmatter(frontmatter: Frontmatter): string {
     for (const [key, value] of Object.entries(frontmatter)) {
         const name = /^[A-Za-z_][A-Za-z0-9_-]*$/.test(key) ? key : scalar(key);
         if (Array.isArray(value)) {
-            if (value.length === 0) lines.push(`${name}: []`);
-            else {
+            if (value.length === 0) {
+                lines.push(`${name}: []`);
+            } else {
                 lines.push(`${name}:`);
-                for (const item of value) lines.push(`  - ${scalar(item)}`);
+                for (const item of value) {
+                    lines.push(`  - ${scalar(item)}`);
+                }
             }
-        } else lines.push(`${name}: ${scalar(value)}`);
+        } else {
+            lines.push(`${name}: ${scalar(value)}`);
+        }
     }
     return lines.join('\n');
 }

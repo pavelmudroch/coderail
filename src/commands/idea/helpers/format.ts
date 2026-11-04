@@ -1,7 +1,8 @@
+import { Log } from '@log';
 import { dirname } from '@std/path/dirname';
+
 import type { IdeaTree } from './get-idea-tree.ts';
 import type { IdeaStatus } from './idea-frontmatter.ts';
-import { Log } from '@log';
 
 export type IdeaArtifact = {
     path: string;

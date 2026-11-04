@@ -1,4 +1,5 @@
 import { join } from '@std/path';
+
 import { InstallManifest } from '../../install-manifest.ts';
 import { fingerprint, regularFile } from '../../install-manifest/capture.ts';
 import { type ActivationResult, launcherTarget, withInstallationLock } from './activation.ts';
@@ -34,11 +35,11 @@ export async function cleanupStaleExecutablesWithinLock(
 ): Promise<string[]> {
     const runningExecutable = await Deno.realPath(options.runningExecutable ?? Deno.execPath());
     const currentLauncherTarget = await launcherTarget(root, Deno.build.os === 'windows');
-    return await removeOwnedExecutables(root, [
-        runningExecutable,
-        currentLauncherTarget,
-        options.selectedExecutable,
-    ], options);
+    return await removeOwnedExecutables(
+        root,
+        [runningExecutable, currentLauncherTarget, options.selectedExecutable],
+        options,
+    );
 }
 
 async function removeOwnedExecutables(
@@ -50,19 +51,29 @@ async function removeOwnedExecutables(
     try {
         await regularFile(root, DISTRIBUTION_MANIFEST);
     } catch (error) {
-        if (error instanceof Deno.errors.NotFound) return [];
+        if (error instanceof Deno.errors.NotFound) {
+            return [];
+        }
         throw error;
     }
     const manifest = await InstallManifest.load(manifestPath);
-    if (!manifest) return [];
+    if (!manifest) {
+        return [];
+    }
     const removed: string[] = [];
     for (const file of [...manifest.files]) {
-        if (!/^libexec\/cr-[A-Za-z0-9_.-]+$/.test(file.path)) continue;
+        if (!/^libexec\/cr-[A-Za-z0-9_.-]+$/.test(file.path)) {
+            continue;
+        }
         const path = join(root, file.path);
-        if (protectedPaths.includes(path)) continue;
+        if (protectedPaths.includes(path)) {
+            continue;
+        }
         try {
             const actual = await fingerprint(await regularFile(root, file.path));
-            if (actual.checksum !== file.checksum || actual.size !== file.size) continue;
+            if (actual.checksum !== file.checksum || actual.size !== file.size) {
+                continue;
+            }
             await (options.remove ?? Deno.remove)(path);
         } catch (error) {
             if (!(error instanceof Deno.errors.NotFound)) {
@@ -128,7 +139,9 @@ function launchDeferred(script: string): Promise<void> {
     // PowerShell's encoded command is UTF-16LE, avoiding shell interpolation.
     const bytes = new Uint8Array(script.length * 2);
     const view = new DataView(bytes.buffer);
-    for (let i = 0; i < script.length; i++) view.setUint16(i * 2, script.charCodeAt(i), true);
+    for (let i = 0; i < script.length; i++) {
+        view.setUint16(i * 2, script.charCodeAt(i), true);
+    }
     const encoded = btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''));
     const child = new Deno.Command('powershell.exe', {
         args: ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
@@ -153,20 +166,26 @@ export async function retireExecutables(
         await withInstallationLock(installation, async (root) => {
             const windows = Deno.build.os === 'windows';
             const currentLauncherTarget = await launcherTarget(root, windows);
-            if (currentLauncherTarget !== activation.selectedExecutable) return;
+            if (currentLauncherTarget !== activation.selectedExecutable) {
+                return;
+            }
             const runningExecutable = await Deno.realPath(
                 options.runningExecutable ?? Deno.execPath(),
             );
-            await removeOwnedExecutables(root, [
-                currentLauncherTarget,
-                windows ? runningExecutable : undefined,
-            ], options);
+            await removeOwnedExecutables(
+                root,
+                [currentLauncherTarget, windows ? runningExecutable : undefined],
+                options,
+            );
             if (windows) {
                 const manifest = await InstallManifest.load(join(root, DISTRIBUTION_MANIFEST));
-                const candidates = (manifest?.files ?? []).filter((file) =>
-                    /^libexec\/cr-[A-Za-z0-9_.-]+$/.test(file.path) &&
-                    join(root, file.path) !== currentLauncherTarget
-                ).map((file) => file.path);
+                const candidates = (manifest?.files ?? [])
+                    .filter(
+                        (file) =>
+                            /^libexec\/cr-[A-Za-z0-9_.-]+$/.test(file.path) &&
+                            join(root, file.path) !== currentLauncherTarget,
+                    )
+                    .map((file) => file.path);
                 if (candidates.length) {
                     await defer(deferredCleanupScript(root, Deno.pid, candidates));
                 }

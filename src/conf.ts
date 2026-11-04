@@ -1,21 +1,19 @@
-import type { Configuration } from './conf/configuration.ts';
-import { loadConfiguration } from './conf/load-configuration.ts';
-import { getGlobalConfigurationFile } from './conf/get-global-configuration-file.ts';
-import { getLocalConfigurationFile } from './conf/get-local-configuration-file.ts';
-import { parse, type ParsedConf } from './conf/parse.ts';
-import type { ConfFileStream } from './conf/get-file-stream.ts';
 import type { GlobalArguments } from '@commands';
 import type { RuntimeContext } from '@runtime';
+
+import type { Configuration } from './conf/configuration.ts';
+import type { ConfFileStream } from './conf/get-file-stream.ts';
+import { getGlobalConfigurationFile } from './conf/get-global-configuration-file.ts';
+import { getLocalConfigurationFile } from './conf/get-local-configuration-file.ts';
+import { loadConfiguration } from './conf/load-configuration.ts';
+import { parse, type ParsedConf } from './conf/parse.ts';
 
 export type { Configuration };
 export type { ConfFileStream };
 export type { Meta, MetaType, ParsedConf, ParseResult } from './conf/parse.ts';
 
 export interface Conf {
-    loadConfiguration(
-        context: RuntimeContext,
-        global: GlobalArguments,
-    ): Promise<Configuration>;
+    loadConfiguration(context: RuntimeContext, global: GlobalArguments): Promise<Configuration>;
     /**
      * Retrieves the local configuration file.
      * @param repositoryRoot Path to current repository root

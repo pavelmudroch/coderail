@@ -1,10 +1,11 @@
-import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Cli } from '@cli';
+import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Fs } from '@fs';
 import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
+
 import { formatJson, formatText } from './helpers/format.ts';
 import { resolveTicket, TICKET_STATUS } from './helpers/resolve-ticket.ts';
 
@@ -29,7 +30,9 @@ export class Close implements Command<CloseArguments> {
         const rest: string[] = [];
         for (let i = 0; i < originalArgs.length; i++) {
             const arg = originalArgs[i];
-            if (arg === undefined) continue;
+            if (arg === undefined) {
+                continue;
+            }
             if (arg === '-h' || arg === '--help') {
                 args.help = true;
                 return { args, rest };
@@ -61,9 +64,7 @@ export class Close implements Command<CloseArguments> {
                 args.reason = value;
                 continue;
             }
-            if (
-                arg === '-d' || arg === '--duplicate-of' || arg.startsWith('--duplicate-of=')
-            ) {
+            if (arg === '-d' || arg === '--duplicate-of' || arg.startsWith('--duplicate-of=')) {
                 const value = arg.startsWith('--duplicate-of=')
                     ? arg.slice('--duplicate-of='.length)
                     : originalArgs[++i];

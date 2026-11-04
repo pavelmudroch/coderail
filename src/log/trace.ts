@@ -1,7 +1,7 @@
-import { writeSync } from './helpers/write-sync.ts';
-import { context } from './helpers/context.ts';
 import { clear, cyan, dim, green, magenta, red } from './helpers/ansi.ts';
+import { context } from './helpers/context.ts';
 import { stringifyMessages } from './helpers/stringifyMessages.ts';
+import { writeSync } from './helpers/write-sync.ts';
 
 export function trace(...messages: unknown[]): void {
     const obj: { stack?: string } = {};
@@ -46,9 +46,8 @@ function colorizeStackLine(stackLine: string): string {
         return cyan(stackLine);
     }
 
-    const [location, line, column, closingParenthesis] = match as
-        & RegExpExecArray
-        & [string, string, string, string];
+    const [location, line, column, closingParenthesis] = match as RegExpExecArray &
+        [string, string, string, string];
     const locationStart = stackLine.length - location.length;
     const pathStart = stackLine.lastIndexOf('(', locationStart) + 1 || stackLine.indexOf('at ') + 3;
     const prefix = stackLine.slice(0, pathStart);
