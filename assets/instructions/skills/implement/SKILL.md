@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 ## Goal
 
-Implement the specified or next ready ticket, validate changes, and close the completed ticket.
+Implement the specified or next ready ticket, verify changes, and close the completed ticket.
 
 ## Boundary
 
@@ -15,8 +15,9 @@ Implement the specified or next ready ticket, validate changes, and close the co
 - Preserve unrelated changes.
 - Mark tasks `[x]` only after satisfying their validation criteria.
 - Leave incomplete tasks `[ ]`.
-- Exclude the ticket file and files not changed by this implementation from validation.
+- Exclude the ticket file and files not changed by this implementation from verification.
 - Never close an incomplete or failing ticket.
+- Stop verification retries when an issue cannot be resolved safely.
 
 ## Completion
 
@@ -25,6 +26,7 @@ Implement the specified or next ready ticket, validate changes, and close the co
 3. Read the activated ticket and its tasks.
 4. Close the ticket with `cr ticket close --reason=duplicate --duplicate-of=<duplicate-ticket> <ticket>` and stop if another ticket already implements its scope.
 5. Implement each task in numbered order. Validate its criteria before marking it `[x]`.
-6. Validate changed project files with `cr verify -s <changed-files...>` after completing all tasks.
-7. Inspect each failed file with `cr verify <failed-file>`. Fix failures and repeat step 6 until all changed files pass.
-8. Close the ticket with `cr ticket close --reason=done <ticket>` only after completing every task and passing validation.
+6. Run `cr verify -s <changed-files...>` after completing all tasks.
+7. Inspect reported failures with `cr verify <failed-file>`, fix their causes, and repeat step 6 until verification succeeds or an unfixable issue is identified.
+8. Stop and report unresolved issues without closing the ticket if verification cannot succeed.
+9. Close the ticket with `cr ticket close --reason=done <ticket>` only after completing every task and passing verification.
