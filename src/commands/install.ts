@@ -1,7 +1,12 @@
 import { Cli } from '@cli';
 import type { Command, ParsedArguments } from '@commands';
 import { Fs } from '@fs';
-import { type ConnectorFile, Harness, type HarnessConnector } from '@harness';
+import {
+    type ConnectorFile,
+    Harness,
+    type HarnessConnector,
+    type InstallationTarget,
+} from '@harness';
 import {
     type Inspection,
     InstallManifest,
@@ -22,6 +27,7 @@ type InstallArguments = {
     force: boolean;
     yes: boolean;
     no: boolean;
+    local: boolean;
     harnesses: string[];
 };
 
@@ -34,6 +40,7 @@ export class Install implements Command<InstallArguments> {
             force: false,
             yes: false,
             no: false,
+            local: false,
             harnesses: [],
         };
         for (let i = 0; i < originalArgs.length; i++) {
@@ -73,6 +80,13 @@ export class Install implements Command<InstallArguments> {
             if (arg.startsWith('--no=')) {
                 Cli.raiseUsageError('Option "--no" does not take a value.', this);
             }
+            if (arg === '--local') {
+                args.local = true;
+                continue;
+            }
+            if (arg.startsWith('--local=')) {
+                Cli.raiseUsageError('Option "--local" does not take a value.', this);
+            }
             if (arg.startsWith('-')) {
                 Cli.raiseUsageError(`Unknown option "${arg}".`, this);
             }
@@ -94,7 +108,7 @@ export class Install implements Command<InstallArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr install [--help] [--force [--yes | --no]] [<harness> ...]',
+            '  cr install [--help] [--local] [--force [--yes | --no]] [<harness> ...]',
             '',
             '  Install instructions for specific harness, to allow agents of that harness use',
             '  coderail tool.',
@@ -106,6 +120,7 @@ export class Install implements Command<InstallArguments> {
             '                       each action.',
             '  -y, --yes            Automatically answer "yes" to all prompts.',
             '  -n, --no             Automatically answer "no" to all prompts.',
+            '      --local          Install instructions locally into the project directory.',
             '',
             'Arguments:',
             '  <harness>            The harness(es) to install instructions for. If no',
@@ -122,11 +137,23 @@ export class Install implements Command<InstallArguments> {
     }
 
     async run(context: RunContext<InstallArguments>): Promise<void> {
+        const target: InstallationTarget = context.parsedArguments.args.local
+            ? {
+                  scope: 'local',
+                  projectRoot:
+                      context.context.repositoryRoot ??
+                      Cli.raiseUsageError(
+                          'No initialized project found. Run "cr init" first.',
+                          this,
+                      ),
+              }
+            : { scope: 'global' };
         const harnessNames = context.parsedArguments.args.harnesses;
         const harnesses: HarnessConnector[] = [];
         for (const name of harnessNames) {
             harnesses.push(
-                Harness.get(name) ?? Cli.raiseUsageError(`Unknown harness "${name}".`, this),
+                Harness.get(name, target) ??
+                    Cli.raiseUsageError(`Unknown harness "${name}".`, this),
             );
         }
         if (harnesses.length === 0) {
@@ -134,7 +161,7 @@ export class Install implements Command<InstallArguments> {
                 context.configuration.defaultHarness ??
                 Cli.raiseUsageError('No harness specified and no default harness set.', this);
             harnesses.push(
-                Harness.get(defaultHarness) ??
+                Harness.get(defaultHarness, target) ??
                     Cli.raiseUsageError(`Unknown default harness "${defaultHarness}".`, this),
             );
         }

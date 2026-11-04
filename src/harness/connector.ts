@@ -1,3 +1,13 @@
+/** Installation scope is fixed for the lifetime of a connector. */
+export type InstallationTarget =
+    | {
+          readonly scope: 'global';
+      }
+    | {
+          readonly scope: 'local';
+          readonly projectRoot: string;
+      };
+
 /** A loaded source file or a fully materialized translation output. */
 export interface ConnectorFile {
     path: string;

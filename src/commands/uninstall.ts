@@ -1,6 +1,6 @@
 import { Cli } from '@cli';
 import type { Command, ParsedArguments } from '@commands';
-import { Harness, type HarnessConnector } from '@harness';
+import { Harness, type HarnessConnector, type InstallationTarget } from '@harness';
 import { InstallManifest, type Manifest } from '@install-manifest';
 import { Log } from '@log';
 import { Path } from '@path';
@@ -13,7 +13,7 @@ type UninstallArguments = {
     force: boolean;
     yes: boolean;
     no: boolean;
-    self: boolean;
+    local: boolean;
     harnesses: string[];
 };
 
@@ -26,7 +26,7 @@ export class Uninstall implements Command<UninstallArguments> {
             force: false,
             yes: false,
             no: false,
-            self: false,
+            local: false,
             harnesses: [],
         };
         for (let i = 0; i < originalArgs.length; i++) {
@@ -66,20 +66,17 @@ export class Uninstall implements Command<UninstallArguments> {
             if (arg.startsWith('--no=')) {
                 Cli.raiseUsageError('Option "--no" does not take a value.', this);
             }
-            if (arg === '--self') {
-                args.self = true;
+            if (arg === '--local') {
+                args.local = true;
                 continue;
             }
-            if (arg.startsWith('--self=')) {
-                Cli.raiseUsageError('Option "--self" does not take a value.', this);
+            if (arg.startsWith('--local=')) {
+                Cli.raiseUsageError('Option "--local" does not take a value.', this);
             }
             if (arg.startsWith('-')) {
                 Cli.raiseUsageError(`Unknown option "${arg}".`, this);
             }
             args.harnesses.push(arg);
-        }
-        if (args.self && args.harnesses.length > 0) {
-            Cli.raiseUsageError('Option "--self" cannot be used with specified harnesses.', this);
         }
         if (args.yes && args.no) {
             Cli.raiseUsageError('Options "--yes" and "--no" cannot be used together.', this);
@@ -97,7 +94,7 @@ export class Uninstall implements Command<UninstallArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr uninstall [--help] [--force [--yes | --no]] [--self | <harness> ...]',
+            '  cr uninstall [--help] [--local] [--force [--yes | --no]] [<harness> ...]',
             '',
             '  Uninstall custom coderail instructions for specific harness.',
             '',
@@ -108,8 +105,7 @@ export class Uninstall implements Command<UninstallArguments> {
             '                       action.',
             '  -y, --yes            Automatically answer "yes" to all prompts.',
             '  -n, --no             Automatically answer "no" to all prompts.',
-            '      --self           Uninstall coderail tool itself. Cannot be used with',
-            '                       specified harness.',
+            '      --local          Uninstall instructions locally from the project directory.',
             '',
             'Arguments:',
             '  <harness>            The harness(es) to uninstall instructions from. If no',
@@ -126,9 +122,17 @@ export class Uninstall implements Command<UninstallArguments> {
     }
 
     async run(context: RunContext<UninstallArguments>): Promise<void> {
-        if (context.parsedArguments.args.self) {
-            return Promise.reject(new Error('Self-uninstallation is not implemented.'));
-        }
+        const target: InstallationTarget = context.parsedArguments.args.local
+            ? {
+                  scope: 'local',
+                  projectRoot:
+                      context.context.repositoryRoot ??
+                      Cli.raiseUsageError(
+                          'No initialized project found. Run "cr init" first.',
+                          this,
+                      ),
+              }
+            : { scope: 'global' };
         context.signal.throwIfAborted();
         const names = [...new Set(context.parsedArguments.args.harnesses)];
         if (names.length === 0) {
@@ -150,7 +154,8 @@ export class Uninstall implements Command<UninstallArguments> {
             }
             try {
                 using harness =
-                    Harness.get(name) ?? Cli.raiseUsageError(`Unknown harness "${name}".`, this);
+                    Harness.get(name, target) ??
+                    Cli.raiseUsageError(`Unknown harness "${name}".`, this);
                 await performHarnessUninstallation(harness, context);
             } catch (cause) {
                 const error = new Error(

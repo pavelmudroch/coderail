@@ -14,7 +14,7 @@ Deno.test('Uninstall parses optional harnesses and flags', () => {
     expect(command.requiresInit).toBe(false);
     expect(command.getSubcommand()).toBeUndefined();
     expect(command.parseArguments([])).toEqual({
-        args: { help: false, force: false, yes: false, no: false, self: false, harnesses: [] },
+        args: { help: false, force: false, yes: false, no: false, local: false, harnesses: [] },
         rest: [],
     });
     expect(command.parseArguments(new Array<string>(1))).toEqual(command.parseArguments([]));
@@ -28,7 +28,7 @@ Deno.test('Uninstall parses optional harnesses and flags', () => {
                 force: true,
                 yes: true,
                 no: false,
-                self: false,
+                local: false,
                 harnesses: ['codex', 'claude'],
             },
             rest: [],
@@ -40,7 +40,7 @@ Deno.test('Uninstall parses optional harnesses and flags', () => {
             force: false,
             yes: false,
             no: false,
-            self: false,
+            local: false,
             harnesses: ['codex', '--help', '-f', '-y'],
         },
         rest: [],
@@ -61,35 +61,16 @@ Deno.test('Uninstall handles help and rejects invalid options', () => {
         '--force=false',
         '--yes=true',
         '--self=true',
+        '--self',
     ]) {
         expect(() => command.parseArguments([option])).toThrow(UsageError);
     }
     expect(command.getUsage()).toContain(
-        'cr uninstall [--help] [--force [--yes | --no]] [--self | <harness> ...]',
+        'cr uninstall [--help] [--local] [--force [--yes | --no]] [<harness> ...]',
     );
     for (const harness of Harness.names) {
         expect(command.getUsage()).toContain(`- ${harness}`);
     }
-});
-
-Deno.test('Uninstall accepts --self without harnesses and rejects conflicting arguments', () => {
-    const command = new Uninstall();
-    expect(command.parseArguments(['--self', '--force', '--yes'])).toEqual({
-        args: { help: false, force: true, yes: true, no: false, self: true, harnesses: [] },
-        rest: [],
-    });
-    for (const args of [
-        ['--self', 'codex'],
-        ['codex', '--self'],
-        ['--self', '--', 'claude'],
-    ]) {
-        expect(() => command.parseArguments(args)).toThrow(
-            'Option "--self" cannot be used with specified harnesses.',
-        );
-    }
-    expect(command.shouldHandleHelp(command.parseArguments(['--self', 'codex', '--help']))).toBe(
-        true,
-    );
 });
 
 Deno.test('Uninstall validates confirmation policy', () => {
@@ -112,34 +93,6 @@ Deno.test('Uninstall validates confirmation policy', () => {
     );
 });
 
-Deno.test(
-    'uninstall --self reports unsupported execution without resolving a harness',
-    async () => {
-        const command = new Uninstall();
-        const original = Harness.get;
-        Harness.get = () => {
-            throw new Error('Unexpected harness resolution');
-        };
-        try {
-            await expect(
-                command.run({
-                    context: { currentWorkingDirectory: '/project', installRoot: '/install' },
-                    configuration: {
-                        logLevel: 'normal',
-                        noColor: false,
-                        nonInteractive: false,
-                        verify: { rules: [] },
-                    },
-                    parsedArguments: command.parseArguments(['--self']),
-                    signal: new AbortController().signal,
-                }),
-            ).rejects.toThrow('Self-uninstallation is not implemented.');
-        } finally {
-            Harness.get = original;
-        }
-    },
-);
-
 type UninstallContext = RunContext<ReturnType<Uninstall['parseArguments']>['args']>;
 
 type UninstallFixture = AsyncDisposable & {
@@ -154,6 +107,7 @@ type UninstallFixture = AsyncDisposable & {
 
 async function setupUninstall(
     files: Record<string, string> = { a: 'A', b: 'B', c: 'C' },
+    local = false,
 ): Promise<UninstallFixture> {
     const root = await Deno.realPath(await Deno.makeTempDir());
     const manifestPath = join(root, Path.INSTALL_MANIFEST_NAME);
@@ -179,7 +133,7 @@ async function setupUninstall(
     };
     const events: string[] = [];
     const messages: unknown[][] = [];
-    Harness.get = (name) => {
+    Harness.get = (name, _target) => {
         events.push(`get:${name}`);
         return {
             name,
@@ -212,6 +166,10 @@ async function setupUninstall(
         parsedArguments: command.parseArguments([]),
         signal: controller.signal,
     };
+    if (local) {
+        await Deno.mkdir(join(root, '.coderail'), { recursive: true });
+        context.context.repositoryRoot = root;
+    }
     return {
         root,
         manifestPath,
@@ -220,7 +178,7 @@ async function setupUninstall(
         context,
         controller,
         async run(args: string[] = []): Promise<void> {
-            context.parsedArguments = command.parseArguments(args);
+            context.parsedArguments = command.parseArguments(local ? ['--local', ...args] : args);
             await command.run(context);
         },
         async [Symbol.asyncDispose](): Promise<void> {
@@ -272,101 +230,117 @@ Deno.test('Uninstall handles absent and empty manifests and absent homes', async
     expect(fixture.messages).toContainEqual(['Nothing to uninstall for codex.']);
 });
 
-Deno.test(
-    'Uninstall requires force before removing modified files and makes no partial changes during planning',
-    async () => {
-        await using fixture = await setupUninstall();
-        await Deno.writeTextFile(join(fixture.root, 'b'), 'modified');
-        await expect(fixture.run()).rejects.toThrow('Modified file "b" requires --force.');
-        expect(await Deno.readTextFile(join(fixture.root, 'a'))).toBe('A');
-        expect((await InstallManifest.load(fixture.manifestPath))?.files).toHaveLength(3);
-        const failure = fixture.messages.find((values) => values[0] instanceof Error)?.[0];
-        expect(failure).toBeInstanceOf(Error);
-        expect((failure as Error).cause).toBeInstanceOf(Error);
-        expect(((failure as Error).cause as Error).message).toContain('Removed: none.');
-    },
-);
+for (const local of [false, true]) {
+    Deno.test(
+        `${local ? 'Local' : 'Global'} Uninstall requires force before removing modified files and makes no partial changes during planning`,
+        async () => {
+            await using fixture = await setupUninstall(undefined, local);
+            await Deno.writeTextFile(join(fixture.root, 'b'), 'modified');
+            await expect(fixture.run()).rejects.toThrow('Modified file "b" requires --force.');
+            expect(await Deno.readTextFile(join(fixture.root, 'a'))).toBe('A');
+            expect((await InstallManifest.load(fixture.manifestPath))?.files).toHaveLength(3);
+            const failure = fixture.messages.find((values) => values[0] instanceof Error)?.[0];
+            expect(failure).toBeInstanceOf(Error);
+            expect((failure as Error).cause).toBeInstanceOf(Error);
+            expect(((failure as Error).cause as Error).message).toContain('Removed: none.');
+        },
+    );
+}
 
-Deno.test(
-    'Uninstall keeps declined modified files tracked and accepts --yes without a terminal',
-    async () => {
-        await using fixture = await setupUninstall();
-        await Deno.writeTextFile(join(fixture.root, 'b'), 'modified');
-        await fixture.run(['--force', '--no']);
-        expect(await Deno.readTextFile(join(fixture.root, 'b'))).toBe('modified');
-        expect(
-            (await InstallManifest.load(fixture.manifestPath))?.files.map((file) => file.path),
-        ).toEqual(['b']);
-        await fixture.run(['--force', '--yes']);
-        expect(await InstallManifest.load(fixture.manifestPath)).toBeNull();
-    },
-);
+for (const local of [false, true]) {
+    Deno.test(
+        `${local ? 'Local' : 'Global'} Uninstall keeps declined modified files tracked and accepts --yes without a terminal`,
+        async () => {
+            await using fixture = await setupUninstall(undefined, local);
+            await Deno.writeTextFile(join(fixture.root, 'b'), 'modified');
+            await fixture.run(['--force', '--no']);
+            expect(await Deno.readTextFile(join(fixture.root, 'b'))).toBe('modified');
+            expect(
+                (await InstallManifest.load(fixture.manifestPath))?.files.map((file) => file.path),
+            ).toEqual(['b']);
+            await fixture.run(['--force', '--yes']);
+            expect(await InstallManifest.load(fixture.manifestPath)).toBeNull();
+        },
+    );
+}
 
-Deno.test('Uninstall prompts for each modified file and respects the answer', async () => {
-    await using fixture = await setupUninstall({ a: 'A', b: 'B' });
-    await Deno.writeTextFile(join(fixture.root, 'a'), 'modified');
-    await Deno.writeTextFile(join(fixture.root, 'b'), 'modified');
-    fixture.context.configuration.nonInteractive = false;
-    Deno.stdin.isTerminal = () => true;
-    const prompts: string[] = [];
-    Log.confirm = (message): boolean => {
-        prompts.push(String(message));
-        return prompts.length === 1;
-    };
-    await fixture.run(['--force']);
-    expect(prompts).toEqual([
-        `Remove modified file "${join(fixture.root, 'a')}"?`,
-        `Remove modified file "${join(fixture.root, 'b')}"?`,
-    ]);
-    expect(
-        (await InstallManifest.load(fixture.manifestPath))?.files.map((file) => file.path),
-    ).toEqual(['b']);
-});
+for (const local of [false, true]) {
+    Deno.test(
+        `${local ? 'Local' : 'Global'} Uninstall prompts for each modified file and respects the answer`,
+        async () => {
+            await using fixture = await setupUninstall({ a: 'A', b: 'B' }, local);
+            await Deno.writeTextFile(join(fixture.root, 'a'), 'modified');
+            await Deno.writeTextFile(join(fixture.root, 'b'), 'modified');
+            fixture.context.configuration.nonInteractive = false;
+            Deno.stdin.isTerminal = () => true;
+            const prompts: string[] = [];
+            Log.confirm = (message): boolean => {
+                prompts.push(String(message));
+                return prompts.length === 1;
+            };
+            await fixture.run(['--force']);
+            expect(prompts).toEqual([
+                `Remove modified file "${join(fixture.root, 'a')}"?`,
+                `Remove modified file "${join(fixture.root, 'b')}"?`,
+            ]);
+            expect(
+                (await InstallManifest.load(fixture.manifestPath))?.files.map((file) => file.path),
+            ).toEqual(['b']);
+        },
+    );
+}
 
-Deno.test('Uninstall refuses confirmation without an interactive terminal', async () => {
-    await using fixture = await setupUninstall({ a: 'A' });
-    await Deno.writeTextFile(join(fixture.root, 'a'), 'modified');
-    for (const nonInteractive of [true, false]) {
-        fixture.context.configuration.nonInteractive = nonInteractive;
-        Deno.stdin.isTerminal = () => false;
-        await expect(fixture.run(['--force'])).rejects.toThrow(
-            'Confirmation requires an interactive terminal',
-        );
-        expect(await Deno.readTextFile(join(fixture.root, 'a'))).toBe('modified');
-    }
-});
-
-Deno.test(
-    'Uninstall reports completed and pending absolute paths on removal failure and saves the remaining manifest',
-    async () => {
-        await using fixture = await setupUninstall();
-        const remove = Deno.remove;
-        Deno.remove = (path, options): Promise<void> => {
-            if (path === join(fixture.root, 'b')) {
-                return Promise.reject(new Error('permission denied'));
+for (const local of [false, true]) {
+    Deno.test(
+        `${local ? 'Local' : 'Global'} Uninstall refuses confirmation without an interactive terminal`,
+        async () => {
+            await using fixture = await setupUninstall({ a: 'A' }, local);
+            await Deno.writeTextFile(join(fixture.root, 'a'), 'modified');
+            for (const nonInteractive of [true, false]) {
+                fixture.context.configuration.nonInteractive = nonInteractive;
+                Deno.stdin.isTerminal = () => false;
+                await expect(fixture.run(['--force'])).rejects.toThrow(
+                    'Confirmation requires an interactive terminal',
+                );
+                expect(await Deno.readTextFile(join(fixture.root, 'a'))).toBe('modified');
             }
-            return remove(path, options);
-        };
-        let failure: unknown;
-        try {
-            await fixture.run();
-        } catch (error) {
-            failure = error;
-        }
-        expect(failure).toBeInstanceOf(AggregateError);
-        const message = (failure as Error).message;
-        expect(message).toContain('permission denied');
-        expect(message).toContain(`Removed: "${join(fixture.root, 'a')}".`);
-        expect(message).toContain(
-            `Remaining files: "${join(fixture.root, 'b')}", "${join(fixture.root, 'c')}".`,
-        );
-        expect(message).toContain('updated to track remaining files');
-        expect(
-            (await InstallManifest.load(fixture.manifestPath))?.files.map((file) => file.path),
-        ).toEqual(['b', 'c']);
-        expect(await Deno.readTextFile(join(fixture.root, 'b'))).toBe('B');
-    },
-);
+        },
+    );
+}
+
+for (const local of [false, true]) {
+    Deno.test(
+        `${local ? 'Local' : 'Global'} Uninstall reports completed and pending absolute paths on removal failure and saves the remaining manifest`,
+        async () => {
+            await using fixture = await setupUninstall(undefined, local);
+            const remove = Deno.remove;
+            Deno.remove = (path, options): Promise<void> => {
+                if (path === join(fixture.root, 'b')) {
+                    return Promise.reject(new Error('permission denied'));
+                }
+                return remove(path, options);
+            };
+            let failure: unknown;
+            try {
+                await fixture.run();
+            } catch (error) {
+                failure = error;
+            }
+            expect(failure).toBeInstanceOf(AggregateError);
+            const message = (failure as Error).message;
+            expect(message).toContain('permission denied');
+            expect(message).toContain(`Removed: "${join(fixture.root, 'a')}".`);
+            expect(message).toContain(
+                `Remaining files: "${join(fixture.root, 'b')}", "${join(fixture.root, 'c')}".`,
+            );
+            expect(message).toContain('updated to track remaining files');
+            expect(
+                (await InstallManifest.load(fixture.manifestPath))?.files.map((file) => file.path),
+            ).toEqual(['b', 'c']);
+            expect(await Deno.readTextFile(join(fixture.root, 'b'))).toBe('B');
+        },
+    );
+}
 
 Deno.test(
     'Uninstall reports persistence failure alongside the original removal failure',
@@ -447,11 +421,11 @@ Deno.test(
 Deno.test('Uninstall continues other harnesses after connector construction failure', async () => {
     await using fixture = await setupUninstall({});
     const get = Harness.get;
-    Harness.get = (name) => {
+    Harness.get = (name, target) => {
         if (name === 'codex') {
             throw new Error('connector failed');
         }
-        return get(name);
+        return get(name, target);
     };
     await expect(fixture.run(['codex', 'claude'])).rejects.toThrow(
         'Failed to uninstall instructions for codex: connector failed',
@@ -632,3 +606,59 @@ Deno.test('Uninstall reports a registered harness whose connector is unavailable
     await expect(fixture.run()).rejects.toThrow('Unknown harness "codex".');
     expect(await Deno.readTextFile(join(fixture.root, 'a'))).toBe('A');
 });
+
+Deno.test('Uninstall accepts only valueless --local and documents it', () => {
+    const command = new Uninstall();
+    expect(command.parseArguments(['--local']).args.local).toBe(true);
+    expect(() => command.parseArguments(['--local=true'])).toThrow('does not take a value');
+    expect(command.getUsage()).toContain('[--local]');
+    expect(command.getUsage()).toContain('locally');
+    expect(command.getUsage()).not.toContain('--self');
+    for (const option of ['--self', '--self=value']) {
+        expect(() => command.parseArguments([option])).toThrow(`Unknown option "${option}".`);
+    }
+});
+
+Deno.test(
+    'Uninstall rejects uninitialized local execution before constructing connectors',
+    async () => {
+        await using fixture = await setupUninstall();
+        const get = Harness.get;
+        let calls = 0;
+        Harness.get = () => {
+            calls++;
+            return null;
+        };
+        await expect(fixture.run(['--local', 'codex'])).rejects.toThrow('cr init');
+        expect(calls).toBe(0);
+        expect((await InstallManifest.load(fixture.manifestPath))?.files).toHaveLength(3);
+        expect(await Deno.readTextFile(join(fixture.root, 'a'))).toBe('A');
+        Harness.get = get;
+    },
+);
+
+Deno.test(
+    'Uninstall passes one discovered local target to explicit and default harnesses',
+    async () => {
+        await using fixture = await setupUninstall();
+        fixture.context.context.repositoryRoot = fixture.root;
+        fixture.context.context.currentWorkingDirectory = join(fixture.root, 'nested');
+        const get = Harness.get;
+        const targets: unknown[] = [];
+        Harness.get = (name, target) => {
+            targets.push(target);
+            return get(name, target);
+        };
+        await fixture.run(['--local']);
+        await fixture.run(['--local', 'codex', 'claude']);
+        expect(targets).toEqual(Array(3).fill({ scope: 'local', projectRoot: fixture.root }));
+        targets.length = 0;
+        await fixture.run([]);
+        await fixture.run(['codex', 'claude']);
+        expect(targets).toEqual(Array(3).fill({ scope: 'global' }));
+        for (const args of [['--local', 'unknown'], ['--local']]) {
+            fixture.context.configuration.defaultHarness = undefined;
+            await expect(fixture.run(args)).rejects.toBeInstanceOf(UsageError);
+        }
+    },
+);

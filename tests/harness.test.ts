@@ -6,16 +6,8 @@ import { Uninstall } from '../src/commands/uninstall.ts';
 import { ClaudeConnector } from '../src/harness/claude.ts';
 import { CodexConnector } from '../src/harness/codex.ts';
 
-Deno.test('Harness enumerates names and renders help without resolving connectors', () => {
-    const original = Object.getOwnPropertyDescriptors(Harness);
-    for (const name of ['codex', 'claude']) {
-        Object.defineProperty(Harness, name, {
-            get(): never {
-                throw new Error('Unexpected construction');
-            },
-            configurable: true,
-        });
-    }
+Deno.test('Harness enumerates names and renders help without constructing connectors', () => {
+    const get = Harness.get;
     Harness.get = () => {
         throw new Error('Unexpected construction');
     };
@@ -27,20 +19,27 @@ Deno.test('Harness enumerates names and renders help without resolving connector
             }
         }
     } finally {
-        Object.defineProperties(Harness, original);
+        Harness.get = get;
     }
 });
 
-Deno.test('Harness constructs fresh selected connectors and preserves facade access', () => {
-    using codex = Harness.get('codex');
-    using claude = Harness.get('claude');
-    using compatibilityCodex = Harness.codex;
-    using compatibilityClaude = Harness.claude;
-    expect(codex).toBeInstanceOf(CodexConnector);
-    expect(claude).toBeInstanceOf(ClaudeConnector);
-    expect(compatibilityCodex).toBeInstanceOf(CodexConnector);
-    expect(compatibilityClaude).toBeInstanceOf(ClaudeConnector);
-    expect(codex).not.toBe(compatibilityCodex);
-    expect(claude).not.toBe(compatibilityClaude);
-    expect(Harness.get('unknown')).toBe(null);
+Deno.test('Harness constructs fresh target-bound connectors without named getters', () => {
+    for (const target of [
+        { scope: 'global' },
+        { scope: 'local', projectRoot: '/project' },
+    ] as const) {
+        using codex = Harness.get('codex', target);
+        using claude = Harness.get('claude', target);
+        using another = Harness.get('codex', target);
+        expect(codex).toBeInstanceOf(CodexConnector);
+        expect(claude).toBeInstanceOf(ClaudeConnector);
+        expect(codex).not.toBe(another);
+        expect(Harness.get('unknown', target)).toBe(null);
+        if (target.scope === 'local') {
+            expect(codex?.home).toBe('/project');
+            expect(claude?.home).toBe('/project/.claude');
+        }
+    }
+    expect('codex' in Harness).toBe(false);
+    expect('claude' in Harness).toBe(false);
 });

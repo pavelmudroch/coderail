@@ -1,7 +1,9 @@
-import type { ConnectorFile, HarnessConnector } from './connector.ts';
+import type { ConnectorFile, HarnessConnector, InstallationTarget } from './connector.ts';
 
 export class ClaudeConnector implements HarnessConnector {
     readonly name = 'claude';
+
+    constructor(target: InstallationTarget) {}
 
     get home(): string {
         throw new Error('ClaudeConnector.home is not implemented.');
