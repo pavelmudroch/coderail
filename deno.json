@@ -1,76 +1,39 @@
 {
-    "exclude": [
-        "./assets",
-        "./bin"
-    ],
-    "fmt": {
-        "bracePosition": "sameLine",
-        "include": [
-            "./src/**/*.ts",
-            "./tests/**/*.ts",
-            "./tools/**/*.ts"
-        ],
-        "indentWidth": 4,
-        "lineWidth": 100,
-        "newLineKind": "lf",
-        "semiColons": true,
-        "singleQuote": true,
-        "useTabs": false,
-        "sortNamedImports": "caseInsensitive",
-        "sortNamedExports": "caseInsensitive",
-        "nextControlFlowPosition": "sameLine"
-    },
-    "imports": {
-        "@mutasaurus/mutasaurus": "jsr:@mutasaurus/mutasaurus@^0.1.5",
-        "@std/expect": "jsr:@std/expect@^1.0.20",
-        "@std/path": "jsr:@std/path@^1.1.6",
-        "@path": "./src/path.ts",
-        "@fs": "./src/fs.ts",
-        "@conf": "./src/conf.ts",
-        "@log": "./src/log.ts",
-        "@cli": "./src/cli.ts",
-        "@commands": "./src/commands.ts",
-        "@runtime": "./src/runtime.ts",
-        "@md": "./src/md.ts",
-        "@harness": "./src/harness.ts",
-        "@utils": "./src/utils.ts",
-        "@install-manifest": "./src/install-manifest.ts",
-        "oxc-parser": "npm:oxc-parser@^0.153.0"
-    },
-    "lint": {
-        "include": [
-            "./src/**/*.ts",
-            "./tests/**/*.ts",
-            "./tools/**/*.ts"
-        ],
-        "rules": {
-            "include": [
-                "explicit-function-return-type",
-                "no-explicit-any",
-                "no-unused-vars",
-                "no-shadow-restricted-names",
-                "no-sparse-arrays",
-                "no-non-null-asserted-optional-chain",
-                "no-non-null-assertion",
-                "no-sloppy-imports",
-                "verbatim-module-syntax"
-            ],
-            "exclude": [
-                "no-fallthrough"
-            ],
-            "tags": [
-                "recommended"
-            ]
-        }
-    },
-    "coverage": {
-        "thresholds": {
-            "branches": 100,
-            "functions": 100,
-            "lines": 100
-        }
-    },
-    "compilerOptions": {
-        "noUncheckedIndexedAccess": true
+  "exclude": [
+    "./assets",
+    "./bin"
+  ],
+  "imports": {
+    "@mutasaurus/mutasaurus": "jsr:@mutasaurus/mutasaurus@^0.1.5",
+    "@std/expect": "jsr:@std/expect@^1.0.20",
+    "@std/path": "jsr:@std/path@^1.1.6",
+    "@path": "./src/path.ts",
+    "@fs": "./src/fs.ts",
+    "@conf": "./src/conf.ts",
+    "@log": "./src/log.ts",
+    "@cli": "./src/cli.ts",
+    "@commands": "./src/commands.ts",
+    "@runtime": "./src/runtime.ts",
+    "@md": "./src/md.ts",
+    "@harness": "./src/harness.ts",
+    "@utils": "./src/utils.ts",
+    "@install-manifest": "./src/install-manifest.ts",
+    "oxc-parser": "npm:oxc-parser@^0.153.0"
+  },
+  "coverage": {
+    "thresholds": {
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
     }
+  },
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true
+  },
+  "lint": {
+    "include": []
+  },
+  "format": {
+    "include": []
+  }
 }

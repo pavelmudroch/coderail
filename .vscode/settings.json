@@ -1,6 +1,14 @@
 {
-	"deno.enable": true,
-	"markdown.validate.enabled": true,
-	"editor.defaultFormatter": "denoland.vscode-deno",
-    "editor.formatOnSave": true
+    "deno.enable": true,
+    "markdown.validate.enabled": true,
+    "editor.formatOnSave": true,
+    "emeraldwalk.runonsave": {
+        "commands": [
+            {
+                "match": ".(ts)",
+                "cmd": "cd \"${workspaceFolder}\" && bun fmt --no-script \"${file}\"",
+                "autoShowOutputPanel": "error"
+            }
+        ]
+    }
 }
