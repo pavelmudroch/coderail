@@ -5,6 +5,8 @@ import { Log } from '@log';
 export type RuntimeContext = {
     currentWorkingDirectory: string;
     installRoot: string;
+    /** Flattened distribution root, or repository assets during source development. */
+    resourceRoot?: string;
     repositoryRoot?: string;
 };
 
@@ -22,6 +24,9 @@ export async function createContext(
     const entryPath = Deno.build.standalone ? Deno.execPath() : fromFileUrl(Deno.mainModule);
     const installRoot = dirname(dirname(await Deno.realPath(entryPath)));
     Log.notice(`Resolved install root at "${installRoot}".`);
+    // Upgrade helpers must preserve libexec/<executable> beneath the physical install root.
+    // Discovery needs neither a manifest nor a launcher, including during bootstrap.
+    const resourceRoot = Deno.build.standalone ? installRoot : join(installRoot, 'assets');
     const repositoryRoot = await findRepositoryRoot(currentWorkingDirectory);
     if (repositoryRoot !== undefined) {
         Log.notice(`Resolved repository root at "${repositoryRoot}".`);
@@ -33,7 +38,7 @@ export async function createContext(
         );
     }
 
-    return { currentWorkingDirectory, installRoot, repositoryRoot };
+    return { currentWorkingDirectory, installRoot, resourceRoot, repositoryRoot };
 }
 
 /** Finds the nearest .coderail directory, including at the filesystem root. */

@@ -136,7 +136,9 @@ export class Install implements Command<InstallArguments> {
                     Cli.raiseUsageError(`Unknown default harness "${defaultHarness}".`, this),
             );
         }
-        const instructionFiles = await getInstructionFiles(context.context.installRoot);
+        const instructionFiles = await getInstructionFiles(
+            context.context.resourceRoot ?? context.context.installRoot,
+        );
         for (const harness of harnesses) {
             try {
                 await performHarnessInstallation(

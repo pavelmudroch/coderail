@@ -2,10 +2,11 @@
 id: "0002"
 slug: "support-flattened-resources-in-compiled-distributions"
 title: "Support flattened resources in compiled distributions"
-status: "open"
+status: "closed"
 created_at: "2026-11-03T13:10:59.011Z"
-updated_at: "2026-11-03T13:10:59.011Z"
+updated_at: "2026-11-04T08:50:33.032Z"
 dependencies: []
+reason: "done"
 ---
 
 # Support flattened resources in compiled distributions
@@ -14,8 +15,8 @@ Make installed commands find resources under the physical installation root, inc
 
 ## Tasks
 
-1. [ ] Add runtime-root and installed-resource lookup regression tests
-2. [ ] Support compiled layout and audit resource consumers
+1. [x] Add runtime-root and installed-resource lookup regression tests
+2. [x] Support compiled layout and audit resource consumers
 
 ## Task details
 
@@ -44,3 +45,11 @@ Validation: task 1 tests and affected existing consumer tests pass. Verify the c
 - [Template commands](../../../src/commands/template.ts)
 - [Global configuration lookup](../../../src/conf/get-global-configuration-file.ts)
 - Integration consumer: ticket 0006.
+
+## Implementation validation
+
+- Runtime resolves the physical executable before deriving the installation root. Upgrade helpers must place compiled executables at `<root>/libexec/cr-<identity>[.exe]`; resources live directly at `<root>/instructions` and `<root>/templates`. Source entrypoints retain repository `assets` lookup.
+- Audited path constants, instruction loading, template commands, and global configuration. Install is the instruction consumer requiring resource-root selection; template commands currently perform no resource reads. Global configuration remains at `<root>/coderail.conf`.
+- Context fixtures cover bootstrap without bin or manifest, a simulated home `.coderail`, custom roots with spaces, `.exe` names, symlink chains, source assets, instruction bytes, and template paths outside an initialized project. Install tests cover explicit source and distribution resource roots.
+- Individual verification passed for both changed source files and both test files, with 100% reported source line coverage. Native macOS compilation and smoke execution passed both directly from libexec before bootstrap activation and through a relative bin/cr symlink, reading external instructions/templates from a root containing spaces.
+- Native Windows and Linux execution was unavailable on this macOS host; Windows executable naming is covered by fixtures. Mutation runs reported type-error mutations rather than killed mutations.

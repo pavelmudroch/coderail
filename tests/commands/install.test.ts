@@ -383,3 +383,16 @@ Deno.test('Install restores missing tracked files and rejects conflicts with ret
         Deno.errors.NotFound,
     );
 });
+
+Deno.test('Install reads the runtime resource root for source and flattened distributions', async () => {
+    for (const layout of ['assets', 'distribution']) {
+        await using fixture = await setupInstall();
+        const resourceRoot = join(fixture.root, layout);
+        await Deno.mkdir(resourceRoot);
+        await Deno.rename(join(fixture.root, 'instructions'), join(resourceRoot, 'instructions'));
+        fixture.context.context.resourceRoot = resourceRoot;
+        await fixture.run();
+        expect(fixture.errors).toEqual([]);
+        expect(await Deno.readTextFile(join(fixture.home, 'b'))).toBe('B');
+    }
+});

@@ -2,6 +2,7 @@ import { expect } from '@std/expect';
 import { dirname, join, relative, resolve, toFileUrl } from '@std/path';
 import { createContext } from '../../src/runtime/context.ts';
 import type { GlobalArguments } from '@commands';
+import { getInstructionFiles } from '../../src/commands/helpers/get-instruction-files.ts';
 
 function globals(cwd?: string): GlobalArguments {
     return {
@@ -129,7 +130,7 @@ Deno.test('Runtime::createContext follows links to initialization directories', 
 
 Deno.test('Runtime::createContext resolves script and compiled installation symlink chains', async () => {
     await using f = await fixture();
-    const executable = join(f.root, 'compiled', 'bin', 'cr');
+    const executable = join(f.root, 'compiled', 'libexec', 'cr-identity');
     await Deno.mkdir(dirname(executable), { recursive: true });
     await Deno.writeTextFile(executable, '');
     for (
@@ -138,9 +139,9 @@ Deno.test('Runtime::createContext resolves script and compiled installation syml
             [executable, true, join(f.root, 'compiled')],
         ] as const
     ) {
-        const link = join(f.root, `entry-${compiled}`);
+        const link = join(dirname(entry), '..', `entry-${compiled}`);
         const outerLink = join(f.root, `outer-${compiled}`);
-        await Deno.symlink(relative(f.root, entry), link, { type: 'file' });
+        await Deno.symlink(relative(dirname(link), entry), link, { type: 'file' });
         await Deno.symlink(relative(f.root, link), outerLink, { type: 'file' });
         for (const path of [entry, outerLink]) {
             f.launch(path, compiled);
@@ -170,4 +171,50 @@ Deno.test('Runtime::createContext propagates discovery errors for optional comma
     } finally {
         Deno.stat = stat;
     }
+});
+
+Deno.test('Runtime::createContext resolves bootstrap resources in flattened distributions', async () => {
+    await using f = await fixture();
+    for (const name of ['.coderail', 'custom root with spaces']) {
+        const root = join(f.root, 'home', name);
+        await Deno.mkdir(join(root, 'libexec'), { recursive: true });
+        await Deno.mkdir(join(root, 'instructions', 'skills', 'example'), { recursive: true });
+        await Deno.mkdir(join(root, 'instructions', 'agents'));
+        await Deno.mkdir(join(root, 'templates'));
+        await Deno.writeTextFile(join(root, 'instructions', 'AGENTS.md'), 'global');
+        await Deno.writeTextFile(
+            join(root, 'instructions', 'skills', 'example', 'SKILL.md'),
+            'skill',
+        );
+        await Deno.writeTextFile(join(root, 'templates', 'example.md'), 'template');
+        for (const name of ['cr-identity', 'cr-identity.exe']) {
+            const executable = join(root, 'libexec', name);
+            await Deno.writeTextFile(executable, '');
+            f.launch(executable, true);
+            const context = await createContext(globals(f.project), { requiresInit: false });
+            expect(context.installRoot).toBe(await Deno.realPath(root));
+            expect(context.resourceRoot).toBe(context.installRoot);
+            const instructions = await getInstructionFiles(context.resourceRoot ?? '');
+            expect(new TextDecoder().decode(instructions.globalInstructionFile.content)).toBe(
+                'global',
+            );
+            expect(instructions.skills[0]?.files[0]?.path).toBe('SKILL.md');
+            expect(
+                await Deno.readTextFile(
+                    join(context.resourceRoot ?? '', 'templates', 'example.md'),
+                ),
+            )
+                .toBe('template');
+            expect(context.repositoryRoot).toBeUndefined();
+        }
+    }
+    f.launch(f.entry);
+    const context = await createContext(globals(f.project), { requiresInit: false });
+    expect(context.resourceRoot).toBe(join(context.installRoot, 'assets'));
+    const sourceInstructions = join(context.installRoot, 'assets', 'instructions');
+    await Deno.mkdir(join(sourceInstructions, 'skills'), { recursive: true });
+    await Deno.mkdir(join(sourceInstructions, 'agents'));
+    await Deno.writeTextFile(join(sourceInstructions, 'AGENTS.md'), 'source');
+    const instructions = await getInstructionFiles(context.resourceRoot ?? '');
+    expect(new TextDecoder().decode(instructions.globalInstructionFile.content)).toBe('source');
 });
