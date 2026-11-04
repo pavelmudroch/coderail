@@ -42,5 +42,5 @@ Deno.test('Harness constructs fresh selected connectors and preserves facade acc
     expect(compatibilityClaude).toBeInstanceOf(ClaudeConnector);
     expect(codex).not.toBe(compatibilityCodex);
     expect(claude).not.toBe(compatibilityClaude);
-    expect(() => Harness.get('unknown')).toEqual(null);
+    expect(Harness.get('unknown')).toBe(null);
 });
