@@ -2,14 +2,15 @@
 id: "0006"
 slug: "integrate-upgrade-cli-and-end-to-end-reconciliation"
 title: "Integrate upgrade CLI and end-to-end reconciliation"
-status: "open"
+status: "closed"
 created_at: "2026-11-03T13:10:59.754Z"
-updated_at: "2026-11-03T13:10:59.754Z"
+updated_at: "2026-11-04T09:25:17.127Z"
 dependencies:
   - "0002"
   - "0003"
   - "0004"
   - "0005"
+reason: "done"
 ---
 
 # Integrate upgrade CLI and end-to-end reconciliation
@@ -18,9 +19,9 @@ Make `cr upgrade` complete bootstrap or upgrade a distribution using verified re
 
 ## Tasks
 
-1. [ ] Add upgrade argument and end-to-end lifecycle tests
-2. [ ] Implement upgrade argument parsing and help
-3. [ ] Wire the upgrade lifecycle and recovery reporting
+1. [x] Add upgrade argument and end-to-end lifecycle tests
+2. [x] Implement upgrade argument parsing and help
+3. [x] Wire the upgrade lifecycle and recovery reporting
 
 ## Task details
 

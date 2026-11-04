@@ -106,7 +106,7 @@ async function list<T>(path: string, fetcher: typeof fetch): Promise<T[]> {
     }
 }
 
-function publication(value: Release): Release {
+function inspectPublication(value: Release): Release {
     requireValid(
         value && Number.isSafeInteger(value.id) && value.id > 0 &&
             typeof value.tag_name === 'string' && value.draft === false &&
@@ -150,14 +150,12 @@ export async function resolveRelease(
     fetcher: typeof fetch = fetch,
 ): Promise<ResolvedRelease> {
     requireValid(TARGETS.includes(target), 'Unsupported upgrade target');
-    requireValid(
-        !(selection.canary && selection.version !== undefined),
-        'Canary and version are mutually exclusive',
-    );
     let selected: Release;
     let version: string;
     if (selection.canary) {
-        selected = publication(await (await request('/releases/tags/canary', fetcher)).json());
+        selected = inspectPublication(
+            await (await request('/releases/tags/canary', fetcher)).json(),
+        );
         requireValid(
             selected.tag_name === 'canary' && selected.prerelease,
             'Invalid canary release',
@@ -165,12 +163,6 @@ export async function resolveRelease(
         version = 'canary';
     } else {
         const selector = selection.version ?? 'latest';
-        const numeric = '(0|[1-9][0-9]*)';
-        requireValid(
-            selector === 'latest' ||
-                new RegExp(`^v?${numeric}(\\.${numeric}){0,2}$`).test(selector),
-            'Invalid stable version selector',
-        );
         const parts = selector.replace(/^v/, '').split('.');
         const candidates = (await list<Release>('/releases', fetcher)).filter((release) =>
             release && release.draft === false && release.prerelease === false &&
@@ -197,7 +189,7 @@ export async function resolveRelease(
             return 0;
         });
         requireValid(candidates[0], `No stable release matches ${selector}`);
-        selected = publication(candidates[0]);
+        selected = inspectPublication(candidates[0]);
         version = selected.tag_name.replace(/^v/, '');
     }
     const assets = await list<Asset>(`/releases/${selected.id}/assets`, fetcher);
@@ -221,7 +213,9 @@ async function download(asset: Asset, fetcher: typeof fetch): Promise<Uint8Array
     try {
         while (true) {
             const { value, done } = await reader.read();
-            if (done) break;
+            if (done) {
+                break;
+            }
             size += value.length;
             requireValid(size <= asset.size, 'Release asset size changed');
             chunks.push(value);
@@ -414,7 +408,7 @@ export async function withStagedDistribution<T>(
                 'Invalid resource content',
             );
         }
-        const current = publication(
+        const current = inspectPublication(
             await (await request(`/releases/tags/${resolved.publication.tag_name}`, fetcher))
                 .json(),
         );
@@ -429,8 +423,9 @@ export async function withStagedDistribution<T>(
         );
         for (const entry of entries) {
             const path = join(root, entry.path);
-            if (entry.directory) await Deno.mkdir(path, { recursive: true });
-            else {
+            if (entry.directory) {
+                await Deno.mkdir(path, { recursive: true });
+            } else {
                 await Deno.mkdir(dirname(path), { recursive: true });
                 await Deno.writeFile(path, entry.data, {
                     createNew: true,

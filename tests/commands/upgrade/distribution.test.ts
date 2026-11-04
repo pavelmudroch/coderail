@@ -322,16 +322,11 @@ Deno.test('canary pins commit and all six platforms stage and clean up', async (
     }
 });
 
-Deno.test('resolution rejects unsupported targets, invalid selectors, missing and malformed publications', async () => {
+Deno.test('resolution rejects unsupported targets, missing and malformed publications', async () => {
     const f = await fixture();
     expect(() => targetTriple('freebsd', 'x86_64')).toThrow();
     expect(() => targetTriple('linux', 'riscv64')).toThrow();
     await expect(resolveRelease({}, 'bad', f.fetcher)).rejects.toThrow();
-    for (const version of ['', 'v', '01', '1.02', '1.2.03', '1.2.3.4', '1.2.3-rc', 'no']) {
-        await expect(resolveRelease({ version }, target, f.fetcher)).rejects.toThrow();
-    }
-    await expect(resolveRelease({ version: 'latest', canary: true }, target, f.fetcher)).rejects
-        .toThrow();
     for (const releases of [[], [release('v1.0.0-rc')], [release('v1.0.0')]]) {
         const missing = await fixture({ releases });
         await expect(resolveRelease({ version: '3' }, target, missing.fetcher)).rejects.toThrow();

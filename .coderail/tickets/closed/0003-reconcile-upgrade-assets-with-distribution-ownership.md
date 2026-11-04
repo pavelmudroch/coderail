@@ -2,11 +2,12 @@
 id: "0003"
 slug: "reconcile-upgrade-assets-with-distribution-ownership"
 title: "Reconcile upgrade assets with distribution ownership"
-status: "open"
+status: "closed"
 created_at: "2026-11-03T13:10:59.115Z"
-updated_at: "2026-11-03T13:10:59.115Z"
+updated_at: "2026-11-04T08:57:52.670Z"
 dependencies:
   - "0001"
+reason: "done"
 ---
 
 # Reconcile upgrade assets with distribution ownership
@@ -15,9 +16,9 @@ Apply verified release assets while preserving unrelated user templates and hono
 
 ## Tasks
 
-1. [ ] Add manifest, preflight, and reconciliation tests
-2. [ ] Implement distribution ownership and conflict planning
-3. [ ] Apply approved asset actions and persist actual manifest state
+1. [x] Add manifest, preflight, and reconciliation tests
+2. [x] Implement distribution ownership and conflict planning
+3. [x] Apply approved asset actions and persist actual manifest state
 
 ## Task details
 

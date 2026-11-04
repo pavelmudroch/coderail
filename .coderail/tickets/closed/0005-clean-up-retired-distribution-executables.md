@@ -2,11 +2,12 @@
 id: "0005"
 slug: "clean-up-retired-distribution-executables"
 title: "Clean up retired distribution executables"
-status: "open"
+status: "closed"
 created_at: "2026-11-03T13:10:59.555Z"
-updated_at: "2026-11-03T13:10:59.555Z"
+updated_at: "2026-11-04T09:11:25.517Z"
 dependencies:
   - "0004"
+reason: "done"
 ---
 
 # Clean up retired distribution executables
@@ -15,9 +16,9 @@ Remove only distribution-owned retired executables, with retryable stale cleanup
 
 ## Tasks
 
-1. [ ] Add stale and deferred executable cleanup tests
-2. [ ] Implement protected stale cleanup at the start of mutation
-3. [ ] Implement post-activation retirement and Windows deferred cleanup
+1. [x] Add stale and deferred executable cleanup tests
+2. [x] Implement protected stale cleanup at the start of mutation
+3. [x] Implement post-activation retirement and Windows deferred cleanup
 
 ## Task details
 
@@ -50,3 +51,10 @@ Validation: task 1 deferred lifecycle tests pass, including helper startup/delet
 - [Cleanup boundary and failure policy](../../plans/upgrade-command/IDEA.md)
 - [Runtime cleanup lifecycle](../../../src/runtime/cleanup.ts)
 - Prerequisite: 0004 (ownership, coordination, activation). Asset sequencing: 0003. Integration consumer: 0006.
+
+## Implementation notes
+
+- Added `cleanupStaleExecutables` for ticket 0006 to invoke after preflight and confirmation, before asset planning/mutation; it owns the installation lock and reloads ownership. Callers must not nest this hook inside an existing installation lock.
+- Added `retireExecutables` for invocation after successful activation. Both hooks protect the current launcher and verify file ownership by checksum and size. Deferred helpers recheck the launcher and ownership under the shared lock after process exit.
+- Windows uses an encoded PowerShell command, with no temporary helper files. Missing executable ownership records are reconciled on the next stale cleanup. Helper failures preserve the active installation and report residual state.
+- Verification passed on macOS, including controlled Windows process orchestration and 100% cleanup source coverage. A native Windows mapped-executable lifecycle test is included and skipped on this host.

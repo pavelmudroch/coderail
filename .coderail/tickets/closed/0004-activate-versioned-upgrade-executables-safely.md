@@ -2,12 +2,13 @@
 id: "0004"
 slug: "activate-versioned-upgrade-executables-safely"
 title: "Activate versioned upgrade executables safely"
-status: "open"
+status: "closed"
 created_at: "2026-11-03T13:10:59.362Z"
-updated_at: "2026-11-03T13:10:59.362Z"
+updated_at: "2026-11-04T09:06:55.418Z"
 dependencies:
   - "0001"
   - "0003"
+reason: "done"
 ---
 
 # Activate versioned upgrade executables safely
@@ -16,9 +17,9 @@ Switch the stable launcher only after asset and manifest reconciliation succeeds
 
 ## Tasks
 
-1. [ ] Add executable staging and launcher activation tests
-2. [ ] Implement versioned executable staging and upgrade coordination
-3. [ ] Implement Unix and Windows launcher activation
+1. [x] Add executable staging and launcher activation tests
+2. [x] Implement versioned executable staging and upgrade coordination
+3. [x] Implement Unix and Windows launcher activation
 
 ## Task details
 
@@ -51,3 +52,9 @@ Validation: task 1 launcher and failure tests pass; the stable bin directory exp
 - [Executable layout, activation, and same-version constraints](../../plans/upgrade-command/IDEA.md)
 - [Runtime root contract](../../../src/runtime/context.ts)
 - Prerequisites: 0001 and 0003. Runtime/resource behavior: 0002. Cleanup consumer: 0005. Integration: 0006.
+
+## Implementation notes
+
+- Added `activation.ts` with an installation-root lock shared by orchestration and future cleanup consumers, exclusive executable creation, verified ownership-based reuse, and launcher replacement after asset/manifest persistence.
+- Cleanup receives owned, running, previously active, selected, protected, and retired executable identities. No cleanup or PATH integration is performed here.
+- Verification: individual source and test checks passed with 100% line and branch coverage. macOS native symlink checks passed; Windows launcher generation/replacement is covered using platform simulation. The native Windows command forwarding/exit-status test is explicitly skipped on this macOS host and requires Windows. Native Linux symlink checks require Linux.
