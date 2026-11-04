@@ -113,6 +113,8 @@ Reference behavior: `src/commands/install.ts` (`planInstallation`, argument vali
 
 ## Agreed release consumption contract
 
+- Subsequent agreed amendment: [Ship tool and release publishing](../ship-tool-and-release-publishing/IDEA.md#agreed-optional-resources) allows empty or entirely missing `instructions/` and `templates/` independently in source and release packages. Treat either as an empty incoming set for that resource while preserving existing ownership/conflict rules. This supersedes any requirement below for either resource's contents to be present. Current consumer implementation still needs this adjustment.
+- Subsequent publication amendment: [Publication and recovery](../ship-tool-and-release-publishing/IDEA.md#agreed-publication-and-recovery) uses no GitHub drafts. All six packages must be built and checked before creating a public release, but asset uploads follow creation and can fail partially. This supersedes the earlier assumption of complete assets before visibility. Upgrade retains its existing refusal of missing/changing assets before installation mutation; publication recovery is manual.
 - One ZIP archive per Deno target triple, named `coderail-<target>.zip`, attached to each stable release and the canary prerelease.
 - Archive root contains `cr` (or `cr.exe`), `instructions/`, `templates/`, and `build.json`; no repository `assets/` level.
 - Build metadata identifies release version, source commit, and target. Canary executable identity includes the commit so distinct canary builds do not share a destination filename.
