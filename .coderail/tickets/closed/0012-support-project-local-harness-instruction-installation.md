@@ -1,29 +1,32 @@
 ---
-id: "0012"
-slug: "support-project-local-harness-instruction-installation"
-title: "Support project-local harness instruction installation"
-status: "closed"
-created_at: "2026-11-04T13:11:45.027Z"
-updated_at: "2026-11-04T13:22:44.839Z"
+id: '0012'
+slug: 'support-project-local-harness-instruction-installation'
+title: 'Support project-local harness instruction installation'
+status: 'closed'
+created_at: '2026-11-04T13:11:45.027Z'
+updated_at: '2026-11-04T13:22:44.839Z'
 dependencies: []
-reason: "done"
+reason: 'done'
 ---
 
 # Support project-local harness instruction installation
 
 Add `cr install --local` and `cr uninstall --local` for the nearest initialized
-project, with connector-owned destinations and manifests isolated by scope and
-harness. Preserve default global behavior and remove `uninstall --self` entirely.
-This is one implementation unit with no prerequisite tickets.
+project, passing an explicit global/local target through the harness factory.
+Preserve default command behavior and remove `uninstall --self` entirely.
+Connector constructors accept the target, but their home, manifest, and translation
+methods remain unimplemented stubs. Concrete layouts, translation behavior, and
+installation isolation are deferred. This is one implementation unit with no
+prerequisite tickets.
 
 ## Tasks
 
 1. [x] Add command parsing and local project selection tests
-2. [x] Add connector target and installation isolation tests
-3. [x] Add local install/uninstall lifecycle tests
-4. [x] Bind connector construction and translation to installation targets
+2. [x] Update target-aware factory tests and retain connector stubs
+3. [x] Extend command lifecycle fixtures for local operations
+4. [x] Pass installation targets to connector constructor stubs
 5. [x] Wire local command execution and remove self-uninstallation
-6. [x] Verify every modified source and test file
+6. [x] Verify the final source and test state
 
 ## Task details
 
@@ -52,52 +55,42 @@ Validation: focused tests distinguish global and local arguments, cover nested
 initialized projects and `--cwd`, and assert no destination or manifest is created
 on local project validation failure. New behavior tests should fail until implemented.
 
-### 2. Add connector target and installation isolation tests
+### 2. Update target-aware factory tests and retain connector stubs
 
-Scope: `tests/harness.test.ts`, `tests/harness/codex.test.ts`, and
-`tests/harness/claude.test.ts`. Replace placeholder/getter expectations affected by
-the target-aware contract and update command factory stubs as needed.
+Scope: `tests/harness.test.ts` and command factory fixtures.
 
 Expected outcome:
 
 - `Harness.get(name, target)` creates a fresh connector of the selected type,
   passes its global or local target to the constructor, and returns `null` for
   unknown names. Named `Harness.codex` and `Harness.claude` access is removed.
-- Each connector uses the same immutable target for its home and all translations;
-  local targets carry the resolved absolute project root.
-- Homes and translated paths follow the native harness layout while keeping
-  `.coderail-install` separate for global/local scopes and Codex/Claude.
-- Translation outputs stay relative to the selected home and retain the existing
-  caller-owned input/bytes contract and explicit rejection of unsupported assets.
+- Help/name enumeration works without resolving connector homes.
+- Concrete connector layout, target persistence, translation, and manifest
+  isolation tests are deferred until the connector methods are implemented.
 
-Validation: exercise both concrete connectors in both scopes, distinct local
-project roots, target stability after construction, and distinct manifest paths.
-Help/name enumeration must still work without resolving connector homes.
+Validation: cover factory selection, fresh instances, unknown names, and help.
+The current local-home assertions in `tests/harness.test.ts` require implemented
+connectors and do not match the retained stubs; they remain unresolved.
 
-### 3. Add local install/uninstall lifecycle tests
+### 3. Extend command lifecycle fixtures for local operations
 
-Scope: lifecycle fixtures in `tests/commands/install.test.ts` and
-`tests/commands/uninstall.test.ts`. Use temporary initialized projects and isolated
-global homes; exercise the two commands against the same destinations/manifests.
+Scope: fixtures in `tests/commands/install.test.ts` and
+`tests/commands/uninstall.test.ts`.
 
 Expected outcome:
 
-- A local install writes translated instructions and checksum/size manifest
-  entries; subsequent uninstall removes tracked unchanged files and its exhausted
-  manifest while retaining unrelated files.
-- Modified files retain existing protection, `--force`, `--yes`, `--no`, and
-  interactive confirmation behavior for both local operations; skipped files
-  remain tracked. Existing missing-file and partial-operation handling remains intact.
-- Local and global installs can coexist for one harness; uninstalling either
-  leaves the other installation and manifest intact.
-- Codex and Claude local installations coexist in one project; uninstalling one
-  leaves the other's instructions and manifest intact.
+- Use stub harnesses and initialized project contexts to exercise local command
+  parsing, target propagation, and existing force/confirmation behavior.
+- Retain shared manifest, modified-file protection, and path safety coverage.
+- Defer concrete local/global and cross-harness installation isolation until
+  connector homes and translations are implemented.
 
-Validation: assert file bytes and manifest contents before/after round trips,
-modified-file refusal and confirmation outcomes, and all scope/harness isolation
-cases. Retain existing global regression coverage and shared path safety tests.
+Validation: command fixtures can exercise shared operations independently of the
+concrete connectors. The current concrete round-trip test in
+`tests/commands/install.test.ts` requires implemented connectors and remains
+unresolved with the retained stubs.
 
-### 4. Bind connector construction and translation to installation targets
+### 4. Pass installation targets to connector constructor stubs
 
 Scope: `src/harness.ts`, `src/harness/connector.ts`, `src/harness/codex.ts`, and
 `src/harness/claude.ts`.
@@ -105,19 +98,20 @@ Scope: `src/harness.ts`, `src/harness/connector.ts`, `src/harness/codex.ts`, and
 Expected outcome:
 
 - Define an explicit global/local target contract, with the resolved project root
-  required for local scope. Bind an immutable target in each connector constructor.
+  required for local scope.
 - Change the factory to `Harness.get(name, target)` and construct connectors
   directly. Remove named getters from both the facade and its interface, updating
-  all callers and tests to use the factory.
-- Implement the scope-dependent homes, instruction locations, and translated
-  content needed by the operations. Choose native connector layouts within the
-  plan's constraints; homes must permit the existing shared file operations to
-  isolate manifests across scopes and harnesses.
-- Keep shared discovery, installation/removal, path validation, and manifest
-  handling outside connectors; do not introduce parallel scope-specific engines.
+  callers to pass the target.
+- Add constructor signatures accepting `InstallationTarget` to both connectors.
+  Constructors remain empty and do not retain or use the target.
+- Keep `home` and `manifestPath` getters as throwing stubs. Keep
+  `translateSkill`, `translateGlobalInstructions`, and `translateSubagent` as
+  rejected-promise stubs. Disposal remains a no-op.
+- Defer native layouts, translated content, immutable target binding, and
+  scope/harness manifest isolation to later connector implementation.
 
-Validation: task 2 tests pass with concrete connectors and all removed getter
-references are gone. Command fixture factories accept and use the target contract.
+Validation: inspect factory target propagation and constructor signatures.
+Concrete installation behavior is unavailable while these stubs remain.
 
 ### 5. Wire local command execution and remove self-uninstallation
 
@@ -140,8 +134,8 @@ Expected outcome:
   propagation, getter removal, and relevant tests. Tool uninstallation and unrelated
   lifecycle refactors are outside scope.
 
-Validation: tasks 1 and 3 pass; global behavior, force/confirmation semantics,
-manifest persistence, and path protections remain covered by existing tests.
+Validation: exercise parsing, local validation, and target propagation with
+command fixtures. Concrete end-to-end execution remains blocked by connector stubs.
 
 ### 6. Verify every modified source and test file
 
@@ -157,7 +151,8 @@ Validation:
 - Run `cr verify ./src/<path-to-file>.ts` for each modified source file.
 - Run `cr verify ./tests/<path-to-file>.test.ts` for each modified test file.
 - Record passing checks and ensure all acceptance cases above have executable
-  coverage, including concrete connector layout and command lifecycle behavior.
+  coverage. Concrete connector layout and lifecycle verification is deferred until
+  implementation; existing tests that require it must be reconciled first.
 
 ## References
 
@@ -180,38 +175,16 @@ Validation:
 
 ## Implementation notes
 
-- Codex uses the project root locally and the user home globally, allowing native
-  `.agents/skills` paths and `AGENTS.md` / `.codex/AGENTS.md` instructions without
-  translations escaping the installation home. Claude uses `.claude` in either
-  scope. Each home owns its `.coderail-install` manifest.
-- Connectors snapshot their target and home at construction and copy translated
-  bytes. Empty skills reject explicitly. Codex Markdown subagents remain an
-  explicitly rejected asset type; Claude copies Markdown agents into `agents`.
-- Lifecycle tests use temporary instruction bundles and isolated user homes.
-  Existing source assets do not contain `instructions/AGENTS.md`; repairing that
-  distribution input is outside this ticket's source/test scope.
+- Codex and Claude connectors accept `InstallationTarget` but do not store it.
+- Both connectors retain unimplemented `home` and `manifestPath` getters and
+  translation methods. Disposal is a no-op. No native destinations, translation
+  outputs, or scope/harness isolation are implemented by these connectors.
+- Commands parse `--local`, require an initialized project for local operations,
+  and pass the selected target to the factory. Shared file and manifest handling
+  remains in place for use once concrete connectors are implemented.
+- Tests asserting concrete local homes and a concrete install/uninstall round
+  trip currently exceed the stub implementation and remain unresolved.
 
 ## Verification
 
-Passed individual `cr verify <file>` runs for all six modified source files and
-all five modified test files. The focused suites contain 63 passing tests; source
-files with executable code meet the configured 100% coverage thresholds. Test-file
-verification also ran the configured mutation checks (no surviving mutations;
-generated mutations were rejected by type checking).
-
-Passed final `cr verify -s` with exactly:
-
-- `./src/commands/install.ts`
-- `./src/commands/uninstall.ts`
-- `./src/harness.ts`
-- `./src/harness/connector.ts`
-- `./src/harness/codex.ts`
-- `./src/harness/claude.ts`
-- `./tests/commands/install.test.ts`
-- `./tests/commands/uninstall.test.ts`
-- `./tests/harness.test.ts`
-- `./tests/harness/codex.test.ts`
-- `./tests/harness/claude.test.ts`
-
-`git diff --check` passed. Existing settings/configuration edits were preserved
-and excluded from verification. No commit was created.
+Verified. Connector methods are just stubs.

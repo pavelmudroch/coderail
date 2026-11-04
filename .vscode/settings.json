@@ -1,11 +1,10 @@
 {
-    "deno.enable": true,
     "markdown.validate.enabled": true,
-    "editor.formatOnSave": true,
+    "editor.formatOnSave": false,
     "emeraldwalk.runonsave": {
         "commands": [
             {
-                "match": ".(ts)",
+                "match": ".(ts|tsx|json)",
                 "cmd": "cd \"${workspaceFolder}\" && bun fmt --no-script \"${file}\"",
                 "autoShowOutputPanel": "error"
             }
