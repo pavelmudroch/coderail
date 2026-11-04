@@ -24,7 +24,12 @@ export async function withInstallationLock<T>(
         await Deno.mkdir(lock);
     } catch (error) {
         if (error instanceof Deno.errors.AlreadyExists) {
-            throw new Error('Installation busy; check running upgrades before removing stale lock');
+            throw new Error(
+                'Installation busy; check running upgrades before removing stale lock',
+                {
+                    cause: error,
+                },
+            );
         }
         throw error;
     }

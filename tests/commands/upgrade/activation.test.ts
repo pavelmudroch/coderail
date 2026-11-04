@@ -103,7 +103,11 @@ Deno.test('same version changed bytes and untracked collisions select new destin
 Deno.test('coordination rejects contention before inspecting or changing installed state and releases on failure', async () => {
     await fixture(async (root, stage) => {
         await withInstallationLock(root, async () => {
-            await expect(activateDistribution(root, stage)).rejects.toThrow('busy');
+            const activation = activateDistribution(root, stage);
+            await expect(activation).rejects.toThrow('busy');
+            await expect(activation).rejects.toMatchObject({
+                cause: expect.any(Deno.errors.AlreadyExists),
+            });
             await expect(Deno.stat(join(root, 'libexec'))).rejects.toThrow();
         });
         await expect(withInstallationLock(root, () => Promise.reject(new Error('failure')))).rejects

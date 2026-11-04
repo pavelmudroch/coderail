@@ -54,6 +54,7 @@ export async function parse(content: ReadableStream<string>): Promise<Markdown> 
                         /line (\d+)$/,
                         (_, line: string) => `line ${Number(line) + 1}`,
                     ),
+                    { cause: error },
                 );
             }
         } else {

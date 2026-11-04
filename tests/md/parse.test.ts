@@ -39,12 +39,15 @@ Deno.test('Md handles empty frontmatter and closing delimiters at EOF', async ()
 });
 
 Deno.test('Md reports malformed headers using document line numbers', async () => {
-    await expect(parse(stream('---\na: true\na: false\n---\n'))).rejects.toThrow(
-        /line 3/,
-    );
-    await expect(parse(stream('---\na: true\n'))).rejects.toThrow(
-        /Unclosed frontmatter/,
-    );
+    const malformed = parse(stream('---\na: true\na: false\n---\n'));
+    await expect(malformed).rejects.toThrow(/line 3/);
+    await expect(malformed).rejects.toMatchObject({
+        cause: expect.any(SyntaxError),
+    });
+    await expect(malformed).rejects.toMatchObject({
+        cause: { message: expect.stringMatching(/line 2$/) },
+    });
+    await expect(parse(stream('---\na: true\n'))).rejects.toThrow(/Unclosed frontmatter/);
 });
 
 Deno.test('Md::parse preserves source failures and releases the reader', async () => {
