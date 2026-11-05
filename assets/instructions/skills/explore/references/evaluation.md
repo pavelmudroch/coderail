@@ -16,6 +16,8 @@
 - Distinguish consequential blockers from accepted risks and delegable implementation choices.
 - Recommend the smallest corrective exploration for each blocker.
 - Avoid exhaustive implementation planning or ticket generation.
+- Verify that consequential module boundaries, file organization, and public interfaces were explicitly reviewed with the user.
+- Identify public functions, module ownership, or structural decisions that implementation would otherwise need to invent.
 
 ## Completion
 
@@ -25,3 +27,4 @@
 - Mark a leaf ready only when ticket generation requires no further consequential user decisions.
 - Consider a split parent complete only when shared decisions are resolved and all relevant children are ready.
 - Delegate routine implementation choices to ticket generation.
+- Confirm that agreed structure and public interfaces provide sufficient architectural guidance for ticket generation.

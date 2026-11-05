@@ -28,7 +28,8 @@ Design consequential behavior and interfaces collaboratively once use cases and 
 - Preserve existing contracts unless changes are justified.
 - Compare alternatives only when meaningful trade-offs exist.
 - Seek user agreement on public and architecturally consequential decisions.
-- Leave internal helpers, file layout, algorithms, and routine implementation choices unspecified.
+- Leave private helpers, algorithms, incidental file organization, and routine implementation choices unspecified.
+- Coordinate interface design with structural exploration so public contracts have clear module ownership.
 - Reconsider earlier decisions when new scenarios expose gaps or contradictions.
 - Avoid creating artifacts or contracts without a concrete need.
 

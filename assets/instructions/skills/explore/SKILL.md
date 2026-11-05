@@ -18,6 +18,7 @@ Transform an initial goal into an implementation-ready idea or idea tree through
    - **Decompose:** Read [decomposition](references/decomposition.md). Identify independent concerns, propose boundaries and dependencies, and agree on consequential structural changes before applying them.
    - **Investigate:** Read [elicitation](references/elicitation.md). Identify unknowns, investigate independently, and resolve decisions requiring user judgment.
    - **Design:** Read [contracts](references/contracts.md). Propose solutions, compare trade-offs, demonstrate behavior with examples, and collaboratively define important contracts.
+   - **Structure:** Read [structure](references/structure.md). Inspect existing code organization, propose consequential file and module boundaries, and collaboratively design public interfaces and function signatures.
    - **Evaluate:** Read [evaluation](references/evaluation.md). Assess completeness, consistency, risks, unresolved decisions, and verification expectations.
 6. Persist evolving understanding in the affected ideas:
    - Intended outcomes and boundaries
@@ -52,13 +53,17 @@ Transform an initial goal into an implementation-ready idea or idea tree through
 - Keep implementation ticket generation outside exploration.
 - Reconstruct context from persisted ideas and artifacts on subsequent invocations.
 - Leave context clearing and restarting to the user.
+- Collaboratively review consequential file structure, module boundaries, and public functions before declaring readiness.
+- Distinguish agreed architectural decisions from routine implementation freedom.
+- Inspect existing code and conventions before proposing structural changes.
 
 ## Completion
 
 1. Verify the following criteria for each ready idea:
    - Clarify the intended outcome and boundaries.
    - Resolve consequential decisions.
-   - Define relevant contracts sufficiently.
+   - Define relevant behavioral contracts sufficiently.
+   - Agree on consequential file structure, module boundaries, and public interfaces.
    - Establish verification expectations.
    - Leave only delegable implementation choices unresolved.
 2. For split ideas, resolve shared decisions and verify readiness of all relevant children.
