@@ -81,8 +81,14 @@ if (Deno.args[0]) {
                     throw new Error('Executable version mismatch');
                 }
                 await run(project, active.selectedExecutable, ['init']);
-                if ((await run(project, probe, [])) !== installation) {
-                    throw new Error('Flattened runtime resource root mismatch');
+                const expectedRoot = await Deno.realPath(installation);
+                const actualRoot = await run(project, probe, []);
+                if (actualRoot !== expectedRoot) {
+                    throw new Error(
+                        `Flattened runtime resource root mismatch: expected ${JSON.stringify(
+                            expectedRoot,
+                        )}, got ${JSON.stringify(actualRoot)}`,
+                    );
                 }
                 for (const name of ['instructions', 'templates']) {
                     let probed = false;

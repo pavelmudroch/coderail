@@ -18,13 +18,19 @@ async function copy(source: string, destination: string): Promise<void> {
     }
 }
 
-async function run(cwd: string, command: string, args: string[]): Promise<string> {
+async function run(
+    cwd: string,
+    command: string,
+    args: string[],
+    env: Record<string, string> = {},
+): Promise<string> {
     const result = await new Deno.Command(command, {
         cwd,
         args,
         env: {
             GIT_CONFIG_NOSYSTEM: '1',
             GIT_CONFIG_GLOBAL: Deno.build.os === 'windows' ? 'NUL' : '/dev/null',
+            ...env,
         },
         stdout: 'piped',
         stderr: 'piped',
@@ -46,6 +52,13 @@ Deno.test({
             await Deno.mkdir(root);
             await Deno.mkdir(installation);
             await Deno.mkdir(project);
+            // Force smoke installations beneath a path whose physical spelling differs.
+            const smokeTemporary = join(temporary, 'smoke-temporary');
+            const smokeTemporaryLink = join(temporary, 'smoke-temporary-link');
+            await Deno.mkdir(smokeTemporary);
+            await Deno.symlink(smokeTemporary, smokeTemporaryLink, {
+                type: Deno.build.os === 'windows' ? 'junction' : 'dir',
+            });
             for (const file of ['src', 'assets', 'deno.json', 'deno.lock']) {
                 await copy(join(repository, file), join(root, file));
             }
@@ -74,19 +87,28 @@ Deno.test({
                 };
                 await packageRelease(options, root);
                 if (index === 0) {
-                    await run(root, Deno.execPath(), [
-                        'run',
-                        '-A',
-                        join(repository, 'tools/internal/smoke-package.ts'),
-                        '--target',
-                        options.target,
-                        '--version',
-                        'canary',
-                        '--commit',
-                        commit,
-                        '--output',
-                        options.output,
-                    ]);
+                    await run(
+                        root,
+                        Deno.execPath(),
+                        [
+                            'run',
+                            '-A',
+                            join(repository, 'tools/internal/smoke-package.ts'),
+                            '--target',
+                            options.target,
+                            '--version',
+                            'canary',
+                            '--commit',
+                            commit,
+                            '--output',
+                            options.output,
+                        ],
+                        {
+                            TMPDIR: smokeTemporaryLink,
+                            TMP: smokeTemporaryLink,
+                            TEMP: smokeTemporaryLink,
+                        },
+                    );
                 }
                 await checkPackage(options, async (stage) => {
                     expect(stage.build).toEqual({
@@ -218,7 +240,7 @@ try {
                         probeSource,
                     ]);
                     const resources = await run(project, probe, []);
-                    expect(resources).toContain(installation);
+                    expect(resources).toContain(await Deno.realPath(installation));
                     expect(resources).toContain('minimum complete working solution');
                     const again = await activateDistribution(installation, stage);
                     expect(again.selectedExecutable).toBe(first.selectedExecutable);
