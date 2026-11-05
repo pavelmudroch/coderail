@@ -117,7 +117,7 @@ Deno.test(
                     expect(await git(repo, 'diff', '--name-only')).toBe('');
                 } else {
                     expect(await git(repo, 'rev-parse', 'HEAD')).not.toBe(head);
-                    expect(await git(repo, 'rev-parse', 'v0.1.1')).toBe(head);
+                    expect(await git(repo, 'rev-parse', 'v0.1.1^{commit}')).toBe(head);
                     expect(await git(repo, 'status', '--porcelain')).toBe('');
                 }
             });
@@ -377,9 +377,13 @@ Deno.test(
                     } else {
                         const head = await git(repo, 'rev-parse', 'HEAD');
                         expect(await git(repo, 'rev-parse', 'HEAD^')).toBe(beforeHead);
-                        expect(await git(repo, 'rev-parse', 'v0.1.1')).toBe(head);
+                        expect(await git(repo, 'rev-parse', 'v0.1.1^{commit}')).toBe(head);
+                        expect(await git(repo, 'cat-file', '-t', 'v0.1.1')).toBe('tag');
+                        expect(await git(repo, 'tag', '-l', '--format=%(contents)', 'v0.1.1')).toBe(
+                            'Release v0.1.1',
+                        );
                         expect(await git(origin, 'rev-parse', 'main')).toBe(head);
-                        expect(await git(origin, 'rev-parse', 'v0.1.1')).toBe(head);
+                        expect(await git(origin, 'rev-parse', 'v0.1.1^{commit}')).toBe(head);
                         expect(await git(repo, 'status', '--porcelain')).toBe('');
                         expect(
                             (
@@ -470,7 +474,7 @@ Deno.test(
                 expect(result.stderr).toContain('v0.1.1');
                 const head = await git(repo, 'rev-parse', 'HEAD');
                 expect(head).not.toBe(old);
-                expect(await git(repo, 'rev-parse', 'v0.1.1')).toBe(head);
+                expect(await git(repo, 'rev-parse', 'v0.1.1^{commit}')).toBe(head);
                 expect(await git(repo, 'status', '--porcelain')).toBe('');
                 expect(await Deno.readTextFile(join(repo, versionPath))).toBe(
                     versionSource.replace('0.1.0', '0.1.1'),

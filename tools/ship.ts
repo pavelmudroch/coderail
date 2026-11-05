@@ -189,7 +189,7 @@ async function main(): Promise<void> {
         const commit = await git(root, 'rev-parse', 'HEAD');
         state += ` Local release commit ${commit} retained.`;
         step = 'release tag';
-        await git(root, 'tag', tag, commit);
+        await git(root, 'tag', '-a', '-m', `Release ${tag}`, tag, commit);
         state += ` Local tag ${tag} retained.`;
         step = 'atomic push';
         await git(
