@@ -2,6 +2,7 @@
 set -eu
 
 API=https://api.github.com/repos/pavelmudroch/coderail
+log() { printf 'install: %s\n' "$*"; }
 fail() { echo "install: $*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || fail "Required tool not found: $1"; }
 
@@ -9,6 +10,7 @@ root=${CODERAIL_INSTALL_ROOT:-"${HOME:?HOME is required}/.coderail"}
 need mkdir
 mkdir -p "$root"
 root=$(CDPATH= cd -P "$root" && pwd) || fail 'Cannot access installation root'
+log "Installing Coderail into $root"
 
 # Only delegate to a launcher that actually belongs to the selected root.
 launcher=$root/bin/cr
@@ -22,7 +24,12 @@ if [ -L "$launcher" ]; then
     if [ "$target_dir" = "$root/libexec" ] && [ ! -L "$target" ] && [ -x "$launcher" ]; then
         if health=$("$launcher" --version 2>/dev/null); then
             case $health in
-                'Coderail version '*) exec "$launcher" "$@" upgrade --version latest ;;
+                'Coderail version '*)
+                    log 'Updating existing installation to the latest stable release...'
+                    "$launcher" "$@" upgrade --version latest
+                    log "Installation complete: $launcher"
+                    exit 0
+                    ;;
             esac
         fi
     fi
@@ -72,6 +79,7 @@ trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
+log 'Resolving the latest stable release...'
 download 'application/vnd.github+json' "$API/releases/latest" > "$tmp/release" || fail 'Could not resolve latest release'
 identity=$(jq -er '
     select(.draft == false and .prerelease == false and (.id | type == "number" and . > 0 and floor == .) and
@@ -81,13 +89,16 @@ identity=$(jq -er '
 id=${identity%% *}
 tag=${identity#* }
 version=${tag#v}
+log "Selected Coderail $version; fetching release asset details..."
 download 'application/vnd.github+json' "$API/releases/$id/assets?per_page=100" > "$tmp/assets" || fail 'Could not list release assets'
 asset_id() {
     jq -er --arg name "$1" '[.[] | select(.name == $name and .state == "uploaded" and (.id | type == "number" and . > 0 and floor == .))] | select(length == 1) | .[0].id' "$tmp/assets"
 }
 archive_id=$(asset_id "$name") || fail "Missing or invalid release asset: $name"
 checksum_id=$(asset_id "$name.sha256") || fail "Missing or invalid release asset: $name.sha256"
+log "Downloading $name..."
 download 'application/octet-stream' "$API/releases/assets/$archive_id" > "$tmp/archive" || fail 'Archive download failed'
+log 'Downloading and verifying the SHA-256 checksum...'
 download 'application/octet-stream' "$API/releases/assets/$checksum_id" > "$tmp/checksum" || fail 'Checksum download failed'
 if [ "$hash_tool" = sha256sum ]; then digest=$(sha256sum "$tmp/archive"); else digest=$(shasum -a 256 "$tmp/archive"); fi
 digest=${digest%% *}
@@ -96,6 +107,10 @@ cmp -s "$tmp/checksum" "$tmp/expected" || fail 'Archive SHA-256 mismatch'
 mkdir -p "$root/libexec"
 [ ! -L "$root/libexec" ] || fail 'Unsafe executable directory'
 bootstrap=$(mktemp "$root/libexec/cr-bootstrap.XXXXXXXX") || fail 'Cannot create bootstrap executable'
+log 'Extracting the bootstrap executable...'
 unzip -p "$tmp/archive" cr > "$bootstrap" || fail 'Could not extract bootstrap executable'
 chmod 755 "$bootstrap"
+log "Installing Coderail $version..."
 "$bootstrap" "$@" upgrade --version "$version"
+[ -x "$launcher" ] || fail "Bootstrap exited successfully without installing $launcher; release $tag may need an installer compatibility fix"
+log "Installation complete: $launcher"

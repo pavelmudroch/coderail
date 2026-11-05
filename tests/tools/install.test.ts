@@ -28,7 +28,10 @@ esac`,
 #!/bin/sh
 echo "$*" >> "$CLI_LOG"
 if [ "$1" = --version ]; then echo 'Coderail version 1.2.3'; exit 0; fi
-exit "$UPGRADE_STATUS"
+[ "$UPGRADE_STATUS" = 0 ] || exit "$UPGRADE_STATUS"
+[ "\${NOOP_BOOTSTRAP:-}" != 1 ] || exit 0
+mkdir -p "$CODERAIL_INSTALL_ROOT/bin"
+ln -s "$0" "$CODERAIL_INSTALL_ROOT/bin/cr"
 SCRIPT`,
     };
     scripts.wget = scripts.curl ?? '';
@@ -51,6 +54,7 @@ SCRIPT`,
         'readlink',
         'cmp',
         'cat',
+        'ln',
     ]) {
         const resolved = await new Deno.Command('sh', {
             args: ['-c', 'command -v "$1"', 'sh', name],
@@ -119,6 +123,13 @@ Deno.test('installer resolves latest once and pins bootstrap on supported hosts'
             const result = await install(env);
             expect(new TextDecoder().decode(result.stderr)).toBe('');
             expect(result.success).toBe(true);
+            const output = new TextDecoder().decode(result.stdout);
+            expect(output).toContain('Resolving the latest stable release...');
+            expect(output).toContain(`Downloading coderail-${target}.zip...`);
+            expect(output).toContain('Downloading and verifying the SHA-256 checksum...');
+            expect(output).toContain('Extracting the bootstrap executable...');
+            expect(output).toContain('Installing Coderail 1.2.3');
+            expect(output).toContain(`Installation complete: ${env.CODERAIL_INSTALL_ROOT}/bin/cr`);
             const requests = await read(env.LOG ?? '');
             expect(requests.match(/releases\/latest/g)?.length).toBe(1);
             expect(await read(env.CLI_LOG ?? '')).toContain('upgrade --version 1.2.3');
@@ -191,6 +202,10 @@ Deno.test(
             await Deno.symlink('../libexec/cr-1.2.3', join(bin, 'cr'));
             const result = await install(env);
             expect(result.code).toBe(23);
+            expect(new TextDecoder().decode(result.stdout)).toContain(
+                'Updating existing installation to the latest stable release...',
+            );
+            expect(new TextDecoder().decode(result.stdout)).not.toContain('Installation complete:');
             expect(await read(env.CLI_LOG ?? '')).toBe('--version\nupgrade --version latest\n');
             expect(await read(env.LOG ?? '')).toBe('');
         });
@@ -236,12 +251,29 @@ Deno.test('failed bootstrap removes unused executable and preserves existing dat
         await Deno.mkdir(join(root, 'templates'), { recursive: true });
         await Deno.writeTextFile(join(root, 'templates', 'user.txt'), 'keep');
         env.UPGRADE_STATUS = '42';
-        expect((await install(env)).code).toBe(42);
+        const result = await install(env);
+        expect(result.code).toBe(42);
+        expect(new TextDecoder().decode(result.stdout)).not.toContain('Installation complete:');
         expect(await read(join(root, 'templates', 'user.txt'))).toBe('keep');
         const files: string[] = [];
         for await (const file of Deno.readDir(join(root, 'libexec'))) {
             files.push(file.name);
         }
         expect(files).toEqual([]);
+    });
+});
+
+Deno.test('installer rejects a bootstrap that succeeds without installing a launcher', async () => {
+    await fixture(async (_root, env) => {
+        env.NOOP_BOOTSTRAP = '1';
+        const result = await install(env);
+        expect(result.success).toBe(false);
+        expect(new TextDecoder().decode(result.stderr)).toContain(
+            'Bootstrap exited successfully without installing',
+        );
+        expect(await read(env.CLI_LOG ?? '')).toBe('upgrade --version 1.2.3\n');
+        expect(
+            Array.from(Deno.readDirSync(join(env.CODERAIL_INSTALL_ROOT ?? '', 'libexec'))),
+        ).toEqual([]);
     });
 });
