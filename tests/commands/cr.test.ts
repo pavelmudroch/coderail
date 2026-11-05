@@ -171,6 +171,24 @@ Deno.test('Cr::parseArguments stops at global help and forwards command help', (
     }
 });
 
+Deno.test('Cr forwards upgrade version selection to the upgrade parser', () => {
+    const command = Commands.cr();
+    for (const version of ['latest', '0.1.0']) {
+        for (const options of [['--version', version], [`--version=${version}`]]) {
+            const parsed = command.parseArguments(['upgrade', ...options]);
+            expect(parsed).toEqual({
+                args: { ...defaults(), command: 'upgrade' },
+                rest: options,
+            });
+            const upgrade = command.getSubcommand(parsed) as Upgrade;
+            expect(upgrade.parseArguments(parsed.rest).args.version).toBe(version);
+        }
+    }
+    expect(parse(['--version', 'upgrade']).args.version).toBe(true);
+    expect(parse(['ticket', '--version']).args.version).toBe(true);
+    expectUsageError(['ticket', '--version=value'], 'Option "--version" does not take a value.');
+});
+
 Deno.test('Cr::parseArguments preserves command arguments and post-command options', () => {
     expect(parse(['command', '--unknown', '-x', '-', 'argument'])).toEqual({
         args: { ...defaults(), command: 'command' },

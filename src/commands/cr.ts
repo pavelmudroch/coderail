@@ -147,9 +147,17 @@ export class Cr implements Command<GlobalArguments> {
                 case arg.startsWith('--help='):
                     Cli.raiseUsageError('Option "--help" does not take a value.', this);
                 case arg === '--version':
+                    if (args.command === COMMAND.UPGRADE) {
+                        rest.push(arg);
+                        break;
+                    }
                     args.version = true;
                     break;
                 case arg.startsWith('--version='):
+                    if (args.command === COMMAND.UPGRADE) {
+                        rest.push(arg);
+                        break;
+                    }
                     Cli.raiseUsageError('Option "--version" does not take a value.', this);
                 case arg === '--non-interactive':
                     args.nonInteractive = true;
