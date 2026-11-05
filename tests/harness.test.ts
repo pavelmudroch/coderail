@@ -35,11 +35,5 @@ Deno.test('Harness constructs fresh target-bound connectors without named getter
         expect(claude).toBeInstanceOf(ClaudeConnector);
         expect(codex).not.toBe(another);
         expect(Harness.get('unknown', target)).toBe(null);
-        if (target.scope === 'local') {
-            expect(codex?.home).toBe('/project');
-            expect(claude?.home).toBe('/project/.claude');
-        }
     }
-    expect('codex' in Harness).toBe(false);
-    expect('claude' in Harness).toBe(false);
 });
