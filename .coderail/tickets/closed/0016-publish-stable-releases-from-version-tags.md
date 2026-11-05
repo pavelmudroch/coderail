@@ -55,7 +55,7 @@ Validation: inspect the job dependency graph and exercise workflow checks agains
 
 Scope: implement the publication step and any private shared helper; update maintainer documentation with the ship-to-CI handoff, local validation, and recovery expectations.
 
-Expected outcome: after all checks, create a public stable release directly and upload exactly the six archives plus six checksum sidecars. Extract notes from the tagged changelog, never generated commits or moving main. Preserve exact target_commitish identity. Document transient/failed missing assets, already-finalized changelog, and manual resolution followed by a fresh normal ship with clean/synchronized main, unused tag, and applicable changelog entries. Do not implement a recovery state machine or automated release cleanup.
+Expected outcome: after all checks, create a public stable release directly and upload exactly the six archives plus six checksum sidecars. Extract notes from the tagged changelog, never generated commits or moving main. Preserve exact target_commitish identity. Document transient/failed missing assets, already-finalized changelog, and manual resolution followed by a fresh normal ship with clean main equal to or ahead of fetched origin/main, unused tag, and applicable changelog entries. Do not implement a recovery state machine or automated release cleanup.
 
 Validation: task 1 checks pass; offline publication checks establish operation ordering and failure reporting. Review the full path from ship-generated tag to checked artifacts and consumer refusal of partial releases. Run required per-file `cr verify` for source/test changes and validate workflow syntax with available tooling. No actual publication is authorized by this ticket-generation work.
 

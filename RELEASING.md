@@ -4,7 +4,7 @@
 
 ## Shipping releases
 
-Run application tests before shipping. From a clean `main` synchronized with `origin/main`,
+Run application tests before shipping. From a clean `main` equal to or ahead of `origin/main`,
 choose one version bump:
 
 ```sh
@@ -14,9 +14,17 @@ deno run -A tools/ship.ts --help
 ```
 
 `major` resets minor and patch, `minor` resets patch, and `patch` increments patch.
-Ship fetches origin, checks main and the target tag, updates `src/cli/version.ts` and
+Ship fetches origin and requires `origin/main` to be an ancestor of local `HEAD` (or equal).
+Behind or diverged local main is rejected before release edits; ship never merges or rebases.
+All unpublished commits on local main are included in the push, so review and test them first.
+Ship checks the target tag, updates `src/cli/version.ts` and
 `CHANGELOG.md`, then commits, tags `vX.Y.Z`, and atomically pushes main and the tag.
 There is no force option or fallback to separate pushes.
+
+You do not need to push local commits before shipping. Shipping them together with the release
+commit and tag starts one canary workflow for the resulting main tip and one stable release
+workflow for the version tag. A separate push to main before shipping starts an additional
+canary workflow. Ship does not require previous GitHub checks to have passed.
 
 Author entries under `Unreleased` first: the initial empty changelog blocks shipping.
 Ship never generates entries from commits. It moves entries into a dated release section
@@ -166,7 +174,7 @@ publication may promote itself again. Promotion failures also retain the public 
 inspect its assets and latest designation before manual recovery.
 
 Resolve failed local/remote state manually, then make a fresh normal ship from clean
-`main` synchronized with `origin/main`, using an unused next version tag and applicable
+`main` equal to or ahead of fetched `origin/main`, using an unused next version tag and applicable
 authored changelog entries. A failed publication may already have finalized its changelog
 section; preserve that history and author entries for the next release as needed.
 Ship preserves an already-finalized section for its computed version byte for byte.

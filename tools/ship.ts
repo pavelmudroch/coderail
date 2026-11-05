@@ -8,6 +8,7 @@ edits, with no commit, tag, or push. Reset dry edits before shipping normally.
 
 Run application tests before ship. Ship only prepares, commits, tags, and
 atomically pushes main and the release tag; GitHub Actions owns publication.
+Local main must be equal to or ahead of fetched origin/main.
 `;
 
 type Bump = 'major' | 'minor' | 'patch';
@@ -151,12 +152,10 @@ async function main(): Promise<void> {
             'origin',
             '+refs/heads/main:refs/remotes/origin/main',
         );
-        step = 'synchronized main preflight';
-        if (
-            (await git(root, 'rev-parse', 'HEAD')) !==
-            (await git(root, 'rev-parse', 'refs/remotes/origin/main'))
-        ) {
-            throw new Error('main must be synchronized with fetched origin/main.');
+        step = 'main ancestry preflight';
+        const remoteMain = await git(root, 'rev-parse', 'refs/remotes/origin/main');
+        if ((await git(root, 'merge-base', remoteMain, 'HEAD')) !== remoteMain) {
+            throw new Error('main must be equal to or ahead of fetched origin/main.');
         }
         step = 'release preparation validation';
         const source = await Deno.readTextFile(`${root}/${versionPath}`);

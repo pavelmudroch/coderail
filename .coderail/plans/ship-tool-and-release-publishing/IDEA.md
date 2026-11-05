@@ -40,8 +40,9 @@ This is exploration, not authorization to release the current checkout. No sourc
 ## Agreed Git preconditions
 
 - Ship only from `main`, with a clean working tree and index, including no untracked release inputs.
-- Fetch `origin` and require local `main` to match `origin/main` before preparing the release. Do not implicitly merge, rebase, or push unrelated local commits.
+- Fetch `origin` and require local `main` to be equal to or ahead of `origin/main` before preparing the release: fetched `origin/main` must be an ancestor of local `HEAD` (or equal). Reject behind or diverged main before release edits. Do not implicitly merge or rebase. All unpublished commits on local main are included in the release push; review and test them before shipping.
 - Create the release commit and `vX.Y.Z` tag, then push that commit to `origin/main` and the tag to `origin` together atomically. No force push or fallback to separate non-atomic pushes.
+- No preliminary push is required. Pushing local commits with the release commit and tag starts one canary workflow for the resulting main tip and one stable release workflow for the version tag. Pushing to main separately first starts an additional canary workflow. Ship does not require previous GitHub checks to have passed.
 - Reject an existing target tag locally or remotely before mutation. A concurrent remote change must cause a rejected push rather than overwrite it.
 
 ## Agreed changelog behavior
@@ -72,7 +73,7 @@ This is exploration, not authorization to release the current checkout. No sourc
 - Use the newly versioned changelog section from the tagged revision as GitHub release notes.
 - Build the exact tagged commit and check all six archives and six sidecars before publication. Create a public release directly and upload its assets. Do not use GitHub drafts or require a manual publication approval.
 - Recovery is entirely manual, followed by shipping again. No automatic rollback, resume/retry interface, tag movement, asset overwrite, or partial-release cleanup is required. On failure stop and report the failed step and any partial state; retain local files, commit, and tag already created for manual inspection.
-- A fresh ship invocation always applies the normal clean/synchronized-main and unused-tag preconditions, plus the changelog rules above. It does not reinterpret an existing release as a request to resume it. The maintainer resolves failed local/remote state and prepares entries for the next release as necessary.
+- A fresh ship invocation always requires clean main equal to or ahead of fetched `origin/main` and an unused tag, plus the changelog rules above. It does not reinterpret an existing release as a request to resume it. The maintainer resolves failed local/remote state and prepares entries for the next release as necessary.
 - A public release may be visible with missing assets during upload, or remain incomplete after an upload failure. This follows from the chosen no-draft flow: release creation and asset upload are separate GitHub operations. Existing upgrade must continue to fail before installation mutation on missing or changing assets; no fallback to an older release or automatic retry is added.
 - Share packaging between stable and canary workflows through the agreed packaging CLI below. Preserve the earlier canary freshness and six-build requirements; apply the no-draft policy to publication. No recovery state machine is needed for either channel.
 
@@ -114,7 +115,7 @@ This is exploration, not authorization to release the current checkout. No sourc
 ## Agreed dry preparation
 
 - Example: `deno run -A tools/ship.ts patch --dry` performs normal preflight checks, including fetching origin, then writes the actual version/changelog edits in the current checkout. It leaves all edits unstaged and creates no commit, tag, or push. Existing-version changelog handling applies equally in dry and normal execution.
-- The maintainer may inspect, reset, or manually commit those edits. Dry mode is preparation only, with no automatic resume path. A later invocation still applies the normal clean/synchronized-main checks and computes a fresh bump from the then-current version. To repeat the original release through normal ship, reset the dry edits first.
+- The maintainer may inspect, reset, or manually commit those edits. Dry mode is preparation only, with no automatic resume path. A later invocation still requires clean main equal to or ahead of fetched `origin/main` and computes a fresh bump from the then-current version. To repeat the original release through normal ship, reset the dry edits first.
 - Dry preparation checks neither future push acceptance nor CI build/publication success. It runs no application tests, matching normal ship responsibility.
 
 ## Verification expectations
@@ -123,7 +124,7 @@ This is exploration, not authorization to release the current checkout. No sourc
 - Exercise semver reset behavior and invalid arguments; verify version, changelog heading, tag, executable version, release metadata, and archive metadata agree.
 - Verify exactly one major/minor/patch argument, optional `--dry`, and rejection of unsupported override flags. Dry mode writes the same preparation edits as normal mode but leaves the index, local commits/tags, and remote refs unchanged; a later invocation rejects the dirty checkout under the existing preconditions.
 - Verify an existing computed-version changelog section leaves the entire changelog unchanged even with empty Unreleased, while version preparation continues. Without that section, preserve the agreed Unreleased validation, content movement, date, and link updates. Exercise both cases in normal and dry mode.
-- Test ship Git behavior in disposable repositories, including dirty state, existing tags, divergent branches, and rejected pushes; never use the real remote for tests.
+- Test ship Git behavior in disposable repositories, including equal and ahead main in dry and normal modes, dirty state, existing tags, behind and diverged branches, and rejected pushes; never use the real remote for tests.
 - Validate real produced packages with the current staging consumer, including all six executable headers, exact checksum formatting, and resource contents.
 - Verify missing and empty source/archive instructions and template directories independently and together through packaging, staging, and reconciliation; preserve unrelated user resources, apply existing managed-file removal rules, and reject unsafe resource entries.
 - Smoke-test compiled executables and resource lookup on matching platforms, with first-install and subsequent upgrade in disposable installation roots.

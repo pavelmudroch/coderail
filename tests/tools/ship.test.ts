@@ -284,12 +284,6 @@ Deno.test('ship rejects Git preflight failures before release mutation', async (
         ],
         ['tracked', (repo) => git(repo, 'rm', '--cached', versionPath)],
         ['tracked', (repo) => git(repo, 'rm', '--cached', 'CHANGELOG.md')],
-        [
-            'synchronized',
-            async (repo) => {
-                await git(repo, 'commit', '--allow-empty', '-m', 'Unpushed');
-            },
-        ],
         ['fetch', (repo) => git(repo, 'remote', 'set-url', 'origin', '/nonexistent/ship-origin')],
         ['tag', (repo) => git(repo, 'tag', 'v0.1.1')],
         ['tag', (repo, origin) => git(origin, 'update-ref', 'refs/tags/v0.1.1', 'refs/heads/main')],
@@ -333,13 +327,40 @@ Deno.test('ship fetches before rejecting stale or diverged main without merging'
             );
             const result = await ship(repo, 'patch', '--dry');
             expect(result.code).toBe(1);
-            expect(result.stderr).toContain('synchronized');
+            expect(result.stderr).toContain('equal to or ahead of fetched origin/main');
             expect(await git(repo, 'rev-parse', 'origin/main')).toBe(
                 await git(peer, 'rev-parse', 'HEAD'),
             );
             expect(await git(repo, 'rev-parse', 'HEAD')).toBe(head);
             expect(await git(repo, 'status', '--porcelain')).toBe('');
             expect(await git(origin, 'show-ref')).toBe(remote);
+        });
+    }
+});
+
+Deno.test('ship allows ahead main and pushes unpublished changes with the release', async () => {
+    for (const dry of [true, false]) {
+        await fixture(async (repo, origin) => {
+            const remote = await git(origin, 'show-ref');
+            await Deno.writeTextFile(join(repo, 'unrelated'), 'unpublished change\n');
+            await git(repo, 'add', 'unrelated');
+            await git(repo, 'commit', '-m', 'Unpublished change');
+            await git(repo, 'commit', '--allow-empty', '-m', 'Another unpublished commit');
+            const head = await git(repo, 'rev-parse', 'HEAD');
+            const result = await ship(repo, 'patch', ...(dry ? ['--dry'] : []));
+            expect(result.code, result.stderr).toBe(0);
+            if (dry) {
+                expect(await git(repo, 'rev-parse', 'HEAD')).toBe(head);
+                expect(await git(repo, 'tag')).toBe('');
+                expect(await git(origin, 'show-ref')).toBe(remote);
+            } else {
+                const release = await git(repo, 'rev-parse', 'HEAD');
+                expect(await git(repo, 'rev-parse', 'HEAD^')).toBe(head);
+                expect(await git(origin, 'rev-parse', 'main')).toBe(release);
+                expect(await git(origin, 'rev-parse', 'v0.1.1^{commit}')).toBe(release);
+                expect(await git(origin, 'show', 'main:unrelated')).toBe('unpublished change');
+                expect(await git(repo, 'status', '--porcelain')).toBe('');
+            }
         });
     }
 });

@@ -43,9 +43,9 @@ Scope: add integration tests using disposable working repositories and bare orig
 
 Expected outcome:
 
-- Reject branches other than main, dirty tracked files/index, untracked release inputs, unsynchronized or diverged main, fetch failures, and existing target tags locally or remotely before release edits.
-- Verify origin is fetched before equality with origin/main is established; do not merge, rebase, or push unrelated commits.
-- Successful normal invocation edits only release inputs, creates the release commit and `vX.Y.Z` tag, then pushes origin/main and the tag together atomically without force.
+- Reject branches other than main, dirty tracked files/index, untracked release inputs, behind or diverged main, fetch failures, and existing target tags locally or remotely before release edits.
+- Verify origin is fetched before checking that origin/main is an ancestor of local HEAD (or equal); do not merge or rebase. Accept equal and ahead main in both dry and normal modes.
+- Successful normal invocation edits only release inputs, creates the release commit and `vX.Y.Z` tag, then pushes all unpublished main commits, the release commit, and the tag together atomically without force.
 - Simulate concurrent remote changes, remote tag collisions, unsupported atomic push, and rejected pushes. No separate-push fallback or ref overwrite is permitted. Failures retain any already-created local files/commit/tag and report the failed step and partial state.
 - Dry mode performs the same preflight, including fetch, and writes the same preparation edits unstaged. Index, commits, tags, and remote refs stay unchanged; a later invocation rejects the dirty checkout. Existing-version changelog handling works in both modes.
 
