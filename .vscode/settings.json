@@ -9,5 +9,8 @@
                 "autoShowOutputPanel": "error"
             }
         ]
+    },
+    "files.associations": {
+        "*.conf": "ini"
     }
 }
