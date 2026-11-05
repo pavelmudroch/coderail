@@ -11,10 +11,10 @@ run verification commands for the files you change.
 
 - [Installation](#installation)
 - [Start a project](#start-a-project)
+- [Typical workflow](#typical-workflow)
 - [Ideas and tickets](#ideas-and-tickets)
 - [Verify your changes](#verify-your-changes)
 - [Upgrading](#upgrading)
-- [Contributing](#contributing)
 - [Help & Current Limitations](#command-help-and-current-limitations)
 - [Contributing](#contributing)
 - [License](#license)
@@ -70,6 +70,37 @@ cr ticket next
 `cr init` creates `.coderail/coderail.conf` without replacing an existing
 configuration. Tickets and ideas are Markdown files under `.coderail`, so you can
 edit their contents and keep them in version control alongside your code.
+
+## Typical workflow
+
+Use CodeRail's skills with your coding agent to move from an idea to reviewed,
+committed changes. Invoke skills through your agent's skill interface; names such
+as `explore` and `implement` refer to agent skills, not `cr` subcommands.
+
+1. **Initialize the project.** Run `cr init` from the project root.
+2. **Configure verification.** Edit `.coderail/coderail.conf` to define the checks
+   your project needs, such as formatting, linting, type checking, and tests. See
+   [Verify your changes](#verify-your-changes) for rule syntax and examples. Set
+   these up before implementation so the agent can validate its work.
+3. **Start an agent session with the CodeRail skills available.** Give the agent
+   your goal and relevant project context, then invoke the skills below as work
+   progresses.
+4. **Explore.** Use `explore` to clarify the outcome, investigate the existing
+   code, and agree on scope, behavior, important interfaces, and verification
+   expectations. The agent records these decisions in an implementation-ready
+   idea or idea tree.
+5. **Create tickets.** Use `ticket` to turn the agreed design into small,
+   actionable tickets with explicit dependencies and validation criteria.
+6. **Implement and repeat.** Use `implement` with a ticket or let it select the
+   next ready ticket. The agent implements its tasks, runs configured
+   verification, fixes failures, and closes the ticket once it passes. Repeat
+   this loop for the remaining tickets; `cr loop` is currently a placeholder.
+7. **Walk through the changes.** Stage the changes you want to review, then use
+   `walkthrough` to understand the implementation and discuss improvements with
+   the agent. It records agreed follow-up work in the idea's `REVIEW.md`. Address
+   that work, verify any changes, and review again as needed.
+8. **Commit.** Stage the final reviewed changes and use `commit` to create
+   logically coherent commits from the staged diff.
 
 ## Ideas and tickets
 
