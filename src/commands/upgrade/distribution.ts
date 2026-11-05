@@ -41,7 +41,13 @@ const TARGETS = [
     'aarch64-pc-windows-msvc',
 ];
 
-type Asset = { id: number; name: string; size: number; updated_at: string; state: string };
+type Asset = {
+    id: number;
+    name: string;
+    size: number;
+    updated_at: string;
+    state: string;
+};
 type Release = {
     id: number;
     tag_name: string;
@@ -50,7 +56,12 @@ type Release = {
     target_commitish: string;
     updated_at: string;
 };
-export type Build = { schemaVersion: 1; version: string; commit: string; target: string };
+export type Build = {
+    schemaVersion: 1;
+    version: string;
+    commit: string;
+    target: string;
+};
 export type ResolvedRelease = {
     version: string;
     commit: string;
@@ -88,7 +99,9 @@ export function targetTriple(os: string, arch: string): string {
 
 async function request(path: string, fetcher: typeof fetch, binary = false): Promise<Response> {
     const response = await fetcher(`${API}${path}`, {
-        headers: { Accept: binary ? 'application/octet-stream' : 'application/vnd.github+json' },
+        headers: {
+            Accept: binary ? 'application/octet-stream' : 'application/vnd.github+json',
+        },
     });
     if (!response.ok) {
         await response.body?.cancel();
@@ -176,8 +189,16 @@ export async function resolveRelease(
             'Invalid canary release',
         );
         version = 'canary';
+    } else if (selection.version === undefined || selection.version === 'latest') {
+        selected = inspectPublication(await (await request('/releases/latest', fetcher)).json());
+        requireValid(
+            selected.prerelease === false &&
+                /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(selected.tag_name),
+            'Invalid latest stable release',
+        );
+        version = selected.tag_name.replace(/^v/, '');
     } else {
-        const selector = selection.version ?? 'latest';
+        const selector = selection.version;
         const parts = selector.replace(/^v/, '').split('.');
         const candidates = (await list<Release>('/releases', fetcher)).filter(
             (release) =>
@@ -185,10 +206,7 @@ export async function resolveRelease(
                 release.draft === false &&
                 release.prerelease === false &&
                 /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(release.tag_name) &&
-                (selector === 'latest' ||
-                    parts.every(
-                        (part, i) => release.tag_name.replace(/^v/, '').split('.')[i] === part,
-                    )),
+                parts.every((part, i) => release.tag_name.replace(/^v/, '').split('.')[i] === part),
         );
         candidates.sort((a, b) => {
             const left = a.tag_name.replace(/^v/, '').split('.').map(BigInt) as [

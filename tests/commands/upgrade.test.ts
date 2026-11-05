@@ -183,6 +183,7 @@ Deno.test('upgrade help follows command formatting and retains release and confl
     for (const content of [
         'including the current version.',
         'latest (default), X / vX, X.Y / vX.Y, or X.Y.Z / vX.Y.Z.',
+        'Latest selects GitHub’s designated stable release.',
         'Partial versions select the newest matching stable release.',
         'Exact versions permit downgrades.',
         'Select the latest unreleased build; excludes --version.',
@@ -249,6 +250,34 @@ async function commandFor(
             }),
     };
 }
+
+Deno.test('latest request failures leave the installation unchanged', async () => {
+    await installation(async (root) => {
+        const marker = join(root, 'personal');
+        await Deno.writeTextFile(marker, 'unchanged');
+        for (const flags of [[], ['--version', 'latest']]) {
+            const calls: string[] = [];
+            const command = new Upgrade({
+                fetcher: (input) => {
+                    calls.push(String(input));
+                    return Promise.resolve(new Response(null, { status: 404 }));
+                },
+                report: () => {},
+            });
+            await expect(
+                command.run({
+                    context: { installRoot: root, currentWorkingDirectory: root },
+                    configuration: { nonInteractive: true } as Configuration,
+                    parsedArguments: command.parseArguments(flags),
+                    signal: new AbortController().signal,
+                }),
+            ).rejects.toThrow('GitHub request failed (404): /releases/latest');
+            expect(calls.length).toBe(1);
+            expect(await Deno.readTextFile(marker)).toBe('unchanged');
+            expect(Array.from(Deno.readDirSync(root), (entry) => entry.name)).toEqual(['personal']);
+        }
+    });
+});
 
 Deno.test(
     'upgrade bootstraps a custom root, restores same version and permits downgrades',

@@ -124,6 +124,7 @@ export class Upgrade implements Command<UpgradeArguments> {
             '      --version <version>',
             '                       Select latest (default), X / vX, X.Y / vX.Y, or',
             '                       X.Y.Z / vX.Y.Z.',
+            '                       Latest selects GitHub’s designated stable release.',
             '                       Partial versions select the newest matching stable',
             '                       release.',
             '                       Exact versions permit downgrades.',

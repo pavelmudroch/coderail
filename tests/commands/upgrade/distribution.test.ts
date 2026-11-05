@@ -100,8 +100,15 @@ function entries(version = '2.10.0', platform = target): Entry[] {
           ? 'darwin'
           : 'linux';
     return [
-        { name: os === 'windows' ? 'cr.exe' : 'cr', data: executable(os, platform.split('-')[0]) },
-        { name: 'instructions/a.md', data: encoder.encode('instruction'), method: 8 },
+        {
+            name: os === 'windows' ? 'cr.exe' : 'cr',
+            data: executable(os, platform.split('-')[0]),
+        },
+        {
+            name: 'instructions/a.md',
+            data: encoder.encode('instruction'),
+            method: 8,
+        },
         { name: 'templates/default.md', data: encoder.encode('template') },
         {
             name: 'build.json',
@@ -162,7 +169,13 @@ async function fixture(
     const checksum = encoder.encode(options.checksum ?? `${hash}  ${assetName}\n`);
     const selected = options.releases?.[0] ?? release();
     const assets = [
-        { id: 10, name: assetName, size: archive.length, updated_at: 'today', state: 'uploaded' },
+        {
+            id: 10,
+            name: assetName,
+            size: archive.length,
+            updated_at: 'today',
+            state: 'uploaded',
+        },
         {
             id: 11,
             name: `${assetName}.sha256`,
@@ -209,8 +222,6 @@ Deno.test(
             { ...release('v8.0.0', 6), draft: true },
         ];
         for (const [selector, version] of [
-            [undefined, '2.10.0'],
-            ['latest', '2.10.0'],
             ['2', '2.10.0'],
             ['v2', '2.10.0'],
             ['2.9', '2.9.9'],
@@ -226,6 +237,71 @@ Deno.test(
         }
     },
 );
+
+Deno.test(
+    'latest uses the designated stable release and stays pinned when designation changes',
+    async () => {
+        for (const version of [undefined, 'latest']) {
+            const f = await fixture({
+                releases: [release('v2.10.0', 1), release('v9.0.0', 2)],
+            });
+            let latest = f.release;
+            const fetcher: typeof fetch = (input, init) => {
+                if (String(input).endsWith('/releases/latest')) {
+                    f.calls.push(String(input));
+                    return Promise.resolve(Response.json(latest));
+                }
+                return f.fetcher(input, init);
+            };
+            const resolved = await resolveRelease({ version }, target, fetcher);
+            latest = release('v9.0.0', 2);
+            await withStagedDistribution(
+                resolved,
+                (stage) => {
+                    expect(stage.build.version).toBe('2.10.0');
+                    return Promise.resolve();
+                },
+                fetcher,
+            );
+            expect(f.calls.filter((url) => url.endsWith('/releases/latest')).length).toBe(1);
+            expect(f.calls.some((url) => url.includes('/releases?'))).toBe(false);
+            expect(f.calls.some((url) => url.endsWith('/releases/tags/v2.10.0'))).toBe(true);
+            expect(f.calls.some((url) => url.includes('/releases/1/assets?'))).toBe(true);
+        }
+    },
+);
+
+Deno.test('latest rejects invalid publications and request failures without fallback', async () => {
+    for (const invalid of [
+        { ...release(), draft: true },
+        { ...release(), prerelease: true },
+        release('canary'),
+        release('v01.2.3'),
+        release('v1.2'),
+        { ...release(), id: 0 },
+        { ...release(), target_commitish: 'main' },
+        null,
+    ]) {
+        const f = await fixture();
+        const fetcher: typeof fetch = (input, init) =>
+            String(input).endsWith('/releases/latest')
+                ? Promise.resolve(Response.json(invalid))
+                : f.fetcher(input, init);
+        await expect(resolveRelease({}, target, fetcher)).rejects.toThrow();
+        expect(f.calls.length).toBe(0);
+    }
+    for (const status of [404, 500]) {
+        const f = await fixture();
+        const fetcher: typeof fetch = (input, init) =>
+            String(input).endsWith('/releases/latest')
+                ? Promise.resolve(new Response(null, { status }))
+                : f.fetcher(input, init);
+        await expect(resolveRelease({}, target, fetcher)).rejects.toThrow(
+            `GitHub request failed (${status}): /releases/latest`,
+        );
+        expect(f.calls.length).toBe(0);
+    }
+});
 
 Deno.test('resolution paginates releases and assets', async () => {
     const f = await fixture();
@@ -260,7 +336,7 @@ Deno.test('resolution paginates releases and assets', async () => {
         }
         return f.fetcher(input, init);
     };
-    expect((await resolveRelease({}, target, fetcher)).version).toBe('2.10.0');
+    expect((await resolveRelease({ version: '2' }, target, fetcher)).version).toBe('2.10.0');
 });
 
 Deno.test('resolution stops at empty pages after exactly 100 releases and assets', async () => {
@@ -287,7 +363,7 @@ Deno.test('resolution stops at empty pages after exactly 100 releases and assets
         }
         return f.fetcher(input, init);
     };
-    const resolved = await resolveRelease({}, target, fetcher);
+    const resolved = await resolveRelease({ version: '2' }, target, fetcher);
     expect(resolved.version).toBe('2.10.0');
     expect(resolved.archive).toEqual(f.assets[0]);
     expect(resolved.checksum).toEqual(f.assets[1]);
@@ -390,7 +466,11 @@ Deno.test('optional resource roots stage and plan empty incoming sets', async ()
             );
             for (const [root, state] of Object.entries(states)) {
                 if (state === 'empty') {
-                    contents.push({ name: `${root}/`, data: new Uint8Array(), mode: 0o40755 });
+                    contents.push({
+                        name: `${root}/`,
+                        data: new Uint8Array(),
+                        mode: 0o40755,
+                    });
                 }
             }
             const f = await fixture({ entries: contents });
@@ -477,7 +557,13 @@ Deno.test(
                 'assets/a',
                 'templates/é',
             ]) {
-                badEntries.push([...entries(), { name: path, data: encoder.encode('bad') }]);
+                badEntries.push([
+                    ...entries(),
+                    {
+                        name: path,
+                        data: encoder.encode('bad'),
+                    },
+                ]);
             }
             for (const root of ['instructions', 'templates']) {
                 badEntries.push(
@@ -497,8 +583,15 @@ Deno.test(
             for (const extra of [
                 { name: 'cr', data: executable() },
                 { name: 'templates/DEFAULT.md', data: encoder.encode('collision') },
-                { name: 'templates/default.md/child', data: encoder.encode('collision') },
-                { name: 'templates/link', data: encoder.encode('../../escape'), mode: 0o120777 },
+                {
+                    name: 'templates/default.md/child',
+                    data: encoder.encode('collision'),
+                },
+                {
+                    name: 'templates/link',
+                    data: encoder.encode('../../escape'),
+                    mode: 0o120777,
+                },
             ]) {
                 badEntries.push([...entries(), extra]);
             }
@@ -548,7 +641,10 @@ Deno.test(
     'changing canary publication and download failures abort before consuming staging',
     async () => {
         for (const change of ['release', 'commit', 'asset', 'size', 'download']) {
-            const f = await fixture({ releases: [release('canary')], entries: entries('canary') });
+            const f = await fixture({
+                releases: [release('canary')],
+                entries: entries('canary'),
+            });
             const resolved = await resolveRelease({ canary: true }, target, f.fetcher);
             if (change === 'release') {
                 f.release.id = 2;
@@ -608,7 +704,9 @@ Deno.test(
         const ordered = await fixture({
             releases: [release('2.10.0'), release('2.10.1'), release('2.10.1'), release('2.10.0')],
         });
-        expect((await resolveRelease({}, target, ordered.fetcher)).version).toBe('2.10.1');
+        expect((await resolveRelease({ version: '2.10' }, target, ordered.fetcher)).version).toBe(
+            '2.10.1',
+        );
     },
 );
 
@@ -671,7 +769,11 @@ Deno.test(
         archives.push(
             badCrc,
             zip([
-                { name: 'instructions/', data: encoder.encode('not empty'), mode: 0o40755 },
+                {
+                    name: 'instructions/',
+                    data: encoder.encode('not empty'),
+                    mode: 0o40755,
+                },
                 ...entries(),
             ]),
         );
@@ -708,7 +810,12 @@ Deno.test('metadata identity and executable headers must match selected build', 
     for (const data of [
         { schemaVersion: 2, version: '2.10.0', commit, target },
         { schemaVersion: 1, version: '2.10.0', commit: 'b'.repeat(40), target },
-        { schemaVersion: 1, version: '2.10.0', commit, target: 'aarch64-unknown-linux-gnu' },
+        {
+            schemaVersion: 1,
+            version: '2.10.0',
+            commit,
+            target: 'aarch64-unknown-linux-gnu',
+        },
         null,
     ]) {
         const f = await fixture({
