@@ -11,6 +11,7 @@
 ## Upgrading
 
 Run `cr upgrade` to install the latest stable release or reconcile the current version.
+Run `cr upgrade --list` to list published stable versions without changing the installation.
 After activation, CodeRail offers to add the selected installation's `bin` directory to PATH.
 This requires separate consent, including when overwrite flags are supplied.
 Bash uses `~/.bashrc`, Zsh uses `~/.zshrc`, and Fish uses `~/.config/fish/config.fish`.

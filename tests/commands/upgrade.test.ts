@@ -84,6 +84,7 @@ Deno.test('upgrade parses valid selectors, defaults and force aliases', () => {
     expect(command.getSubcommand()).toBeUndefined();
     expect(command.parseArguments([]).args).toEqual({
         help: false,
+        list: false,
         canary: false,
         force: false,
         yes: false,
@@ -163,7 +164,7 @@ Deno.test('upgrade help follows command formatting and retains release and confl
         if (!line || line === 'Usage:' || line === 'Options:') {
             continue;
         }
-        if (/^\s+--(?:version|canary)/.test(line)) {
+        if (/^\s+--(?:version|canary|list)/.test(line)) {
             expect(line).toMatch(/^ {6}--/);
         } else if (/^\s+-[hfyn],/.test(line)) {
             expect(line).toMatch(/^ {2}-[hfyn],/);
@@ -961,3 +962,142 @@ Deno.test(
         });
     },
 );
+
+Deno.test('upgrade listing rejects incompatible options', () => {
+    const command = new Upgrade();
+    for (const flags of [
+        ['--list', '--version=1'],
+        ['--version', '1', '--list'],
+        ['--list', '--force'],
+        ['--list', '--yes'],
+        ['--list', '--no'],
+        ['--list', '--canary'],
+        ['--list', '-f'],
+        ['--list', '-y'],
+        ['--list', '-n'],
+    ]) {
+        expect(() => command.parseArguments(flags)).toThrow();
+    }
+    for (const value of ['', 'true', 'false']) {
+        expect(() => command.parseArguments([`--list=${value}`])).toThrow();
+    }
+});
+
+Deno.test('listing prints markers and never changes the installation, even on errors', async () => {
+    await installation(async (root) => {
+        const publication = (
+            tag_name: string,
+        ): {
+            id: number;
+            tag_name: string;
+            draft: boolean;
+            prerelease: boolean;
+            target_commitish: string;
+            updated_at: string;
+        } => ({
+            id: 1,
+            tag_name,
+            draft: false,
+            prerelease: false,
+            target_commitish: 'a'.repeat(40),
+            updated_at: 'today',
+        });
+        const releases = [publication('1.4.2'), publication('v1.5.0'), publication('v1.4.3')];
+        for (const scenario of [
+            {
+                current: '1.4.3',
+                latest: '1.4.3',
+                expected: ['1.5.0', '1.4.3 (latest, current)', '1.4.2'],
+            },
+            {
+                current: '1.4.2',
+                latest: '1.4.3',
+                expected: ['1.5.0', '1.4.3 (latest)', '1.4.2 (current)'],
+            },
+            {
+                current: 'canary',
+                latest: '1.4.3',
+                expected: ['1.5.0', '1.4.3 (latest)', '1.4.2'],
+            },
+            { current: undefined, latest: '1.4.3', expected: ['1.5.0', '1.4.3 (latest)', '1.4.2'] },
+            {
+                current: '9.0.0',
+                latest: '9.1.0',
+                expected: ['1.5.0', '1.4.3', '1.4.2'],
+            },
+        ]) {
+            const messages: string[] = [];
+            const calls: string[] = [];
+            const command = new Upgrade({
+                currentVersion: scenario.current,
+                fetcher: (input) => {
+                    const url = String(input);
+                    calls.push(url);
+                    return Promise.resolve(
+                        Response.json(
+                            url.includes('/latest') ? publication(scenario.latest) : releases,
+                        ),
+                    );
+                },
+                report: (message) => messages.push(message),
+                pathSetup: () => {
+                    throw new Error('unexpected PATH setup');
+                },
+                confirm: () => {
+                    throw new Error('unexpected prompt');
+                },
+            });
+            await command.run({
+                context: { installRoot: root, currentWorkingDirectory: root },
+                configuration: { nonInteractive: true } as Configuration,
+                parsedArguments: command.parseArguments(['--list']),
+                signal: new AbortController().signal,
+            });
+            expect(messages).toEqual([
+                scenario.expected
+                    .map((line) =>
+                        line.includes('current')
+                            ? Log.color.green(line)
+                            : line.includes('latest')
+                              ? Log.color.yellow(line)
+                              : line,
+                    )
+                    .join('\n'),
+            ]);
+            expect(calls.length).toBe(2);
+            expect(calls.every((url) => !url.includes('/assets'))).toBe(true);
+            expect([...Deno.readDirSync(root)]).toEqual([]);
+        }
+        for (const failure of ['empty', 'list', 'latest']) {
+            const calls: string[] = [];
+            const command = new Upgrade({
+                fetcher: (input) => {
+                    const url = String(input);
+                    calls.push(url);
+                    return Promise.resolve(
+                        failure === 'list' || (failure === 'latest' && url.includes('/latest'))
+                            ? new Response('', { status: 404 })
+                            : Response.json(failure === 'empty' ? [] : releases),
+                    );
+                },
+                report: () => {},
+                pathSetup: () => {
+                    throw new Error('unexpected PATH setup');
+                },
+                confirm: () => {
+                    throw new Error('unexpected prompt');
+                },
+            });
+            await expect(
+                command.run({
+                    context: { installRoot: root, currentWorkingDirectory: root },
+                    configuration: { nonInteractive: true } as Configuration,
+                    parsedArguments: command.parseArguments(['--list']),
+                    signal: new AbortController().signal,
+                }),
+            ).rejects.toThrow(failure === 'empty' ? 'No stable releases' : 'GitHub request failed');
+            expect(calls.every((url) => !url.includes('/assets'))).toBe(true);
+            expect([...Deno.readDirSync(root)]).toEqual([]);
+        }
+    });
+});

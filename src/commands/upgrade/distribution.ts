@@ -172,6 +172,46 @@ function selectAsset(assets: Asset[], name: string): Asset {
     };
 }
 
+export async function listStableReleases(
+    fetcher: typeof fetch = fetch,
+): Promise<{ versions: string[]; latest: string }> {
+    const releases = await list<Release>('/releases', fetcher);
+    const versions = [
+        ...new Set(
+            releases
+                .filter(
+                    (release) =>
+                        release &&
+                        release.draft === false &&
+                        release.prerelease === false &&
+                        typeof release.tag_name === 'string' &&
+                        /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(
+                            release.tag_name,
+                        ),
+                )
+                .map((release) => release.tag_name.replace(/^v/, '')),
+        ),
+    ];
+    requireValid(versions.length > 0, 'No stable releases found');
+    const latest = inspectPublication(await (await request('/releases/latest', fetcher)).json());
+    requireValid(
+        latest.prerelease === false &&
+            /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(latest.tag_name),
+        'Invalid latest stable release',
+    );
+    versions.sort((a, b) => {
+        const left = a.split('.').map(BigInt) as [bigint, bigint, bigint];
+        const right = b.split('.').map(BigInt) as [bigint, bigint, bigint];
+        for (const i of [0, 1] as const) {
+            if (left[i] !== right[i]) {
+                return left[i] > right[i] ? -1 : 1;
+            }
+        }
+        return left[2] > right[2] ? -1 : 1;
+    });
+    return { versions, latest: latest.tag_name.replace(/^v/, '') };
+}
+
 export async function resolveRelease(
     selection: { version?: string; canary?: boolean },
     target: string,

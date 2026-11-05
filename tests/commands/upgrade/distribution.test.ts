@@ -895,3 +895,106 @@ Deno.test('streamed assets and larger compressed resources retain every byte', a
         'Missing or invalid release asset',
     );
 });
+
+Deno.test('stable listing sorts normalized releases and uses designated latest', async () => {
+    const publication = (
+        tag_name: string,
+    ): {
+        id: number;
+        tag_name: string;
+        draft: boolean;
+        prerelease: boolean;
+        target_commitish: string;
+        updated_at: string;
+    } => ({
+        id: 1,
+        tag_name,
+        draft: false,
+        prerelease: false,
+        target_commitish: commit,
+        updated_at: 'now',
+    });
+    const fetcher: typeof fetch = (input) => {
+        const url = String(input);
+        return Promise.resolve(
+            Response.json(
+                url.includes('/latest')
+                    ? publication('v1.4.3')
+                    : [
+                          publication('1.4.3'),
+                          publication('1.4.2'),
+                          publication('v1.5.0'),
+                          publication('1.4.3'),
+                          { ...publication('v2.0.0'), prerelease: true },
+                          publication('bad'),
+                      ],
+            ),
+        );
+    };
+    const { listStableReleases } = await import('../../../src/commands/upgrade/distribution.ts');
+    expect(await listStableReleases(fetcher)).toEqual({
+        versions: ['1.5.0', '1.4.3', '1.4.2'],
+        latest: '1.4.3',
+    });
+});
+
+Deno.test('stable listing handles pages and metadata errors', async () => {
+    const { listStableReleases } = await import('../../../src/commands/upgrade/distribution.ts');
+    const publication = (
+        tag_name: string,
+    ): {
+        id: number;
+        tag_name: string;
+        draft: boolean;
+        prerelease: boolean;
+        target_commitish: string;
+        updated_at: string;
+    } => ({
+        id: 1,
+        tag_name,
+        draft: false,
+        prerelease: false,
+        target_commitish: commit,
+        updated_at: 'now',
+    });
+    const page = Array.from({ length: 100 }, (_, i) => publication(`1.${i}.0`));
+    const fetcher: typeof fetch = (input) =>
+        Promise.resolve(
+            Response.json(
+                String(input).includes('latest')
+                    ? publication('1.0.0')
+                    : String(input).includes('page=2')
+                      ? [
+                            publication('1.0.1'),
+                            null,
+                            { ...publication('2.0.0'), draft: true },
+                            { ...publication('canary'), prerelease: true },
+                        ]
+                      : page,
+            ),
+        );
+    expect((await listStableReleases(fetcher)).versions.length).toBe(101);
+    await expect(listStableReleases(() => Promise.resolve(Response.json([])))).rejects.toThrow(
+        'No stable releases',
+    );
+    await expect(
+        listStableReleases((input) =>
+            Promise.resolve(
+                String(input).includes('latest')
+                    ? new Response('', { status: 404 })
+                    : Response.json([publication('1.0.0')]),
+            ),
+        ),
+    ).rejects.toThrow('GitHub request failed');
+    await expect(
+        listStableReleases((input) =>
+            Promise.resolve(
+                Response.json(
+                    String(input).includes('latest')
+                        ? { ...publication('bad'), prerelease: true }
+                        : [publication('1.0.0')],
+                ),
+            ),
+        ),
+    ).rejects.toThrow('Invalid latest');
+});

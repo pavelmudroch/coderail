@@ -3,15 +3,22 @@ import type { Command, ParsedArguments } from '@commands';
 import { Log } from '@log';
 import { join } from '@std/path';
 
+import { CODERAIL_VERSION } from '../cli/version.ts';
 import type { RunContext } from './helpers/command.ts';
 import { activateDistribution } from './upgrade/activation.ts';
 import { AssetApplyError, type AssetPlan, type AssetProgress } from './upgrade/assets.ts';
 import { cleanupStaleExecutablesWithinLock, retireExecutables } from './upgrade/cleanup.ts';
-import { resolveRelease, targetTriple, withStagedDistribution } from './upgrade/distribution.ts';
+import {
+    listStableReleases,
+    resolveRelease,
+    targetTriple,
+    withStagedDistribution,
+} from './upgrade/distribution.ts';
 import { setupPath, terminalConfirm } from './upgrade/path.ts';
 
 type UpgradeArguments = {
     help: boolean;
+    list: boolean;
     version?: string;
     canary: boolean;
     force: boolean;
@@ -21,6 +28,7 @@ type UpgradeArguments = {
 
 type UpgradeOptions = {
     fetcher?: typeof fetch;
+    currentVersion?: string;
     runningExecutable?: string;
     interactive?: boolean;
     confirm?: (message: string) => boolean | Promise<boolean>;
@@ -36,6 +44,7 @@ export class Upgrade implements Command<UpgradeArguments> {
     parseArguments(original: readonly string[]): ParsedArguments<UpgradeArguments> {
         const args: UpgradeArguments = {
             help: false,
+            list: false,
             canary: false,
             force: false,
             yes: false,
@@ -50,7 +59,7 @@ export class Upgrade implements Command<UpgradeArguments> {
             if (arg === undefined) {
                 continue;
             }
-            for (const option of ['--help', '--canary', '--force', '--yes', '--no']) {
+            for (const option of ['--help', '--list', '--canary', '--force', '--yes', '--no']) {
                 if (arg.startsWith(`${option}=`)) {
                     Cli.raiseUsageError(`Option "${option}" does not take a value.`, this);
                 }
@@ -72,6 +81,9 @@ export class Upgrade implements Command<UpgradeArguments> {
                 continue;
             }
             switch (arg) {
+                case '--list':
+                    args.list = true;
+                    break;
                 case '--canary':
                     args.canary = true;
                     break;
@@ -93,6 +105,12 @@ export class Upgrade implements Command<UpgradeArguments> {
                     }
                     Cli.raiseUsageError(`Unexpected upgrade argument "${arg}".`, this);
             }
+        }
+        if (
+            args.list &&
+            (args.version !== undefined || args.canary || args.force || args.yes || args.no)
+        ) {
+            Cli.raiseUsageError('Option "--list" cannot be combined with upgrade options.', this);
         }
         if (args.canary && args.version !== undefined) {
             Cli.raiseUsageError(
@@ -117,11 +135,14 @@ export class Upgrade implements Command<UpgradeArguments> {
         return [
             'Usage:',
             '  cr upgrade [--help] [--canary | --version <version>] [--force [--yes | --no]]',
+            '  cr upgrade [--help] --list',
             '',
             '  Install or reconcile a verified Coderail distribution, including the current',
             '  version.',
             '',
             'Options:',
+            '      --list           List stable releases without changing the installation;',
+            '                       cannot be combined with other upgrade options.',
             '  -h, --help           Show this help message and exit.',
             '      --version <version>',
             '                       Select latest (default), X / vX, X.Y / vX.Y, or',
@@ -187,6 +208,34 @@ export class Upgrade implements Command<UpgradeArguments> {
         };
         try {
             signal.throwIfAborted();
+            if (args.list) {
+                const { versions, latest } = await listStableReleases(fetcher);
+                const formattedVersionOutputs: string[] = [];
+                for (const version of versions) {
+                    const isLatest = version === latest;
+                    const isCurrent = version === (this.options.currentVersion ?? CODERAIL_VERSION);
+                    const markers: string[] = [];
+                    if (isLatest) {
+                        markers.push('latest');
+                    }
+                    if (isCurrent) {
+                        markers.push('current');
+                    }
+
+                    const outputLine = `${version}${markers.length ? ` (${markers.join(', ')})` : ''}`;
+                    if (isCurrent) {
+                        formattedVersionOutputs.push(Log.color.green(outputLine));
+                        continue;
+                    }
+                    if (isLatest) {
+                        formattedVersionOutputs.push(Log.color.yellow(outputLine));
+                        continue;
+                    }
+                    formattedVersionOutputs.push(outputLine);
+                }
+                output(formattedVersionOutputs.join('\n'));
+                return;
+            }
             const release = await resolveRelease(
                 args,
                 targetTriple(Deno.build.os, Deno.build.arch),
