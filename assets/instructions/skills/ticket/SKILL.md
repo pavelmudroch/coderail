@@ -33,3 +33,4 @@ For each implementation unit:
 4. Specify implementation scope, expected outcome, and validation criteria for each task under `## Task details`.
 5. Reference relevant files, documentation, specifications, and related tickets under `## References`.
 6. Verify that every task is independently actionable and has verifiable outcomes.
+7. Create or update TICKETS.md with ticket references, next to corresponding IDEA.md if applicable.
