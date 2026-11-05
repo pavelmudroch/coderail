@@ -35,15 +35,23 @@ Explore implementation of `src/commands/upgrade.ts`.
 
 ## Agreed bootstrap contract
 
+- Final installer amendments, rerun behavior and PATH targets are recorded in [Stable release installer](../stable-release-installer/IDEA.md). PATH supports Bash, Zsh, Fish and Windows user PATH with manual guidance elsewhere; declines and unattended runs print instructions without edits. Piped installation can prompt through an available terminal unless explicitly noninteractive. These decisions supersede earlier unresolved PATH scope notes below.
+
 - `install.sh` puts the downloaded compiled executable directly in `<selected-root>/libexec/` and invokes its upgrade command by physical path.
 - Upgrade derives the selected installation root from its own executable location; no installation-directory flag is needed for this bootstrap contract.
 - Upgrade completes installation of instructions/templates, creates the initial distribution manifest, and establishes `<root>/bin/cr`.
-- Bootstrap integration with PATH belongs to the deferred installer work; only `<root>/bin` should be exposed. Windows feasibility: updating the current user PATH does not require administrator privileges; changing the machine-wide PATH does. PATH permissions therefore do not inherently require an elevated per-user installation, unlike Windows symlink creation without Developer Mode. References: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmd and https://learn.microsoft.com/en-us/windows/win32/shell/user-environment-variables .
+- PATH ownership amendment: PATH integration belongs to upgrade, including bootstrap, as agreed in [Stable release installer](../stable-release-installer/IDEA.md#agreed-installation-root-and-path-ownership). After successful activation, check whether `<root>/bin` is on PATH; if missing, ask before configuring it automatically. Failure is nonfatal and prints the error plus manual setup instructions. Only `<root>/bin` should be exposed. Supported configuration targets and unattended behavior still need agreement. Windows feasibility: updating the current user PATH does not require administrator privileges; changing the machine-wide PATH does. References: https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/cmd and https://learn.microsoft.com/en-us/windows/win32/shell/user-environment-variables .
 - Initial bootstrap reconciliation must recognize the running bootstrap executable as such rather than reject it as an untracked conflicting file.
 
 ## Agreed stable version selection
 
-- Omitted `--version`, or `--version latest`, selects the newest stable release.
+- `cr upgrade` with no arguments upgrades to GitHub's designated latest stable release, exactly like `cr upgrade --version latest`.
+- Add `cr upgrade --list` to list available versions without upgrading. This operation must not download distribution archives, change the installation, or configure PATH.
+- Listing contract: list stable releases in descending numeric version order, exclude drafts and prereleases (canary remains selectable with `--canary`), and reject `--list` combined with selection or mutation flags (`--version`, `--canary`, `--force`, `--yes`, `--no`, including aliases).
+- Mark GitHub's designated latest as `(latest)` and the running CLI's stable version as `(current)`. If both match the same release, use exactly `(latest, current)`. Compare normalized versions so a release tag's optional `v` prefix does not affect matching. Only mark current if it appears in the stable listing; a canary or unpublished running version does not add a synthetic release row.
+- Example: `1.5.0`, `1.4.3 (latest, current)`, `1.4.2`, each on its own line. When different, annotate the two respective rows separately with `(latest)` and `(current)`.
+
+- Omitted `--version`, or `--version latest`, selects GitHub's designated latest stable release via `/releases/latest`, rather than calculating the highest version. This agreed amendment is shared with [Stable release installer](../stable-release-installer/IDEA.md); the current implementation still requires alignment. Reject invalid stable identity, drafts and prereleases; fail clearly when no latest release exists. Resolve once and retain existing pinned publication/asset verification.
 - `X` / `vX` selects the newest stable release matching that major version.
 - `X.Y` / `vX.Y` selects the newest stable release matching that major/minor version.
 - `X.Y.Z` / `vX.Y.Z` selects that exact release. Explicit selection permits downgrades.
@@ -123,6 +131,8 @@ Reference behavior: `src/commands/install.ts` (`planInstallation`, argument vali
 - Actual workflow implementation remains deferred.
 
 ## Verification expectations
+
+- Verify `--list` lists versions without archive downloads, installation changes, or PATH prompts; cover numeric listing order, stable filtering, latest/current/combined markers, normalized version matching, absent current releases, incompatible flags, empty results and GitHub request failures. Verify no arguments and `--version latest` have identical selection behavior.
 
 - Help and invalid arguments never perform an upgrade.
 - Verify mutually exclusive selection flags; `X`, `X.Y`, and `X.Y.Z` with and without leading `v`; default/latest stable selection; explicit downgrades; and same-version reconciliation with conflict protection.

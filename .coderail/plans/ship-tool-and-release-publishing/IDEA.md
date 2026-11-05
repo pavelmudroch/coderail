@@ -64,6 +64,10 @@ This is exploration, not authorization to release the current checkout. No sourc
 
 ## Agreed publication and recovery
 
+- Promotion policy finalized during installer exploration: after upload and validation, automatically promote only if the version is higher than the currently designated latest, or no latest exists. Older maintenance releases stay available without promotion; rollback is manual in GitHub. Serialize promotion and recheck latest before deciding so concurrent builds cannot promote an older release over a newer one. This resolves the promotion-policy question below without adding a maintainer CLI flag.
+
+- Latest-release amendment agreed during [Stable release installer](../stable-release-installer/IDEA.md) exploration: create stable releases with `make_latest: "false"`, upload and validate the complete asset set, then promote the intended default with `make_latest: "true"`. Failed upload/validation must not promote the release. Older maintenance releases must not displace the intended default. No moving `latest` Git tag is needed; canary remains a prerelease. Installer and default upgrade consume GitHub's latest designation. The publisher implementation still needs alignment; the promotion policy/interface for distinguishing maintenance releases remains to be designed.
+
 - Ship finalizes the changelog as shipped before committing/tagging/pushing; it does not track subsequent CI publication state or undo changelog entries on failure.
 - Use the newly versioned changelog section from the tagged revision as GitHub release notes.
 - Build the exact tagged commit and check all six archives and six sidecars before publication. Create a public release directly and upload its assets. Do not use GitHub drafts or require a manual publication approval.
