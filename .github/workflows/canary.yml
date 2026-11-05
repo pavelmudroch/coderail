@@ -1,0 +1,112 @@
+name: Canary release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+          # Native public-repository ARM64 runner. Unavailability blocks publication;
+          # never silently substitute a cross-compile for runtime smoke coverage.
+          - target: aarch64-pc-windows-msvc
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.8'
+      - name: Compile and check distribution
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: canary
+          COMMIT: ${{ github.sha }}
+        run: deno run -A tools/package.ts --target "$TARGET" --version "$VERSION" --commit "$COMMIT" --output packages
+      - name: Native executable, resource lookup, first installation and upgrade
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: canary
+          COMMIT: ${{ github.sha }}
+        run: deno run -A tools/smoke-package.ts --target "$TARGET" --version "$VERSION" --commit "$COMMIT" --output packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.target }}
+          path: packages/*
+          if-no-files-found: error
+
+  check:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.8'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: packages
+      - name: Check all six archives and all six sidecars through upgrade consumer
+        env:
+          COMMIT: ${{ github.sha }}
+        run: deno run -A tools/canary.ts check "$COMMIT" packages
+
+  publish:
+    needs: check
+    runs-on: ubuntu-24.04
+    # All mutations, including tag movement and every upload, hold this lock.
+    # Pending runs may be superseded. Never cancel an active publisher: its API
+    # request could still complete after cancellation. Queue order is irrelevant
+    # because the helper checks authoritative main inside this boundary.
+    concurrency:
+      group: canary-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.8'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: packages
+      - name: Recheck complete set and freshness, replace rolling public canary, upload twelve assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ github.sha }}
+        run: deno run -A tools/canary.ts publish "$COMMIT" packages

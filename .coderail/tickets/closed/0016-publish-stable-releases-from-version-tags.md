@@ -2,12 +2,13 @@
 id: "0016"
 slug: "publish-stable-releases-from-version-tags"
 title: "Publish stable releases from version tags"
-status: "open"
+status: "closed"
 created_at: "2026-11-05T08:56:01.198Z"
-updated_at: "2026-11-05T08:56:01.198Z"
+updated_at: "2026-11-05T09:46:00.846Z"
 dependencies:
   - "0014"
   - "0015"
+reason: "done"
 ---
 
 # Publish stable releases from version tags
@@ -16,9 +17,9 @@ Build the exact pushed `vX.Y.Z` revision and publish its six checked distributio
 
 ## Tasks
 
-1. [ ] Specify stable publication gates and failure behavior with fixtures
-2. [ ] Add the six-target stable release workflow
-3. [ ] Publish checked assets and document manual recovery
+1. [x] Specify stable publication gates and failure behavior with fixtures
+2. [x] Add the six-target stable release workflow
+3. [x] Publish checked assets and document manual recovery
 
 ## Task details
 
@@ -67,3 +68,13 @@ Validation: task 1 checks pass; offline publication checks establish operation o
 - [GitHub Releases API](https://docs.github.com/en/rest/releases/releases)
 - Dependencies: [0014 ship CLI](0014-add-maintainer-ship-cli-for-versioned-releases.md), [0015 packaging](0015-compile-and-package-upgrade-compatible-release-distributions.md).
 - Shared publication consumer: [0017 canary workflow](0017-publish-fresh-main-tip-canary-distributions.md).
+
+## Implementation validation
+
+- Added stable tag workflow with identity -> six native build/smoke jobs -> collected package check -> publication dependencies. Every job uses Deno 2.9.8; only publication has contents write permission. Native runners cover Linux/macOS/Windows x86_64 and ARM64, including windows-11-arm; runner unavailability blocks publication.
+- Four offline publication contracts pass via `cr verify ./tests/tools/release.test.ts`: annotated/lightweight identity, tagged notes, all twelve assets, missing/corrupt/mismatched packages, existing releases, creation failures, and retained public state after two successful uploads followed by a failed upload. No cleanup, replacement, retry, or real API mutation occurs in these checks.
+- Built all six real compiler outputs in a disposable committed source snapshot with an annotated version tag. `tools/release.ts check` accepted the complete archive/sidecar collection through the current upgrade consumer. Linux x86_64 native smoke passed executable version, initialization, first installation, actual resource reads through compiled production runtime context, installed resource equality, and subsequent upgrade using a real canary archive. Other five runtimes require their matching CI hosts; they cannot run on this Linux x86_64 workstation.
+- Existing upgrade partial-publication refusal test passes (missing/changing assets rejected before prompts or installation mutation); consumer behavior was unchanged.
+- actionlint 1.7.12 validates workflow syntax and current runner labels. Inspected success-only dependencies, six-target matrix, compiler pins, lack of application-suite/manual/draft gates, and both release.yml/canary.yml ignore exceptions.
+- `deno check tools/release.ts tools/smoke-package.ts`, `git diff --check`, and final `cr verify -s` over only this implementation's six changed files pass (Markdown/YAML/ignore files have no configured verification rules).
+- Maintainer documentation covers exact ship-to-CI handoff, offline local checks, transient/failed missing assets, finalized changelog history, and manual resolution followed by a fresh normal ship. Existing staged changes were preserved. No tag pushes, real workflow triggers, or release publication were performed.

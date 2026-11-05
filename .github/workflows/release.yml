@@ -1,0 +1,133 @@
+name: Stable release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stable-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  identity:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      commit: ${{ steps.identity.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.8'
+      - id: identity
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        # github.sha may identify an annotated tag object; always peel to a commit.
+        run: deno run -A tools/release.ts identity "$RELEASE_TAG" "$(git rev-parse HEAD)"
+
+  build:
+    needs: identity
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+          # Native public-repository ARM64 runner. Unavailability blocks publication;
+          # never silently substitute a cross-compile for runtime smoke coverage.
+          - target: aarch64-pc-windows-msvc
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.8'
+      - name: Compile and check distribution
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.identity.outputs.version }}
+          COMMIT: ${{ needs.identity.outputs.commit }}
+        run: deno run -A tools/package.ts --target "$TARGET" --version "$VERSION" --commit "$COMMIT" --output packages
+      - name: Native executable, resource lookup, first installation and upgrade
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.identity.outputs.version }}
+          COMMIT: ${{ needs.identity.outputs.commit }}
+        run: deno run -A tools/smoke-package.ts --target "$TARGET" --version "$VERSION" --commit "$COMMIT" --output packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.target }}
+          path: packages/*
+          if-no-files-found: error
+
+  check:
+    needs: [identity, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.8'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: packages
+      - name: Check all six archives and all six sidecars through upgrade consumer
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          COMMIT: ${{ needs.identity.outputs.commit }}
+        run: deno run -A tools/release.ts check "$RELEASE_TAG" "$COMMIT" packages
+
+  publish:
+    needs: [identity, check]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.8'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: packages
+      - name: Recheck complete set, create public release, upload twelve assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          COMMIT: ${{ needs.identity.outputs.commit }}
+        run: deno run -A tools/release.ts publish "$RELEASE_TAG" "$COMMIT" packages

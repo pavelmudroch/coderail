@@ -2,10 +2,11 @@
 id: "0014"
 slug: "add-maintainer-ship-cli-for-versioned-releases"
 title: "Add maintainer ship CLI for versioned releases"
-status: "open"
+status: "closed"
 created_at: "2026-11-05T08:55:55.531Z"
-updated_at: "2026-11-05T08:55:55.531Z"
+updated_at: "2026-11-05T09:15:46.165Z"
 dependencies: []
+reason: "done"
 ---
 
 # Add maintainer ship CLI for versioned releases
@@ -14,10 +15,10 @@ Provide `deno run -A tools/ship.ts <major|minor|patch> [--dry]` to prepare the v
 
 ## Tasks
 
-1. [ ] Specify CLI, version, and changelog preparation with tests
-2. [ ] Specify Git preflight, dry preparation, and push failures in disposable repositories
-3. [ ] Implement argument parsing and version/changelog preparation
-4. [ ] Implement safe Git orchestration and maintainer guidance
+1. [x] Specify CLI, version, and changelog preparation with tests
+2. [x] Specify Git preflight, dry preparation, and push failures in disposable repositories
+3. [x] Implement argument parsing and version/changelog preparation
+4. [x] Implement safe Git orchestration and maintainer guidance
 
 ## Task details
 

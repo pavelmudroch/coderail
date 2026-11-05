@@ -2,11 +2,12 @@
 id: "0015"
 slug: "compile-and-package-upgrade-compatible-release-distributions"
 title: "Compile and package upgrade-compatible release distributions"
-status: "open"
+status: "closed"
 created_at: "2026-11-05T08:56:00.945Z"
-updated_at: "2026-11-05T08:56:00.945Z"
+updated_at: "2026-11-05T09:36:26.409Z"
 dependencies:
   - "0013"
+reason: "done"
 ---
 
 # Compile and package upgrade-compatible release distributions
@@ -15,9 +16,9 @@ Provide the shared per-target packaging CLI used by stable and canary publicatio
 
 ## Tasks
 
-1. [ ] Add packaging contract and consumer-compatibility tests
-2. [ ] Implement per-target compilation and strict archive production
-3. [ ] Validate real package outputs and document the packaging interface
+1. [x] Add packaging contract and consumer-compatibility tests
+2. [x] Implement per-target compilation and strict archive production
+3. [x] Validate real package outputs and document the packaging interface
 
 ## Task details
 
@@ -70,3 +71,14 @@ Validation: exercise all six real compiler outputs and record matching-platform 
 - [Deno compile documentation](https://docs.deno.com/runtime/reference/cli/compile/)
 - Dependency: [0013 optional resources](0013-support-optional-resources-in-upgrade-distributions.md).
 - Consumers: [0016 stable publishing](0016-publish-stable-releases-from-version-tags.md), [0017 canary publishing](0017-publish-fresh-main-tip-canary-distributions.md).
+
+## Implementation validation
+
+- Added `tools/package.ts`, dependency-free CLI option definitions, per-target compilation/archive production, and reusable offline `tools/check-package.ts` checks. Compiler pin: Deno 2.9.8; both downstream workflows must use that exact pin.
+- `cr verify ./tests/tools/package.test.ts` passes all 10 focused contracts, including source identity, clean tracked inputs, untracked/ignored exclusion, six target formats, stable/canary metadata, exact checksums, optional source/archive roots, unsafe resources, missing/corrupt outputs, and consumer rejection paths.
+- `CODERAIL_PACKAGE_ACCEPTANCE=1 cr verify ./tests/tools/package-real.test.ts` passes using disposable committed source snapshots and output/installation roots. All six real Deno 2.9.8 compiler outputs passed production staging-consumer checks through fake GitHub transport. The real packaging and offline-check CLIs also passed for canary.
+- Matching-platform execution passed on Linux x86_64: source/executable version agreement, initialization, first installation, repeat installation, stable-to-canary upgrade with absent resources, personal-resource preservation, and first installation without resources. A compiled probe importing production runtime context verified flattened resource lookup before and after upgrade.
+- Other five target runtimes cannot execute on this Linux x86_64 host. Matching Linux ARM64, macOS x86_64/ARM64, and Windows x86_64/ARM64 runner smoke coverage is required in downstream publication workflows; cross-compilation is not runtime coverage.
+- The actual `src/main.ts` dependency graph contains 173 modules and no npm module specifiers. Native `oxc-parser` packages in the lock/config belong to development tooling, outside the compiled graph. Future native application imports require target binding/runtime validation.
+- Existing harness connectors and template installation are stubs, and source instructions currently omit AGENTS.md. Full harness installation is outside this smoke coverage; no application behavior or placeholder resource was added to mask those limitations.
+- Tool type checking passed with `deno check`; usage, output contract, six-package publication prerequisite, and runner requirements are documented in README. No GitHub publication or release-path artifact writes occurred.
