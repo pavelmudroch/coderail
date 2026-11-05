@@ -9,7 +9,9 @@ import type { StagedDistribution } from './distribution.ts';
 /** Separate from harness ownership. Schema 1 uses the shared checksum/size schema.
  * libexec entries are reserved for activation/cleanup consumers; assets never
  * retire executables. Consumers must serialize planning through activation at
- * the installation root, and activate only after applyAssets resolves.
+ * the installation root, and activate only after applyAssets resolves. Missing
+ * or empty staged resource roots represent empty incoming sets; existing roots
+ * must be real directories, and other inspection errors propagate.
  */
 export const DISTRIBUTION_MANIFEST = '.coderail-distribution.json';
 export type AssetAction = {
@@ -69,7 +71,17 @@ async function inspectDestination(root: string, path: string): Promise<boolean> 
 
 async function resources(root: string, directory: string): Promise<ManifestFile[]> {
     const result: ManifestFile[] = [];
-    await regularDirectory(root, directory);
+    try {
+        await regularDirectory(root, directory);
+    } catch (error) {
+        if (
+            error instanceof Deno.errors.NotFound &&
+            ['instructions', 'templates'].includes(directory)
+        ) {
+            return result;
+        }
+        throw error;
+    }
     for await (const entry of Deno.readDir(join(root, directory))) {
         const path = `${directory}/${entry.name}`;
         if (entry.isDirectory) {

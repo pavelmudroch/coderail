@@ -767,3 +767,59 @@ Deno.test(
         }
     },
 );
+
+Deno.test('optional resources do not bypass release asset preflight before mutation', async () => {
+    for (const failure of ['missing', 'changing']) {
+        await installation(async (root) => {
+            await Deno.mkdir(join(root, 'templates'));
+            const personal = join(root, 'templates/personal.md');
+            await Deno.writeTextFile(personal, 'personal');
+            const platform = targetTriple(Deno.build.os, Deno.build.arch);
+            const mock = await fixture({
+                platform,
+                entries: entries('2.10.0', platform).filter(
+                    (entry) =>
+                        !entry.name.startsWith('instructions/') &&
+                        !entry.name.startsWith('templates/'),
+                ),
+            });
+            if (failure === 'missing') {
+                mock.assets.pop();
+            }
+            const fetcher: typeof fetch = async (input, init) => {
+                const response = await mock.fetcher(input, init);
+                if (failure === 'changing' && String(input).endsWith('/releases/assets/10')) {
+                    const asset = mock.assets[0];
+                    if (!asset) {
+                        throw new Error('Missing fixture asset');
+                    }
+                    asset.updated_at = 'changed';
+                }
+                return response;
+            };
+            let prompts = 0;
+            const command = new Upgrade({
+                fetcher,
+                interactive: true,
+                report: () => {},
+                confirm: () => {
+                    prompts++;
+                    return true;
+                },
+            });
+            await expect(
+                command.run({
+                    context: { installRoot: root, currentWorkingDirectory: root },
+                    configuration: {} as Configuration,
+                    parsedArguments: command.parseArguments([]),
+                    signal: new AbortController().signal,
+                }),
+            ).rejects.toThrow();
+            expect(prompts).toBe(0);
+            expect(await Deno.readTextFile(personal)).toBe('personal');
+            expect(Array.from(Deno.readDirSync(root), (entry) => entry.name)).toEqual([
+                'templates',
+            ]);
+        });
+    }
+});

@@ -4,10 +4,16 @@ import { expect } from '@std/expect';
 import { join } from '@std/path';
 
 import {
+    applyAssets,
+    DISTRIBUTION_MANIFEST,
+    planAssets,
+} from '../../../src/commands/upgrade/assets.ts';
+import {
     resolveRelease,
     targetTriple,
     withStagedDistribution,
 } from '../../../src/commands/upgrade/distribution.ts';
+import { InstallManifest } from '../../../src/install-manifest.ts';
 
 const commit = 'a'.repeat(40);
 const target = 'x86_64-unknown-linux-gnu';
@@ -372,6 +378,66 @@ Deno.test(
     },
 );
 
+Deno.test('optional resource roots stage and plan empty incoming sets', async () => {
+    for (const instructions of ['files', 'empty', 'missing']) {
+        for (const templates of ['files', 'empty', 'missing']) {
+            const states = { instructions, templates };
+            const contents = entries().filter(
+                (entry) =>
+                    !Object.entries(states).some(
+                        ([root, state]) => state !== 'files' && entry.name.startsWith(`${root}/`),
+                    ),
+            );
+            for (const [root, state] of Object.entries(states)) {
+                if (state === 'empty') {
+                    contents.push({ name: `${root}/`, data: new Uint8Array(), mode: 0o40755 });
+                }
+            }
+            const f = await fixture({ entries: contents });
+            const resolved = await resolveRelease({}, target, f.fetcher);
+            const installation = await Deno.makeTempDir();
+            try {
+                await withStagedDistribution(
+                    resolved,
+                    async (stage) => {
+                        for (const [root, state] of Object.entries(states)) {
+                            const path = join(stage.root, root);
+                            if (state === 'missing') {
+                                await expect(Deno.lstat(path)).rejects.toBeInstanceOf(
+                                    Deno.errors.NotFound,
+                                );
+                            } else {
+                                expect((await Deno.lstat(path)).isDirectory).toBe(true);
+                            }
+                        }
+                        const plan = await planAssets(installation, stage);
+                        const expected = entries()
+                            .filter((entry) =>
+                                Object.entries(states).some(
+                                    ([root, state]) =>
+                                        state === 'files' && entry.name.startsWith(`${root}/`),
+                                ),
+                            )
+                            .map((entry) => entry.name);
+                        expect(plan.actions.map((action) => action.file.path)).toEqual(expected);
+                        await applyAssets(plan);
+                        expect(
+                            (
+                                await InstallManifest.load(
+                                    join(installation, DISTRIBUTION_MANIFEST),
+                                )
+                            )?.files.map((file) => file.path),
+                        ).toEqual(expected);
+                    },
+                    f.fetcher,
+                );
+            } finally {
+                await Deno.remove(installation, { recursive: true });
+            }
+        }
+    }
+});
+
 Deno.test(
     'package failures preserve installation and remove staging, including callback failures',
     async () => {
@@ -381,8 +447,6 @@ Deno.test(
             const badEntries = [
                 [],
                 entries().slice(1),
-                entries().filter((e) => !e.name.startsWith('instructions/')),
-                entries().filter((e) => !e.name.startsWith('templates/')),
                 entries().filter((e) => e.name !== 'build.json'),
                 entries('3.0.0'),
                 entries().map((e) =>
@@ -414,6 +478,21 @@ Deno.test(
                 'templates/é',
             ]) {
                 badEntries.push([...entries(), { name: path, data: encoder.encode('bad') }]);
+            }
+            for (const root of ['instructions', 'templates']) {
+                badEntries.push(
+                    entries().map((entry) =>
+                        entry.name.startsWith(`${root}/`)
+                            ? { ...entry, data: new Uint8Array() }
+                            : entry,
+                    ),
+                );
+                for (const mode of [0o100644, 0o120777, 0o020644]) {
+                    badEntries.push([
+                        ...entries().filter((entry) => !entry.name.startsWith(`${root}/`)),
+                        { name: root, data: encoder.encode('invalid root'), mode },
+                    ]);
+                }
             }
             for (const extra of [
                 { name: 'cr', data: executable() },

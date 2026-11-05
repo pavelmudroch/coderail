@@ -2,10 +2,11 @@
 id: "0013"
 slug: "support-optional-resources-in-upgrade-distributions"
 title: "Support optional resources in upgrade distributions"
-status: "open"
+status: "closed"
 created_at: "2026-11-05T08:55:55.349Z"
-updated_at: "2026-11-05T08:55:55.349Z"
+updated_at: "2026-11-05T09:06:44.155Z"
 dependencies: []
+reason: "done"
 ---
 
 # Support optional resources in upgrade distributions
@@ -14,8 +15,8 @@ Allow either resource directory to be absent or empty so the existing upgrade co
 
 ## Tasks
 
-1. [ ] Cover optional-resource staging and reconciliation behavior
-2. [ ] Accept absent and empty resource directories through upgrade
+1. [x] Cover optional-resource staging and reconciliation behavior
+2. [x] Accept absent and empty resource directories through upgrade
 
 ## Task details
 
@@ -51,3 +52,11 @@ Validation: task 1 passes alongside existing distribution and asset checks. Run 
 - [Shared release fixture](../../../tests/commands/upgrade/release-fixture.ts)
 - Related completed tickets: 0001 (distribution staging), 0003 (asset ownership).
 - Consumer of this amendment: [0015 packaging](0015-compile-and-package-upgrade-compatible-release-distributions.md).
+
+## Implementation validation
+
+- Staging accepts independently absent or empty resource roots without placeholders; the exported paths and interfaces remain unchanged. The planner treats missing top-level resource directories as empty sets and propagates other filesystem errors.
+- Tests cover all nine combinations of populated, explicitly empty, and omitted ZIP resource roots through staging, planning, application, and manifest persistence. Invalid root types, empty resource files, unsafe paths, links, and special files remain rejected.
+- Empty incoming sets preserve personal files, remove unchanged obsolete resources and missing ownership entries, retain declined modified-file baselines, and require force plus affirmative confirmation for modified removals.
+- Command integration confirms missing or changing release assets fail before installation mutation with optional resources.
+- Per-file verification and final `cr verify -s` passed for both changed source files and all three changed test files: 46 tests total, with 100% reported line coverage for the corresponding sources. Mutation checks passed but reported type-error mutations rather than killed mutations.

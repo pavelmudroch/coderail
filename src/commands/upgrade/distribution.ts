@@ -9,7 +9,8 @@ import { crc32, inflateRawSync } from 'node:zlib';
  * Each release attaches coderail-<Deno target>.zip and <archive>.sha256 containing
  * exactly `<lowercase SHA-256>  <archive name>\n` (sha256sum format).
  *
- * ZIP roots contain cr (cr.exe on Windows), build.json, instructions/, templates/.
+ * ZIP roots contain cr (cr.exe on Windows) and build.json. Optional instructions/
+ * and templates/ roots may be absent or empty, representing empty resource sets.
  * build.json is {schemaVersion:1,version:"X.Y.Z"|"canary",commit:"<40 hex>",
  * target:"<Deno target>"}. Canary identity is its full commit, not just "canary".
  * Archives use classic single-disk ZIP, stored or deflated entries, UTF-8/ASCII
@@ -443,10 +444,6 @@ export async function withStagedDistribution<T>(
             'Build metadata mismatch',
         );
         for (const resource of ['instructions', 'templates']) {
-            requireValid(
-                entries.some((entry) => entry.path.startsWith(`${resource}/`) && !entry.directory),
-                `Missing ${resource} contents`,
-            );
             requireValid(
                 !entries.some(
                     (entry) =>

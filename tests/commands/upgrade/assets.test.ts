@@ -501,3 +501,86 @@ Deno.test(
         });
     },
 );
+
+Deno.test(
+    'empty incoming sets preserve personal files and reconcile managed baselines',
+    async () => {
+        for (const emptyDirectories of [false, true]) {
+            await fixture(async (root, stage) => {
+                await put(root, 'templates/personal.md', 'personal');
+                for (const path of [stage.instructions, stage.templates]) {
+                    await Deno.remove(path, { recursive: true });
+                    if (emptyDirectories) {
+                        await Deno.mkdir(path);
+                    }
+                }
+                const first = await planAssets(root, stage);
+                expect(first.actions).toEqual([]);
+                await applyAssets(first);
+                expect((await manifest(root)).files).toEqual([]);
+                await put(root, 'instructions/old.md', 'baseline');
+                await put(root, 'templates/edited.md', 'baseline');
+                await put(root, 'templates/missing.md', 'baseline');
+                const baseline = await InstallManifest.capture(root, [
+                    'instructions/old.md',
+                    'templates/edited.md',
+                    'templates/missing.md',
+                ]);
+                await InstallManifest.save(join(root, DISTRIBUTION_MANIFEST), baseline);
+                await put(root, 'templates/edited.md', 'edited');
+                await Deno.remove(join(root, 'templates/missing.md'));
+                await expect(planAssets(root, stage)).rejects.toThrow('force');
+                await expect(planAssets(root, stage, { force: true })).rejects.toThrow(
+                    'interactive',
+                );
+                await applyAssets(await planAssets(root, stage, { force: true, no: true }));
+                expect((await manifest(root)).files).toEqual(
+                    baseline.files.filter((file) => file.path === 'templates/edited.md'),
+                );
+                await expect(Deno.stat(join(root, 'instructions/old.md'))).rejects.toBeInstanceOf(
+                    Deno.errors.NotFound,
+                );
+                expect(await Deno.readTextFile(join(root, 'templates/edited.md'))).toBe('edited');
+                let prompts = 0;
+                await applyAssets(
+                    await planAssets(root, stage, {
+                        force: true,
+                        interactive: true,
+                        confirm(action) {
+                            prompts++;
+                            expect(action.kind).toBe('remove');
+                            expect(action.file.path).toBe('templates/edited.md');
+                            return true;
+                        },
+                    }),
+                );
+                expect(prompts).toBe(1);
+                expect((await manifest(root)).files).toEqual([]);
+                await expect(Deno.stat(join(root, 'templates/edited.md'))).rejects.toBeInstanceOf(
+                    Deno.errors.NotFound,
+                );
+                expect(await Deno.readTextFile(join(root, 'templates/personal.md'))).toBe(
+                    'personal',
+                );
+            });
+        }
+    },
+);
+
+Deno.test('staged resource inspection errors are not treated as absent roots', async () => {
+    await fixture(async (root, stage) => {
+        const original = Deno.lstat;
+        Deno.lstat = (path): Promise<Deno.FileInfo> => {
+            if (String(path) === stage.instructions) {
+                return Promise.reject(new Deno.errors.PermissionDenied('staged inspection denied'));
+            }
+            return original(path);
+        };
+        try {
+            await expect(planAssets(root, stage)).rejects.toThrow('staged inspection denied');
+            expect(Array.from(Deno.readDirSync(root))).toEqual([]);
+        } finally {
+            Deno.lstat = original;
+        }
+    });
+});
