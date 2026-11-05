@@ -5,6 +5,7 @@ const installer = join(Deno.cwd(), 'install.sh');
 
 async function fixture(
     run: (root: string, env: Record<string, string>) => Promise<void>,
+    downloaders: string[] = ['curl', 'wget'],
 ): Promise<void> {
     const root = await Deno.makeTempDir({ prefix: 'installer test ' });
     const tools = join(root, 'tools');
@@ -30,12 +31,39 @@ if [ "$1" = --version ]; then echo 'Coderail version 1.2.3'; exit 0; fi
 exit "$UPGRADE_STATUS"
 SCRIPT`,
     };
+    scripts.wget = scripts.curl ?? '';
     for (const [name, body] of Object.entries(scripts)) {
+        if ((name === 'curl' || name === 'wget') && !downloaders.includes(name)) {
+            continue;
+        }
         await Deno.writeTextFile(join(tools, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+    }
+    // Keep host downloaders out of PATH so missing-tool cases exercise the fallback.
+    for (const name of [
+        'sh',
+        'mkdir',
+        'jq',
+        'mktemp',
+        'chmod',
+        'rm',
+        'dirname',
+        'basename',
+        'readlink',
+        'cmp',
+        'cat',
+    ]) {
+        const resolved = await new Deno.Command('sh', {
+            args: ['-c', 'command -v "$1"', 'sh', name],
+            stdout: 'piped',
+        }).output();
+        if (!resolved.success) {
+            throw new Error(`Required fixture tool not found: ${name}`);
+        }
+        await Deno.symlink(new TextDecoder().decode(resolved.stdout).trim(), join(tools, name));
     }
     const env = {
         ...Deno.env.toObject(),
-        PATH: `${tools}:/usr/bin:/bin`,
+        PATH: tools,
         HOME: root,
         CODERAIL_INSTALL_ROOT: join(root, 'install root'),
         LOG: join(root, 'downloads'),
@@ -95,6 +123,55 @@ Deno.test('installer resolves latest once and pins bootstrap on supported hosts'
             expect(requests.match(/releases\/latest/g)?.length).toBe(1);
             expect(await read(env.CLI_LOG ?? '')).toContain('upgrade --version 1.2.3');
         });
+    }
+});
+
+Deno.test('installer prefers curl and falls back to wget when curl is unavailable', async () => {
+    for (const downloaders of [['curl', 'wget'], ['wget']]) {
+        await fixture(async (_root, env) => {
+            const result = await install(env);
+            expect(new TextDecoder().decode(result.stderr)).toBe('');
+            expect(result.success).toBe(true);
+            const requests = (await read(env.LOG ?? '')).trim().split('\n');
+            expect(requests.length).toBe(4);
+            const prefix = downloaders.includes('curl') ? '-fsSL -H ' : '-qO- --header=';
+            expect(requests.every((request) => request.startsWith(prefix))).toBe(true);
+            expect(requests[0]).toContain('Accept: application/vnd.github+json');
+            expect(requests[1]).toContain('Accept: application/vnd.github+json');
+            expect(requests[2]).toContain('Accept: application/octet-stream');
+            expect(requests[3]).toContain('Accept: application/octet-stream');
+            expect(await read(env.CLI_LOG ?? '')).toBe('upgrade --version 1.2.3\n');
+        }, downloaders);
+    }
+});
+
+Deno.test('installer reports when neither curl nor wget is available', async () => {
+    await fixture(async (_root, env) => {
+        const result = await install(env);
+        expect(result.success).toBe(false);
+        expect(new TextDecoder().decode(result.stderr)).toContain(
+            'Required download tool not found (curl or wget)',
+        );
+        expect(await read(env.LOG ?? '')).toBe('');
+        expect(await read(env.CLI_LOG ?? '')).toBe('');
+    }, []);
+});
+
+Deno.test('wget download failures never execute the bootstrap', async () => {
+    for (const failUrl of [
+        'releases/latest',
+        'releases/1/assets',
+        'releases/assets/2',
+        'releases/assets/3',
+    ]) {
+        await fixture(
+            async (_root, env) => {
+                env.FAIL_URL = failUrl;
+                expect((await install(env)).success).toBe(false);
+                expect(await read(env.CLI_LOG ?? '')).toBe('');
+            },
+            ['wget'],
+        );
     }
 });
 
