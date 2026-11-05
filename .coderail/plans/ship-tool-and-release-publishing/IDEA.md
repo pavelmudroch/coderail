@@ -35,7 +35,7 @@ This is exploration, not authorization to release the current checkout. No sourc
 
 - Ship is a repository maintainer tool. Its responsibility is limited to version bump, changelog update, commit, tag, and push to GitHub.
 - GitHub Actions owns compilation, distribution packaging, and GitHub Release publication. Ship does not perform these tasks locally or wait for them to finish.
-- Proposed invocation: `deno run -A tools/ship.ts major|minor|patch`; exact invocation remains an implementation choice within the repository-tool boundary.
+- Agreed invocation: `deno run -A tools/ship.ts <major|minor|patch> [--dry]`. Exactly one bump argument is required. No `--version` or `--force` option; manual version edits remain the maintainer's responsibility.
 
 ## Agreed Git preconditions
 
@@ -46,9 +46,10 @@ This is exploration, not authorization to release the current checkout. No sourc
 
 ## Agreed changelog behavior
 
-- Require actual release entries under `[Unreleased]`; an empty section blocks shipping before any release mutation. Empty category headings or whitespace alone are not entries.
-- Move those entries into a new `## [X.Y.Z] - YYYY-MM-DD` section for the bumped version, preserving their content, and retain a fresh empty `## [Unreleased]` section above it.
-- Update reference links at the end of the changelog to point to version tags and comparisons. `[Unreleased]` compares the new `vX.Y.Z` tag to `HEAD`; a version with a preceding release links to the comparison between their tags. For the first recorded release, use its tag page because no preceding release is recorded.
+- First check whether the changelog already contains a section for the computed target version. If it does, leave the entire changelog unchanged, including entries, date, and reference links; use that existing section as release notes. This skips the nonempty-Unreleased requirement for that case only, and does not skip version preparation or the remaining ship steps.
+- Otherwise require actual release entries under `[Unreleased]`; an empty section blocks shipping before any release mutation. Empty category headings or whitespace alone are not entries.
+- When creating the target version section, move those entries into a new `## [X.Y.Z] - YYYY-MM-DD` section for the bumped version, preserving their content, and retain a fresh empty `## [Unreleased]` section above it.
+- When creating the target version section, update reference links at the end of the changelog to point to version tags and comparisons. `[Unreleased]` compares the new `vX.Y.Z` tag to `HEAD`; a version with a preceding release links to the comparison between their tags. For the first recorded release, use its tag page because no preceding release is recorded.
 - Example after a first patch release: `[Unreleased]: https://github.com/pavelmudroch/coderail/compare/v0.1.1...HEAD` and `[0.1.1]: https://github.com/pavelmudroch/coderail/releases/tag/v0.1.1`. A subsequent `0.1.2` entry links to `https://github.com/pavelmudroch/coderail/compare/v0.1.1...v0.1.2`.
 - Preserve existing historical entries and reference links. Do not generate release entries from commits.
 
@@ -67,9 +68,9 @@ This is exploration, not authorization to release the current checkout. No sourc
 - Use the newly versioned changelog section from the tagged revision as GitHub release notes.
 - Build the exact tagged commit and check all six archives and six sidecars before publication. Create a public release directly and upload its assets. Do not use GitHub drafts or require a manual publication approval.
 - Recovery is entirely manual, followed by shipping again. No automatic rollback, resume/retry interface, tag movement, asset overwrite, or partial-release cleanup is required. On failure stop and report the failed step and any partial state; retain local files, commit, and tag already created for manual inspection.
-- A fresh ship invocation always applies the normal clean/synchronized-main, nonempty-Unreleased, and unused-tag preconditions. It does not reinterpret an existing release as a request to resume it. The maintainer resolves failed local/remote state and prepares entries for the next release as necessary.
+- A fresh ship invocation always applies the normal clean/synchronized-main and unused-tag preconditions, plus the changelog rules above. It does not reinterpret an existing release as a request to resume it. The maintainer resolves failed local/remote state and prepares entries for the next release as necessary.
 - A public release may be visible with missing assets during upload, or remain incomplete after an upload failure. This follows from the chosen no-draft flow: release creation and asset upload are separate GitHub operations. Existing upgrade must continue to fail before installation mutation on missing or changing assets; no fallback to an older release or automatic retry is added.
-- Share packaging between stable and canary workflows as an implementation choice. Preserve the earlier canary freshness and six-build requirements; apply the no-draft policy to publication. No recovery state machine is needed for either channel.
+- Share packaging between stable and canary workflows through the agreed packaging CLI below. Preserve the earlier canary freshness and six-build requirements; apply the no-draft policy to publication. No recovery state machine is needed for either channel.
 
 ## Agreed validation responsibility
 
@@ -81,12 +82,43 @@ This is exploration, not authorization to release the current checkout. No sourc
 
 ## Readiness and implementation freedom
 
-- No consequential design questions remain. Keep one idea covering the ship tool, CI publisher, and required upgrade compatibility amendment; these share the same version/package contract.
+- Behavioral decisions and consequential structure are agreed. Keep one idea covering the ship tool, CI publisher, and required upgrade compatibility amendment; these share the same version/package contract.
 - Leave helper boundaries, commit/tag message wording, release-date timezone, runner allocation, compiler pin, packaging library, and manual recovery guidance wording to implementation. Do not introduce additional release gates or automated recovery machinery.
+
+## Agreed structure and interfaces
+
+- `tools/ship.ts` owns the maintainer CLI and Git/version/changelog orchestration. Invocation: `deno run -A tools/ship.ts <major|minor|patch> [--dry]`. It exposes no application API. Private helpers and test seams remain implementation choices.
+- `tools/package.ts` owns compilation and packaging for one target. CLI: `deno run -A tools/package.ts --target <triple> --version <X.Y.Z|canary> --commit <full-sha> --output <directory>`. It runs in the checked-out source revision, checks that HEAD matches the supplied commit, and produces the agreed archive and checksum sidecar. Invalid identity, compilation, or package validation fails the command. Both channels use this entrypoint.
+- `.github/workflows/release.yml` owns stable tag orchestration; `.github/workflows/canary.yml` owns main-tip orchestration and freshness. Both collect and check all six packages before public publication. Workflow-local details and any private publication helper remain implementation choices.
+- Keep upgrade consumption in `src/commands/upgrade/distribution.ts` and resource reconciliation in `src/commands/upgrade/assets.ts`. Amend those existing boundaries for optional resources; retain their exported interfaces. Packaging compatibility tests exercise the existing staging consumer using a fake release transport, without depending on GitHub or adding a second ZIP validator as the compatibility authority.
+- Verify the tool entrypoints with disposable output roots and repositories. Version/source identity, executable headers, checksums, and staging compatibility must pass before a package counts as ready for publication. No application-test gate is added.
+- These approved boundaries narrow the earlier blanket delegation of helper boundaries at the consequential CLI/workflow/module boundaries. Private helpers, test seams, and workflow-local details remain implementation choices.
+
+## Agreed help behavior
+
+- Both `deno run -A tools/ship.ts --help` and `deno run -A tools/package.ts --help` print usage to stdout and exit successfully without requiring other arguments.
+- Ship help describes major/minor/patch selection and `--dry`, including its unstaged file edits and absence of commit/tag/push. Package help describes the required target, version, commit, and output options and the archive/checksum outputs.
+- Help exits before repository checks, fetching, file edits, compilation, packaging, or publication. It works outside a Git checkout and without network access.
+
+## Readiness evaluation
+
+- Release behavior, structure, bump arguments, dry preparation, and existing-version changelog handling are agreed. No consequential questions remain.
+- The related upgrade idea already references the optional-resource and no-draft publication amendments; existing consumer interfaces remain intact.
+- Accepted risks remain partial public releases after upload failure and potentially broken canary application behavior. Recovery remains manual as agreed.
+- Ready for ticket generation; no implementation or release execution is authorized by this exploration.
+
+## Agreed dry preparation
+
+- Example: `deno run -A tools/ship.ts patch --dry` performs normal preflight checks, including fetching origin, then writes the actual version/changelog edits in the current checkout. It leaves all edits unstaged and creates no commit, tag, or push. Existing-version changelog handling applies equally in dry and normal execution.
+- The maintainer may inspect, reset, or manually commit those edits. Dry mode is preparation only, with no automatic resume path. A later invocation still applies the normal clean/synchronized-main checks and computes a fresh bump from the then-current version. To repeat the original release through normal ship, reset the dry edits first.
+- Dry preparation checks neither future push acceptance nor CI build/publication success. It runs no application tests, matching normal ship responsibility.
 
 ## Verification expectations
 
+- Verify both `--help` entrypoints print their documented usage and exit zero without other arguments, repository access, network calls, or file mutations.
 - Exercise semver reset behavior and invalid arguments; verify version, changelog heading, tag, executable version, release metadata, and archive metadata agree.
+- Verify exactly one major/minor/patch argument, optional `--dry`, and rejection of unsupported override flags. Dry mode writes the same preparation edits as normal mode but leaves the index, local commits/tags, and remote refs unchanged; a later invocation rejects the dirty checkout under the existing preconditions.
+- Verify an existing computed-version changelog section leaves the entire changelog unchanged even with empty Unreleased, while version preparation continues. Without that section, preserve the agreed Unreleased validation, content movement, date, and link updates. Exercise both cases in normal and dry mode.
 - Test ship Git behavior in disposable repositories, including dirty state, existing tags, divergent branches, and rejected pushes; never use the real remote for tests.
 - Validate real produced packages with the current staging consumer, including all six executable headers, exact checksum formatting, and resource contents.
 - Verify missing and empty source/archive instructions and template directories independently and together through packaging, staging, and reconciliation; preserve unrelated user resources, apply existing managed-file removal rules, and reject unsafe resource entries.
