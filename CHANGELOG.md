@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Forward upgrade version selection correctly to the `cr upgrade` subcommand.
+- Report installation progress and check that the bootstrap executable created
+  the launcher before reporting success.
+
 ## [0.1.0] - 2026-11-05
 
 ### Added
