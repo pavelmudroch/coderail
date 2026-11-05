@@ -21,12 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stable release, a selected version, or the latest canary via `--canary`.
 - Upgrade checks for package integrity and platform compatibility, with protection
   for modified files and preservation of user templates.
-
-### Fixed
-
-- Bundled instructions and templates can be located when running compiled releases.
-- Terminal output remains readable when redirected or used without a terminal.
-- Missing and unknown commands report usage errors.
+- Shell installer for first-time installation and repair on Linux and macOS,
+  using verified stable packages and a configurable installation directory.
+  Downloads prefer `curl` and fall back to `wget` when `curl` is unavailable.
+- `cr upgrade --list` displays published stable versions with `latest` and
+  `current` markers without changing the installation.
+- Optional PATH setup after installation or upgrade, with separate consent for
+  Bash, Zsh, Fish, and Windows. Non-interactive sessions receive manual instructions.
+- Expanded the README into a user guide covering installation, project setup,
+  ideas, tickets, verification, upgrades, and current command limitations.
+  Development and release instructions now live in `DEVELOPMENT.md` and
+  `RELEASING.md`.
 
 ### Known limitations
 
