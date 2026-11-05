@@ -1,4 +1,4 @@
-import { parsePackageArguments, usage } from './package-options.ts';
+import { parsePackageArguments, usage } from './internal/package-options.ts';
 
 if (import.meta.main) {
     try {
@@ -6,7 +6,7 @@ if (import.meta.main) {
         if (options === 'help') {
             console.log(usage);
         } else {
-            const { packageRelease } = await import('./package-build.ts');
+            const { packageRelease } = await import('./internal/package-build.ts');
             await packageRelease(options);
             console.log(`Checked package ready: ${options.output}/coderail-${options.target}.zip`);
         }

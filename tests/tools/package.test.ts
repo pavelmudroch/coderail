@@ -2,12 +2,12 @@ import { expect } from '@std/expect';
 import { fromFileUrl, join } from '@std/path';
 
 import { checkPackage } from '../../tools/check-package.ts';
-import { type Compile, packageRelease } from '../../tools/package-build.ts';
+import { type Compile, packageRelease } from '../../tools/internal/package-build.ts';
 import {
     type PackageOptions,
     parsePackageArguments,
     targets,
-} from '../../tools/package-options.ts';
+} from '../../tools/internal/package-options.ts';
 import { entries, fixture as releaseFixture } from '../commands/upgrade/release-fixture.ts';
 
 const entrypoint = fromFileUrl(new URL('../../tools/package.ts', import.meta.url));

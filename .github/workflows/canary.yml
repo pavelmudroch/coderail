@@ -50,7 +50,7 @@ jobs:
           TARGET: ${{ matrix.target }}
           VERSION: canary
           COMMIT: ${{ github.sha }}
-        run: deno run -A tools/smoke-package.ts --target "$TARGET" --version "$VERSION" --commit "$COMMIT" --output packages
+        run: deno run -A tools/internal/smoke-package.ts --target "$TARGET" --version "$VERSION" --commit "$COMMIT" --output packages
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.target }}
@@ -77,7 +77,7 @@ jobs:
       - name: Check all six archives and all six sidecars through upgrade consumer
         env:
           COMMIT: ${{ github.sha }}
-        run: deno run -A tools/canary.ts check "$COMMIT" packages
+        run: deno run -A tools/internal/canary.ts check "$COMMIT" packages
 
   publish:
     needs: check
@@ -109,4 +109,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           COMMIT: ${{ github.sha }}
-        run: deno run -A tools/canary.ts publish "$COMMIT" packages
+        run: deno run -A tools/internal/canary.ts publish "$COMMIT" packages

@@ -109,7 +109,7 @@ before shipping again. Ship performs no rollback, cleanup, retry/resume, or tag 
 
 ## Packaging distributions
 
-Use **Deno 2.9.8**, pinned in `tools/package-options.ts`, on local builders and in both release
+Use **Deno 2.9.8**, pinned in `tools/internal/package-options.ts`, on local builders and in both release
 workflows. From the checked-out release revision, package one target:
 
 ```sh
@@ -173,6 +173,10 @@ imports enter the application graph, verify target-specific bindings with those 
 runners as well as compilation. Deno's cross-compilation interface is documented in the
 [official compile reference](https://docs.deno.com/runtime/reference/cli/compile/).
 
+Maintainer commands (`ship.ts`, `package.ts`, and `check-package.ts`) live directly in
+`tools/`. Workflow scripts, verification helpers, and import-only modules live in
+`tools/internal/`.
+
 ## Stable publication
 
 After ship pushes `vX.Y.Z`, `.github/workflows/release.yml` resolves the pushed
@@ -197,15 +201,15 @@ public creation and the separate asset upload operations.
 From a clean checkout of a tagged revision, run the same local checks without publication:
 
 ```sh
-deno run -A tools/release.ts identity v0.1.0 <full-sha>
-deno run -A tools/smoke-package.ts --target x86_64-unknown-linux-gnu --version 0.1.0 --commit <full-sha> --output /tmp/coderail-packages
-deno run -A tools/release.ts check v0.1.0 <full-sha> /tmp/coderail-packages
+deno run -A tools/internal/release.ts identity v0.1.0 <full-sha>
+deno run -A tools/internal/smoke-package.ts --target x86_64-unknown-linux-gnu --version 0.1.0 --commit <full-sha> --output /tmp/coderail-packages
+deno run -A tools/internal/release.ts check v0.1.0 <full-sha> /tmp/coderail-packages
 deno test -A tests/tools/release.test.ts
 ```
 
 Use the host's matching target for smoke checks. Package all six targets into the
 collection directory before the final check. These commands do not access the release
-API. Publication uses `tools/release.ts publish <tag> <full-sha> <directory>` with
+API. Publication uses `tools/internal/release.ts publish <tag> <full-sha> <directory>` with
 `GH_TOKEN`; the normal path is the tag-triggered workflow.
 
 Creation and upload are separate operations, so a release can be visible temporarily
@@ -261,7 +265,7 @@ There is no automatic cleanup, rollback, or upload resume; a publication that al
 targets the same SHA is refused, including an incomplete one. Inspect the workflow,
 release, tag and assets manually before recovery. A successful later main tip can
 replace the rolling canary normally; it does not resume the failed publication.
-Do not manually cancel an active publisher or run `tools/canary.ts publish` outside
+Do not manually cancel an active publisher or run `tools/internal/canary.ts publish` outside
 the workflow's lock. For manual recovery, first stop scheduling new publication and
 establish that publishers and their outstanding API requests have finished before
 changing remote state. Only the canary tag is disposable; stable tags remain fixed.
@@ -269,7 +273,7 @@ changing remote state. Only the canary tag is disposable; stable tags remain fix
 Offline checks require a clean checkout of the intended event tip and all six packages:
 
 ```sh
-deno run -A tools/canary.ts check <full-sha> /tmp/coderail-packages
+deno run -A tools/internal/canary.ts check <full-sha> /tmp/coderail-packages
 deno test -A tests/tools/canary.test.ts tests/tools/release.test.ts
 CODERAIL_PACKAGE_ACCEPTANCE=1 deno test -A --filter 'real canary:' tests/tools/package-real.test.ts
 ```

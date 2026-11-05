@@ -1,9 +1,9 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
-import { canaryIdentity, publishCanary } from '../../tools/canary.ts';
-import { packageRelease } from '../../tools/package-build.ts';
-import { targets } from '../../tools/package-options.ts';
+import { canaryIdentity, publishCanary } from '../../tools/internal/canary.ts';
+import { packageRelease } from '../../tools/internal/package-build.ts';
+import { targets } from '../../tools/internal/package-options.ts';
 import { entries } from '../commands/upgrade/release-fixture.ts';
 
 Deno.test(
@@ -28,12 +28,12 @@ Deno.test(
         expect(build).toContain('fail-fast: false');
         expect(build).toContain('VERSION: canary');
         expect(build).toContain('tools/package.ts');
-        expect(build).toContain('tools/smoke-package.ts');
+        expect(build).toContain('tools/internal/smoke-package.ts');
         expect(workflow).toContain('  check:\n    needs: build');
-        expect(workflow).toContain('tools/canary.ts check');
+        expect(workflow).toContain('tools/internal/canary.ts check');
         expect(workflow).toContain('  publish:\n    needs: check');
         expect(workflow).toContain('group: canary-publication\n      cancel-in-progress: false');
-        expect(workflow).toContain('tools/canary.ts publish');
+        expect(workflow).toContain('tools/internal/canary.ts publish');
         expect([...workflow.matchAll(/ref: (.+)/g)].map((match) => match[1])).toEqual(
             Array(3).fill('${{ github.sha }}'),
         );

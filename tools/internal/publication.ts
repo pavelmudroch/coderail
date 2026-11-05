@@ -1,6 +1,6 @@
 import { join } from '@std/path';
 
-import { checkPackage } from './check-package.ts';
+import { checkPackage } from '../check-package.ts';
 import { targets } from './package-options.ts';
 
 export const releaseApi = 'https://api.github.com/repos/pavelmudroch/coderail';

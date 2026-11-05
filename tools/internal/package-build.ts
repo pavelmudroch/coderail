@@ -2,7 +2,7 @@ import { crc32, deflateRawSync } from 'node:zlib';
 
 import { join, resolve } from '@std/path';
 
-import { checkPackage, sha256 } from './check-package.ts';
+import { checkPackage, sha256 } from '../check-package.ts';
 import { compilerVersion, type PackageOptions, parsePackageArguments } from './package-options.ts';
 
 type Entry = { name: string; data: Uint8Array };

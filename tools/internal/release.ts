@@ -143,7 +143,7 @@ if (import.meta.main) {
             Deno.args.length !== (mode === 'identity' ? 3 : 4)
         ) {
             throw new Error(
-                'Usage: deno run -A tools/release.ts <identity|check|publish> <vX.Y.Z> <full-sha> [package-directory]',
+                'Usage: deno run -A tools/internal/release.ts <identity|check|publish> <vX.Y.Z> <full-sha> [package-directory]',
             );
         }
         if (mode === 'identity') {

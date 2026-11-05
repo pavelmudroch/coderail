@@ -4,8 +4,8 @@ import { fromFileUrl, join } from '@std/path';
 import { activateDistribution } from '../../src/commands/upgrade/activation.ts';
 import { targetTriple } from '../../src/commands/upgrade/distribution.ts';
 import { checkPackage } from '../../tools/check-package.ts';
-import { packageRelease } from '../../tools/package-build.ts';
-import { targets } from '../../tools/package-options.ts';
+import { packageRelease } from '../../tools/internal/package-build.ts';
+import { targets } from '../../tools/internal/package-options.ts';
 
 async function copy(source: string, destination: string): Promise<void> {
     if ((await Deno.lstat(source)).isDirectory) {
@@ -77,7 +77,7 @@ Deno.test({
                     await run(root, Deno.execPath(), [
                         'run',
                         '-A',
-                        join(repository, 'tools/smoke-package.ts'),
+                        join(repository, 'tools/internal/smoke-package.ts'),
                         '--target',
                         options.target,
                         '--version',

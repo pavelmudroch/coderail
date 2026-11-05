@@ -6,7 +6,7 @@ import {
     type StagedDistribution,
     withStagedDistribution,
 } from '../src/commands/upgrade/distribution.ts';
-import { type PackageOptions, parsePackageArguments } from './package-options.ts';
+import { type PackageOptions, parsePackageArguments } from './internal/package-options.ts';
 
 export async function sha256(bytes: Uint8Array): Promise<string> {
     return Array.from(

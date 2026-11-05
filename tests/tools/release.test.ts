@@ -1,9 +1,9 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
-import { packageRelease } from '../../tools/package-build.ts';
-import { targets } from '../../tools/package-options.ts';
-import { publishStable, stableIdentity } from '../../tools/release.ts';
+import { packageRelease } from '../../tools/internal/package-build.ts';
+import { targets } from '../../tools/internal/package-options.ts';
+import { publishStable, stableIdentity } from '../../tools/internal/release.ts';
 import { entries } from '../commands/upgrade/release-fixture.ts';
 
 async function git(root: string, ...args: string[]): Promise<string> {

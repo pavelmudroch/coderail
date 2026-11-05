@@ -150,7 +150,7 @@ if (import.meta.main) {
             Deno.args.length !== 3
         ) {
             throw new Error(
-                'Usage: deno run -A tools/canary.ts <check|publish> <full-sha> <package-directory>',
+                'Usage: deno run -A tools/internal/canary.ts <check|publish> <full-sha> <package-directory>',
             );
         }
         if (mode === 'check') {

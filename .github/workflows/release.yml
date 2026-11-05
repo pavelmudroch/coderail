@@ -31,7 +31,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         # github.sha may identify an annotated tag object; always peel to a commit.
-        run: deno run -A tools/release.ts identity "$RELEASE_TAG" "$(git rev-parse HEAD)"
+        run: deno run -A tools/internal/release.ts identity "$RELEASE_TAG" "$(git rev-parse HEAD)"
 
   build:
     needs: identity
@@ -76,7 +76,7 @@ jobs:
           TARGET: ${{ matrix.target }}
           VERSION: ${{ needs.identity.outputs.version }}
           COMMIT: ${{ needs.identity.outputs.commit }}
-        run: deno run -A tools/smoke-package.ts --target "$TARGET" --version "$VERSION" --commit "$COMMIT" --output packages
+        run: deno run -A tools/internal/smoke-package.ts --target "$TARGET" --version "$VERSION" --commit "$COMMIT" --output packages
       - uses: actions/upload-artifact@v4
         with:
           name: package-${{ matrix.target }}
@@ -104,7 +104,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           COMMIT: ${{ needs.identity.outputs.commit }}
-        run: deno run -A tools/release.ts check "$RELEASE_TAG" "$COMMIT" packages
+        run: deno run -A tools/internal/release.ts check "$RELEASE_TAG" "$COMMIT" packages
 
   publish:
     needs: [identity, check]
@@ -130,4 +130,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
           COMMIT: ${{ needs.identity.outputs.commit }}
-        run: deno run -A tools/release.ts publish "$RELEASE_TAG" "$COMMIT" packages
+        run: deno run -A tools/internal/release.ts publish "$RELEASE_TAG" "$COMMIT" packages
