@@ -8,6 +8,7 @@ import { activateDistribution } from './upgrade/activation.ts';
 import { AssetApplyError, type AssetPlan, type AssetProgress } from './upgrade/assets.ts';
 import { cleanupStaleExecutablesWithinLock, retireExecutables } from './upgrade/cleanup.ts';
 import { resolveRelease, targetTriple, withStagedDistribution } from './upgrade/distribution.ts';
+import { setupPath, terminalConfirm } from './upgrade/path.ts';
 
 type UpgradeArguments = {
     help: boolean;
@@ -24,6 +25,7 @@ type UpgradeOptions = {
     interactive?: boolean;
     confirm?: (message: string) => boolean | Promise<boolean>;
     report?: (message: string) => void;
+    pathSetup?: typeof setupPath;
 };
 
 export class Upgrade implements Command<UpgradeArguments> {
@@ -230,7 +232,10 @@ export class Upgrade implements Command<UpgradeArguments> {
                             for (const action of plan.actions) {
                                 if (!action.approved) {
                                     report(
-                                        `Declined ${action.kind}: "${join(root, action.file.path)}".`,
+                                        `Declined ${action.kind}: "${join(
+                                            root,
+                                            action.file.path,
+                                        )}".`,
                                     );
                                 }
                             }
@@ -260,6 +265,22 @@ export class Upgrade implements Command<UpgradeArguments> {
                 },
                 fetcher,
             );
+            try {
+                await (this.options.pathSetup ?? setupPath)({
+                    bin: join(root, 'bin'),
+                    confirm: context.configuration.nonInteractive
+                        ? undefined
+                        : () => terminalConfirm(`Add "${join(root, 'bin')}" to your PATH?`),
+                    report: warn,
+                });
+            } catch (error) {
+                warn(
+                    `Could not configure PATH: ${String(error)}. Add "${join(
+                        root,
+                        'bin',
+                    )}" to your PATH manually and open a new shell.`,
+                );
+            }
         } catch (error) {
             if (assetPlan) {
                 if (error instanceof AssetApplyError) {

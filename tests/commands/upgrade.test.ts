@@ -1,4 +1,5 @@
 import type { Configuration } from '@conf';
+import { Log } from '@log';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
@@ -141,7 +142,7 @@ Deno.test('upgrade early help and rejected invocations never fetch or mutate', a
             expect(command.shouldHandleHelp(parsed)).toBe(true);
             await command.run({
                 context: { installRoot: root, currentWorkingDirectory: root },
-                configuration: {} as Configuration,
+                configuration: { nonInteractive: true } as Configuration,
                 parsedArguments: parsed,
                 signal: new AbortController().signal,
             });
@@ -244,7 +245,7 @@ async function commandFor(
         run: (flags = [], signal = new AbortController().signal) =>
             command.run({
                 context: { installRoot: root, currentWorkingDirectory: root },
-                configuration: {} as Configuration,
+                configuration: { nonInteractive: true } as Configuration,
                 parsedArguments: command.parseArguments(flags),
                 signal,
             }),
@@ -377,7 +378,7 @@ Deno.test(
                 await expect(
                     command.run({
                         context: { installRoot: root, currentWorkingDirectory: root },
-                        configuration: {} as Configuration,
+                        configuration: { nonInteractive: true } as Configuration,
                         parsedArguments: command.parseArguments(['--force']),
                         signal: controller.signal,
                     }),
@@ -410,12 +411,18 @@ Deno.test(
             if (!manifest) {
                 throw new Error('Missing manifest');
             }
-            manifest.files.push({ path: 'libexec/cr-0.1.0', ...(await fingerprint(stale)) });
+            manifest.files.push({
+                path: 'libexec/cr-0.1.0',
+                ...(await fingerprint(stale)),
+            });
             await InstallManifest.save(join(root, DISTRIBUTION_MANIFEST), manifest);
             await Deno.writeTextFile(join(root, 'templates/default.md'), 'edited');
             await Deno.writeTextFile(join(root, 'instructions/a.md'), 'edited');
             const platform = targetTriple(Deno.build.os, Deno.build.arch);
-            const mock = await fixture({ platform, entries: entries('2.10.0', platform) });
+            const mock = await fixture({
+                platform,
+                entries: entries('2.10.0', platform),
+            });
             const events: string[] = [];
             const command = new Upgrade({
                 fetcher: mock.fetcher,
@@ -460,7 +467,7 @@ Deno.test(
             try {
                 await command.run({
                     context: { installRoot: root, currentWorkingDirectory: root },
-                    configuration: {} as Configuration,
+                    configuration: { nonInteractive: true } as Configuration,
                     parsedArguments: command.parseArguments(['--force']),
                     signal: new AbortController().signal,
                 });
@@ -562,7 +569,10 @@ Deno.test(
                 for (const name of ['obsolete-one', 'obsolete-two']) {
                     const path = `templates/${name}`;
                     await Deno.writeTextFile(join(root, path), name);
-                    manifest.files.push({ path, ...(await fingerprint(join(root, path))) });
+                    manifest.files.push({
+                        path,
+                        ...(await fingerprint(join(root, path))),
+                    });
                 }
                 await InstallManifest.save(join(root, DISTRIBUTION_MANIFEST), manifest);
                 const next = await commandFor(root, '1.0.0');
@@ -646,7 +656,7 @@ Deno.test(
             });
             await command.run({
                 context: { installRoot: root, currentWorkingDirectory: root },
-                configuration: {} as Configuration,
+                configuration: { nonInteractive: true } as Configuration,
                 parsedArguments: command.parseArguments([]),
                 signal: new AbortController().signal,
             });
@@ -677,7 +687,6 @@ Deno.test(
 Deno.test(
     'default adapters handle help, interactive removals, cancellation and stale cleanup residuals',
     async () => {
-        const { Log } = await import('@log');
         const fetcher = globalThis.fetch;
         const confirm = Log.confirm;
         const info = Log.info;
@@ -689,7 +698,10 @@ Deno.test(
         try {
             await installation(async (root) => {
                 const platform = targetTriple(Deno.build.os, Deno.build.arch);
-                const mock = await fixture({ platform, entries: entries('2.10.0', platform) });
+                const mock = await fixture({
+                    platform,
+                    entries: entries('2.10.0', platform),
+                });
                 globalThis.fetch = mock.fetcher;
                 const messages: string[] = [];
                 const warnings: string[] = [];
@@ -705,7 +717,7 @@ Deno.test(
                 const run = (flags: string[]): Promise<void> =>
                     command.run({
                         context: { installRoot: root, currentWorkingDirectory: root },
-                        configuration: {} as Configuration,
+                        configuration: { nonInteractive: true } as Configuration,
                         parsedArguments: command.parseArguments(flags),
                         signal: new AbortController().signal,
                     });
@@ -839,7 +851,7 @@ Deno.test('optional resources do not bypass release asset preflight before mutat
             await expect(
                 command.run({
                     context: { installRoot: root, currentWorkingDirectory: root },
-                    configuration: {} as Configuration,
+                    configuration: { nonInteractive: true } as Configuration,
                     parsedArguments: command.parseArguments([]),
                     signal: new AbortController().signal,
                 }),
@@ -852,3 +864,100 @@ Deno.test('optional resources do not bypass release asset preflight before mutat
         });
     }
 });
+
+Deno.test('PATH setup follows activation and respects explicit noninteractive mode', async () => {
+    await installation(async (root) => {
+        const platform = targetTriple(Deno.build.os, Deno.build.arch);
+        const mock = await fixture({
+            platform,
+            entries: entries('2.10.0', platform),
+        });
+        let calls = 0;
+        const messages: string[] = [];
+        const command = new Upgrade({
+            fetcher: mock.fetcher,
+            report: (message) => messages.push(message),
+            pathSetup: async (options) => {
+                calls++;
+                expect(options.bin).toBe(join(root, 'bin'));
+                expect(options.confirm).toBeUndefined();
+                expect(await launcherTarget(root, Deno.build.os === 'windows')).toContain(
+                    'cr-2.10.0',
+                );
+                throw new Error('PATH failed');
+            },
+        });
+        const run = (): Promise<void> =>
+            command.run({
+                context: { installRoot: root, currentWorkingDirectory: root },
+                configuration: { nonInteractive: true } as Configuration,
+                parsedArguments: command.parseArguments([]),
+                signal: new AbortController().signal,
+            });
+        await run();
+        await run();
+        expect(calls).toBe(2);
+        expect(messages.join('\n')).toContain('PATH failed');
+    });
+});
+
+Deno.test(
+    'PATH consent is separate from overwrite flags and failed upgrades skip setup',
+    async () => {
+        await installation(async (root) => {
+            const platform = targetTriple(Deno.build.os, Deno.build.arch);
+            const mock = await fixture({
+                platform,
+                entries: entries('2.10.0', platform),
+            });
+            let calls = 0;
+            const command = new Upgrade({
+                fetcher: mock.fetcher,
+                report: () => {},
+                pathSetup: async (options) => {
+                    calls++;
+                    expect(options.confirm).toBeDefined();
+                    const openSync = Deno.openSync;
+                    const devices: string[] = [];
+                    try {
+                        Deno.openSync = (path) => {
+                            devices.push(String(path));
+                            throw new Deno.errors.NotFound('No terminal in this test');
+                        };
+                        expect(await options.confirm?.()).toBe(false);
+                    } finally {
+                        Deno.openSync = openSync;
+                    }
+                    expect(devices).toEqual([Deno.build.os === 'windows' ? 'CON' : '/dev/tty']);
+                    expect(await launcherTarget(root, Deno.build.os === 'windows')).toContain(
+                        'cr-2.10.0',
+                    );
+                },
+            });
+            await command.run({
+                context: { installRoot: root, currentWorkingDirectory: root },
+                configuration: { nonInteractive: false } as Configuration,
+                parsedArguments: command.parseArguments(['--force']),
+                signal: new AbortController().signal,
+            });
+            expect(calls).toBe(1);
+            const failed = new Upgrade({
+                fetcher: () => Promise.resolve(new Response(null, { status: 404 })),
+                report: () => {},
+                pathSetup: () => {
+                    calls++;
+                    return Promise.resolve();
+                },
+            });
+            await expect(
+                failed.run({
+                    context: { installRoot: root, currentWorkingDirectory: root },
+                    configuration: { nonInteractive: true } as Configuration,
+                    parsedArguments: failed.parseArguments([]),
+                    signal: new AbortController().signal,
+                }),
+            ).rejects.toThrow();
+            expect(calls).toBe(1);
+        });
+    },
+);

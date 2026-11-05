@@ -2,10 +2,24 @@
 
 ## Table of contents
 
+- [Upgrading](#upgrading)
 - [Development](#development)
 - [Shipping releases](#shipping-releases)
 - [Packaging distributions](#packaging-distributions)
 - [License](#license.md)
+
+## Upgrading
+
+Run `cr upgrade` to install the latest stable release or reconcile the current version.
+After activation, CodeRail offers to add the selected installation's `bin` directory to PATH.
+This requires separate consent, including when overwrite flags are supplied.
+Bash uses `~/.bashrc`, Zsh uses `~/.zshrc`, and Fish uses `~/.config/fish/config.fish`.
+Windows updates the current user's PATH. Open a new shell after setup.
+
+Piped stdin can use a controlling terminal for consent. Without a terminal, or with
+`--non-interactive`, upgrade prints manual instructions without editing PATH configuration.
+Unsupported shells also receive manual instructions. PATH setup failures leave the activated
+installation usable through its full path; follow the printed instructions to finish setup.
 
 ## Development
 
