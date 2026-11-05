@@ -192,7 +192,15 @@ The collection job requires every build to succeed and all six archives plus six
 checksum sidecars to pass the current upgrade staging consumer. The publishing job
 repeats these checks, refuses an existing release, creates a public stable release
 for `pavelmudroch/coderail` with the exact full `target_commitish`, and uploads exactly
-twelve assets. Notes come only from that commit's versioned changelog section.
+twelve assets. It creates the release without making it latest, validates the complete
+remote asset list, then looks up the designated latest release and promotes only if the
+new stable version is numerically newer, or no latest exists. An older maintenance
+release remains public without becoming the default. Notes come only from that commit's
+versioned changelog section. Publication jobs across version tags share a concurrency
+group covering upload, validation, latest lookup, and promotion. Builds can finish in
+any order; GitHub may replace a pending job with a newer pending job. A skipped,
+cancelled, or failed publication cannot promote without passing these checks. Do not run
+the publisher concurrently outside the workflow.
 Only the publication job has `contents: write`. No application-test result, draft stage,
 or manual approval is a prerequisite; run application tests before shipping.
 The [GitHub Releases API](https://docs.github.com/en/rest/releases/releases) defines
@@ -220,7 +228,10 @@ failed step, release identity, and confirmed upload count, retaining remote stat
 Creation failures can also be ambiguous if GitHub accepted a request before a connection
 failed. Inspect the tag, release, workflow logs, and assets manually. Existing releases
 are errors; rerunning publication does not overwrite assets. There is no automatic
-rollback, cleanup, tag movement, or resume command.
+cleanup, tag movement, or resume command. To intentionally roll back the default,
+select the desired complete stable release as latest in GitHub. A later newer successful
+publication may promote itself again. Promotion failures also retain the public release;
+inspect its assets and latest designation before manual recovery.
 
 Resolve failed local/remote state manually, then make a fresh normal ship from clean
 `main` synchronized with `origin/main`, using an unused next version tag and applicable

@@ -1,3 +1,6 @@
+import { join } from '@std/path';
+
+import { targets } from './package-options.ts';
 import { checkPackages, githubRequest, releaseApi as api, uploadPackages } from './publication.ts';
 export type StableIdentity = { tag: string; version: string; commit: string; notes: string };
 
@@ -103,6 +106,7 @@ export async function publishStable(
                 body: identity.notes,
                 draft: false,
                 prerelease: false,
+                make_latest: 'false',
             }),
         );
         if (created.status !== 201) {
@@ -124,6 +128,70 @@ export async function publishStable(
                 state = `Public release ${tag} (id ${release.id}) retained with ${uploaded}/12 confirmed uploads; last upload may have partial state.`;
             },
         );
+        step = 'remote asset validation';
+        const response = await request(`${api}/releases/${release.id}/assets?per_page=100`);
+        if (!response.ok) {
+            throw new Error(`GitHub HTTP ${response.status}`);
+        }
+        const assets: unknown = await response.json();
+        const names = targets.flatMap((target) => [
+            `coderail-${target}.zip`,
+            `coderail-${target}.zip.sha256`,
+        ]);
+        if (!Array.isArray(assets) || assets.length !== names.length) {
+            throw new Error('Invalid remote asset set');
+        }
+        for (const name of names) {
+            const matches = assets.filter((asset) => asset?.name === name);
+            const size = (await Deno.stat(join(output, name))).size;
+            if (
+                matches.length !== 1 ||
+                matches[0].state !== 'uploaded' ||
+                matches[0].size !== size
+            ) {
+                throw new Error(`Invalid remote asset ${name}`);
+            }
+        }
+        state = `Public release ${tag} (id ${release.id}) retained with all assets uploaded.`;
+        step = 'latest release lookup';
+        const latest = await request(`${api}/releases/latest`);
+        let promote = latest.status === 404;
+        if (!promote) {
+            if (!latest.ok) {
+                throw new Error(`GitHub HTTP ${latest.status}`);
+            }
+            const current = await latest.json();
+            const match =
+                typeof current.tag_name === 'string' &&
+                /^(?:v)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(current.tag_name);
+            if (!match || current.draft !== false || current.prerelease !== false) {
+                throw new Error('Invalid latest release identity');
+            }
+            const candidate = identity.version.split('.').map(BigInt);
+            const previous = match.slice(1).map(BigInt);
+            for (let i = 0; i < 3; i++) {
+                const nextPart = candidate[i];
+                const currentPart = previous[i];
+                if (nextPart === undefined || currentPart === undefined) {
+                    throw new Error('Invalid version');
+                }
+                if (nextPart !== currentPart) {
+                    promote = nextPart > currentPart;
+                    break;
+                }
+            }
+        }
+        if (promote) {
+            step = 'latest promotion';
+            const result = await request(
+                `${api}/releases/${release.id}`,
+                'PATCH',
+                JSON.stringify({ make_latest: 'true' }),
+            );
+            if (!result.ok) {
+                throw new Error(`GitHub HTTP ${result.status}`);
+            }
+        }
     } catch (error) {
         throw new Error(
             `Release failed during ${step}: ${error instanceof Error ? error.message : String(error)}\n${state}\nNo automatic cleanup or retry; inspect remote state manually.`,

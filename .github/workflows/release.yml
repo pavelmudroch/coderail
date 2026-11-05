@@ -108,6 +108,9 @@ jobs:
 
   publish:
     needs: [identity, check]
+    concurrency:
+      group: stable-publication
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     permissions:
       contents: write
