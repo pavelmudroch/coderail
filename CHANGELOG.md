@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-05
+
 ### Added
 
 - Project initialization with `cr init` and project-specific configuration.
@@ -39,4 +41,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instructions for either harness is not yet functional, including project-local
   installation with `--local`.
 
-[Unreleased]: https://github.com/pavelmudroch/coderail
+[Unreleased]: https://github.com/pavelmudroch/coderail/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/pavelmudroch/coderail/releases/tag/v0.1.0
