@@ -662,3 +662,63 @@ Deno.test(
         }
     },
 );
+
+Deno.test(
+    'Real Claude protects existing and modified rules through install and uninstall confirmation',
+    async () => {
+        const get = Harness.get;
+        await using fixture = await setupUninstall({});
+        Harness.get = get;
+        const override = Deno.env.get('CLAUDE_CONFIG_DIR');
+        Deno.env.set('CLAUDE_CONFIG_DIR', join(fixture.root, '.claude'));
+        try {
+            const { Install } = await import('../../src/commands/install.ts');
+            const install = new Install();
+            fixture.context.context.installRoot = fixture.root;
+            await Deno.mkdir(join(fixture.root, 'instructions'));
+            await Deno.writeTextFile(
+                join(fixture.root, 'instructions/AGENTS.md'),
+                '<skill>example</skill>',
+            );
+            const home = join(fixture.root, '.claude');
+            await Deno.mkdir(join(home, 'rules'), { recursive: true });
+            const rule = join(home, 'rules/coderail.md');
+            const manifest = join(home, Path.INSTALL_MANIFEST_NAME);
+            await Deno.writeTextFile(rule, 'existing');
+            const runInstall = async (args: string[]): Promise<void> => {
+                await install.run({
+                    ...fixture.context,
+                    parsedArguments: install.parseArguments(['claude', ...args]),
+                });
+            };
+            await runInstall([]);
+            expect(await Deno.readTextFile(rule)).toBe('existing');
+            expect(await InstallManifest.load(manifest)).toBeNull();
+            await runInstall(['--force', '--no']);
+            expect(await InstallManifest.load(manifest)).toBeNull();
+            await runInstall(['--force', '--yes']);
+            expect(await Deno.readTextFile(rule)).toBe('/example');
+            await Deno.writeTextFile(rule, 'modified');
+            const before = await Deno.readFile(manifest);
+            await expect(fixture.run(['claude'])).rejects.toThrow('requires --force');
+            expect(await Deno.readFile(manifest)).toEqual(before);
+            await fixture.run(['claude', '--force', '--no']);
+            expect(await Deno.readTextFile(rule)).toBe('modified');
+            Log.confirm = () => false;
+            Deno.stdin.isTerminal = () => true;
+            fixture.context.configuration.nonInteractive = false;
+            await fixture.run(['claude', '--force']);
+            expect(await Deno.readTextFile(rule)).toBe('modified');
+            Log.confirm = () => true;
+            await fixture.run(['claude', '--force']);
+            expect(await InstallManifest.load(manifest)).toBeNull();
+            await expect(Deno.stat(rule)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+        } finally {
+            if (override === undefined) {
+                Deno.env.delete('CLAUDE_CONFIG_DIR');
+            } else {
+                Deno.env.set('CLAUDE_CONFIG_DIR', override);
+            }
+        }
+    },
+);

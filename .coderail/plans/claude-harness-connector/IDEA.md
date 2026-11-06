@@ -1,6 +1,6 @@
 ---
 title: "Claude harness connector"
-status: "open"
+status: "ready"
 ---
 
 ## Outcome
@@ -24,6 +24,22 @@ Codex remains later work.
   loading so the connector can report the error.
 - Optional absence must not mask unrelated filesystem failures (for example,
   unreadable existing files) or existing installation conflict/path protections.
+- Represent missing general instructions as
+  `globalInstructionFile: InstructionFile | null`; missing skill and subagent
+  collections remain empty arrays. Call `translateGlobalInstructions` only when
+  the file is present. Keep `HarnessConnector` signatures unchanged.
+- Validate supplied skill and subagent frontmatter in the Claude connector.
+  Both require nonblank string `name` and `description` properties. A skill's
+  `name` must exactly match its source directory name. A subagent's `name` must
+  exactly match its filename without `.md`, excluding parent directories:
+  `agents/review/worker.md` requires `name: worker`.
+- Instruction Markdown must be valid UTF-8. Preserve binary supporting assets
+  unchanged. Preserve frontmatter and add no defaults; required metadata checks
+  supplement the previously agreed root-level `SKILL.md` requirement.
+- Translation failures identify the source path and reason. All translation,
+  destination-path validation, and destination inspection must finish before
+  writes for that harness. The shared install command already owns this ordering;
+  retain it rather than adding a separate connector inspection phase.
 - Support optional boolean `user-invocable` in skill frontmatter. Preserve both
   explicit `true` and `false` values during Claude translation and leave omission
   unchanged so Claude's native default applies. Preserve the independent
@@ -37,6 +53,10 @@ Codex remains later work.
 - Use native `CLAUDE_CONFIG_DIR` for custom global homes in both install and
   uninstall. Add no Coderail-specific home argument. Local installations remain
   rooted at `<projectRoot>/.claude` independently of that environment variable.
+- For global operations, an unset or empty `CLAUDE_CONFIG_DIR` uses `~/.claude`.
+  Accept absolute overrides directly; reject relative overrides with a clear
+  error rather than resolving them against the working directory. Local
+  operations ignore the override, including invalid relative values.
 - Translate every `<skill>skill_name</skill>` occurrence to `/skill_name`
   anywhere in translated instruction text: skill files, nested supporting files,
   subagents, and general instructions. Do not limit replacement to `SKILL.md`
@@ -68,6 +88,15 @@ Codex remains later work.
 
 ## Agreed layout and module boundaries
 
+- Reuse existing shared modules (`@md`, `@fs`, `@path`, and other relevant
+  project utilities) through their established APIs. Use `Md.parse` for
+  Markdown/frontmatter inspection; do not introduce connector-specific Markdown
+  or frontmatter parsing/serialization functions. Keep validation separate from
+  output generation so inspection does not reserialize unchanged source bytes.
+  Reuse `Fs` for filesystem operations it supports in shared loading/install code;
+  the connector itself remains a byte-based translator without filesystem mutation.
+  If a shared capability needs extending, place it in its owning shared module
+  rather than duplicating it inside the connector.
 - Support global and local installation using the existing connector contract.
 - Use `CLAUDE_CONFIG_DIR` globally when configured, otherwise `~/.claude`;
   use `<projectRoot>/.claude` locally regardless of the global override. Resolve
@@ -91,17 +120,21 @@ Codex remains later work.
   conflict handling, and manifest ownership. Tag translation remains internal
   to the Claude connector; no new public API is needed.
 
-## Unresolved decisions
+## Readiness
 
-- Review home-value validation, translation validation, and error behavior.
-- Proposed shared data contract: represent missing general instructions as
-  `globalInstructionFile: InstructionFile | null`; missing collections remain
-  empty arrays. Call `translateGlobalInstructions` only when the file is present.
-  `HarnessConnector` signatures remain unchanged. Review this shared interface
-  adjustment before readiness.
+No consequential decisions remain open. The existing connector interface and
+module boundaries are retained, with the agreed nullable shared instruction-file
+contract. No decomposition is needed. Private metadata validation and skill-tag
+translation helpers, binary detection, and detailed test organization remain
+implementation choices within the agreed behavior, shared-module reuse, and
+byte-preservation requirements. Markdown/frontmatter processing belongs to `@md`.
 
-## Verification expectations (proposed)
+## Verification expectations
 
+- Review shared-module reuse: connector metadata inspection uses `@md`, supported
+  filesystem operations use `@fs`, and no duplicate Markdown/frontmatter parser
+  or serializer is introduced. Preserve the existing non-absence error contract
+  when selecting shared filesystem helpers.
 - Verify global/local destination paths and manifest isolation.
 - Cover independently missing general instructions, skills and agents directories,
   and the whole instruction root. No sources must succeed without filesystem
@@ -109,8 +142,16 @@ Codex remains later work.
   empty/malformed discovered skills: missing `SKILL.md` fails in the connector.
 - Verify non-absence read failures remain visible and that omitted general
   instructions never call `translateGlobalInstructions`.
+- Cover missing/malformed frontmatter, missing/non-string/blank required metadata,
+  and mismatched skill and subagent names, including nested subagent paths.
+  Verify errors identify the source and that a failed
+  translation or destination inspection prevents all writes for that harness,
+  including when earlier assets are valid.
+- Cover invalid UTF-8 in instruction Markdown and unchanged binary supporting
+  assets; metadata validation must not reserialize or otherwise rewrite content.
 - Cover global `CLAUDE_CONFIG_DIR` overrides and their independence from local
-  installation targets.
+  installation targets, including unset/empty fallback, accepted absolute paths,
+  and rejected relative paths globally. Local operations ignore relative overrides.
 - Verify content preservation except the agreed tag replacement, nested
   supporting files, binary assets, and caller input ownership.
 - Cover multiple and repeated skill tags in skills, nested supporting files,
@@ -131,6 +172,9 @@ Codex remains later work.
 - `src/harness/connector.ts`
 - `src/harness/claude.ts`
 - `src/harness.ts`
+- `src/md.ts`
+- `src/fs.ts`
+- `src/path.ts`
 - `src/commands/install.ts`
 - `src/commands/uninstall.ts`
 - `src/commands/helpers/get-instruction-files.ts`

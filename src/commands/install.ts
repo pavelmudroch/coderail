@@ -204,6 +204,9 @@ async function installFiles(
     harnessHome: string,
     args: InstallArguments,
 ): Promise<number> {
+    if (translatedFiles.length === 0) {
+        return 0;
+    }
     const root = resolve(harnessHome);
     validateInstallationPaths(root, translatedFiles);
     const installManifestPath = join(root, Path.INSTALL_MANIFEST_NAME);
@@ -383,7 +386,7 @@ async function translateFiles(
         const translatedFile = harness.translateSubagent(subagent);
         translatedFiles.push(translatedFile);
     }
-    {
+    if (instructionFiles.globalInstructionFile !== null) {
         const translatedFile = harness.translateGlobalInstructions(
             instructionFiles.globalInstructionFile,
         );
