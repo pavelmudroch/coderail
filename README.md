@@ -56,6 +56,33 @@ If you skip PATH setup, follow the printed instructions or run
 `~/.coderail/bin/cr` directly. Running the installer again upgrades or reconciles
 the selected installation with the latest stable release.
 
+A healthy installation uses its existing CLI for the upgrade without downloading
+another bootstrap executable. A broken or incomplete installation downloads a
+verified bootstrap and applies the usual upgrade conflict checks. The installer
+does not force overwrites: resolve reported conflicts before rerunning it. User
+created templates and unrelated files are preserved. A different
+`CODERAIL_INSTALL_ROOT` creates a separate installation; it does not move an
+existing one.
+
+Piped installation can ask for PATH consent through a controlling terminal.
+Without a terminal, it prints manual setup instructions. To explicitly skip
+prompts and shell configuration edits, run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | sh -s -- --non-interactive
+```
+
+PATH setup belongs to `cr upgrade` and exposes only the selected root's `bin`
+directory. If editing your shell configuration fails, installation still succeeds
+and prints manual instructions. Open a new shell or reload the indicated profile
+after setup; the installer cannot update its parent shell's environment.
+
+If installation fails or is interrupted, it removes its temporary downloads and
+unused bootstrap executable. Files already installed, active executables and user
+data remain in place; there is no automatic rollback. Fix the reported issue and
+rerun the installer to repair the selected root. Windows installation through
+PowerShell is not yet supported.
+
 ## Start a project
 
 Run these commands from your project's root directory:

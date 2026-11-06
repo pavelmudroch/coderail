@@ -67,11 +67,20 @@ cleanup() {
     if [ -n "$bootstrap" ] && [ -f "$bootstrap" ]; then
         # Activation may have made this executable active or recorded ownership.
         active=$(readlink "$launcher" 2>/dev/null || :)
+        case $active in
+            /*) ;;
+            '') ;;
+            *) active=$root/bin/$active ;;
+        esac
+        if [ -n "$active" ]; then
+            active_dir=$(CDPATH= cd -P "$(dirname "$active")" 2>/dev/null && pwd) || active_dir=
+            [ -z "$active_dir" ] || active=$active_dir/$(basename "$active")
+        fi
         owned=false
         if [ -f "$root/.coderail-distribution.json" ]; then
             if jq -e --arg path "libexec/$(basename "$bootstrap")" '.files | any(.path == $path)' "$root/.coderail-distribution.json" >/dev/null 2>&1; then owned=true; fi
         fi
-        if [ "$active" != "$bootstrap" ] && [ "$active" != "../libexec/$(basename "$bootstrap")" ] && [ "$owned" = false ]; then rm -f "$bootstrap"; fi
+        if [ "$active" != "$bootstrap" ] && [ "$owned" = false ]; then rm -f "$bootstrap"; fi
     fi
     rm -rf "$tmp"
 }

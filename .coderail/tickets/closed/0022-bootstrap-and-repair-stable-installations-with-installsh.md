@@ -2,13 +2,14 @@
 id: "0022"
 slug: "bootstrap-and-repair-stable-installations-with-installsh"
 title: "Bootstrap and repair stable installations with install.sh"
-status: "active"
+status: "closed"
 created_at: "2026-11-05T10:46:59.827Z"
-updated_at: "2026-11-05T11:32:52.430Z"
+updated_at: "2026-11-06T19:53:28.144Z"
 dependencies:
   - "0018"
   - "0019"
   - "0020"
+reason: "done"
 ---
 
 # Bootstrap and repair stable installations with install.sh
@@ -17,10 +18,10 @@ Turn root `install.sh` into a Linux/macOS x64/arm64 installer using the existing
 
 ## Tasks
 
-1. [ ] Specify bootstrap, rerun and cleanup behavior with isolated fixtures
-2. [ ] Implement verified stable bootstrap for supported hosts
-3. [ ] Handle existing installations and safe failure cleanup
-4. [ ] Document and exercise complete installation flows
+1. [x] Specify bootstrap, rerun and cleanup behavior with isolated fixtures
+2. [x] Implement verified stable bootstrap for supported hosts
+3. [x] Handle existing installations and safe failure cleanup
+4. [x] Document and exercise complete installation flows
 
 ## Task details
 
@@ -65,3 +66,18 @@ Validation: exercise first installation, same-version reconciliation, resource r
 - [Activation and bootstrap recognition](../../../src/commands/upgrade/activation.ts)
 - [Release fixtures](../../../tests/commands/upgrade/release-fixture.ts)
 - Dependencies: [0018 publisher](0018-promote-complete-stable-releases-without-replacing-newer-defaults.md), [0019 selection](0019-resolve-default-upgrades-from-github-designated-latest.md), [0020 PATH](0020-configure-installation-path-after-successful-upgrades.md)
+
+## Implementation notes
+
+- Kept the existing verified release bootstrap and upgrade boundary; extended isolated
+  lifecycle coverage and added a native compiled-CLI acceptance flow using local
+  release responses, including piped terminal consent and nonfatal PATH edit errors.
+- Canonicalized launcher targets during cleanup so equivalent relative paths cannot
+  cause deletion of an active bootstrap. Covered HUP, INT and TERM cleanup, manifest
+  ownership, partial changes, invalid publications, failed downloads and root isolation.
+- Expanded README guidance for noninteractive use, repair, root selection and failures.
+- Shell syntax checked with `sh -n install.sh`; ShellCheck is unavailable in this environment.
+- Final `cr verify -s` passed for all changed implementation/test files (17 tests
+  across three installer suites). README and shell files have no configured verify
+  rule; shell syntax and `git diff --check` passed separately. Terminal acceptance
+  required execution outside the sandbox because it blocks `/dev/tty`.

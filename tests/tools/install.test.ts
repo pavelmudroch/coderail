@@ -7,7 +7,7 @@ async function fixture(
     run: (root: string, env: Record<string, string>) => Promise<void>,
     downloaders: string[] = ['curl', 'wget'],
 ): Promise<void> {
-    const root = await Deno.makeTempDir({ prefix: 'installer test ' });
+    const root = await Deno.realPath(await Deno.makeTempDir({ prefix: 'installer test ' }));
     const tools = join(root, 'tools');
     await Deno.mkdir(tools);
     const scripts: Record<string, string> = {
