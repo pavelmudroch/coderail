@@ -722,3 +722,113 @@ Deno.test(
         }
     },
 );
+
+for (const local of [false, true]) {
+    for (const policy of [false, true]) {
+        Deno.test(
+            `Real Codex ${local ? 'local' : 'global'} protects whole ${policy ? 'invocation policies' : 'AGENTS.md files'} through install and uninstall confirmation`,
+            async () => {
+                const get = Harness.get;
+                await using fixture = await setupUninstall({}, local);
+                Harness.get = get;
+                await Deno.remove(fixture.manifestPath);
+                const override = Deno.env.get('CODEX_HOME');
+                Deno.env.set(
+                    'CODEX_HOME',
+                    local ? 'invalid-relative' : join(fixture.root, '.codex'),
+                );
+                try {
+                    const { Install } = await import('../../src/commands/install.ts');
+                    const install = new Install();
+                    fixture.context.context.installRoot = fixture.root;
+                    await Deno.mkdir(join(fixture.root, 'instructions'));
+                    await Deno.writeTextFile(
+                        join(fixture.root, 'instructions/AGENTS.md'),
+                        '<skill>example</skill>',
+                    );
+                    if (policy) {
+                        await Deno.remove(join(fixture.root, 'instructions/AGENTS.md'));
+                        await Deno.mkdir(join(fixture.root, 'instructions/skills/example'), {
+                            recursive: true,
+                        });
+                        await Deno.writeTextFile(
+                            join(fixture.root, 'instructions/skills/example/SKILL.md'),
+                            '---\nname: example\ndescription: Example\ndisable-model-invocation: true\n---\nbody',
+                        );
+                    }
+                    const expected = policy
+                        ? 'policy:\n  allow_implicit_invocation: false\n'
+                        : '$example';
+                    const home = local ? fixture.root : join(fixture.root, '.codex');
+                    await Deno.mkdir(home, { recursive: true });
+                    const rule = join(
+                        home,
+                        policy
+                            ? `${local ? '.codex/' : ''}skills/example/agents/openai.yaml`
+                            : 'AGENTS.md',
+                    );
+                    if (policy) {
+                        await Deno.mkdir(dirname(rule), { recursive: true });
+                    }
+                    const manifest = join(home, Path.INSTALL_MANIFEST_NAME);
+                    await Deno.writeTextFile(rule, 'existing');
+                    const runInstall = async (args: string[]): Promise<void> => {
+                        await install.run({
+                            ...fixture.context,
+                            parsedArguments: install.parseArguments([
+                                ...(local ? ['--local'] : []),
+                                'codex',
+                                ...args,
+                            ]),
+                        });
+                    };
+                    await runInstall([]);
+                    expect(await Deno.readTextFile(rule)).toBe('existing');
+                    expect(
+                        (await InstallManifest.load(manifest))?.files.some((file) =>
+                            file.path.endsWith(policy ? 'openai.yaml' : 'AGENTS.md'),
+                        ) ?? false,
+                    ).toBe(false);
+                    await runInstall(['--force', '--no']);
+                    expect(
+                        (await InstallManifest.load(manifest))?.files.some((file) =>
+                            file.path.endsWith(policy ? 'openai.yaml' : 'AGENTS.md'),
+                        ) ?? false,
+                    ).toBe(false);
+                    Log.confirm = () => false;
+                    await runInstall(['--force']);
+                    expect(await Deno.readTextFile(rule)).toBe('existing');
+                    Log.confirm = () => true;
+                    await runInstall(['--force']);
+                    expect(await Deno.readTextFile(rule)).toBe(expected);
+                    await Deno.writeTextFile(rule, 'changed after installation');
+                    await runInstall([]);
+                    expect(await Deno.readTextFile(rule)).toBe('changed after installation');
+                    await runInstall(['--force', '--yes']);
+                    expect(await Deno.readTextFile(rule)).toBe(expected);
+                    await Deno.writeTextFile(rule, 'modified');
+                    const before = await Deno.readFile(manifest);
+                    await expect(fixture.run(['codex'])).rejects.toThrow('requires --force');
+                    expect(await Deno.readFile(manifest)).toEqual(before);
+                    await fixture.run(['codex', '--force', '--no']);
+                    expect(await Deno.readTextFile(rule)).toBe('modified');
+                    Log.confirm = () => false;
+                    Deno.stdin.isTerminal = () => true;
+                    fixture.context.configuration.nonInteractive = false;
+                    await fixture.run(['codex', '--force']);
+                    expect(await Deno.readTextFile(rule)).toBe('modified');
+                    Log.confirm = () => true;
+                    await fixture.run(['codex', '--force']);
+                    expect(await InstallManifest.load(manifest)).toBeNull();
+                    await expect(Deno.stat(rule)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+                } finally {
+                    if (override === undefined) {
+                        Deno.env.delete('CODEX_HOME');
+                    } else {
+                        Deno.env.set('CODEX_HOME', override);
+                    }
+                }
+            },
+        );
+    }
+}

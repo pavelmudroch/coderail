@@ -770,3 +770,232 @@ Deno.test(
         }
     },
 );
+
+Deno.test('Real Codex round trips isolated global and local native bundles', async () => {
+    const get = Harness.get;
+    await using fixture = await setupInstall();
+    Harness.get = get;
+    const override = Deno.env.get('CODEX_HOME');
+    const globalHome = join(fixture.root, 'global-codex');
+    Deno.env.set('CODEX_HOME', globalHome);
+    try {
+        const instructions = join(fixture.root, 'instructions');
+        await Deno.mkdir(join(instructions, 'skills/example/nested'), { recursive: true });
+        await Deno.mkdir(join(instructions, 'agents/review'));
+        await Deno.writeTextFile(
+            join(instructions, 'skills/example/SKILL.md'),
+            '---\nname: example\ndescription: Example\ndisable-model-invocation: false\n---\n<skill>missing</skill>',
+        );
+        await Deno.writeTextFile(
+            join(instructions, 'skills/example/nested/help.md'),
+            '<skill>example</skill>',
+        );
+        const binary = new Uint8Array([0, 255, 137]);
+        await Deno.writeFile(join(instructions, 'skills/example/nested/image.png'), binary);
+        await Deno.copyFile(
+            'assets/instructions/agents/worker.md',
+            join(instructions, 'agents/review/worker.md'),
+        );
+        for (const name of ['code', 'implement']) {
+            await Deno.mkdir(join(instructions, 'skills', name));
+            await Deno.copyFile(
+                `assets/instructions/skills/${name}/SKILL.md`,
+                join(instructions, 'skills', name, 'SKILL.md'),
+            );
+        }
+        await Deno.writeTextFile(join(instructions, 'AGENTS.md'), 'general <skill>example</skill>');
+        const projects = [join(fixture.root, 'project-one'), join(fixture.root, 'project-two')];
+        const homes = [globalHome, ...projects];
+        for (const home of homes) {
+            await Deno.mkdir(join(home, '.claude'), { recursive: true });
+            await Deno.writeTextFile(
+                join(home, '.claude', Path.INSTALL_MANIFEST_NAME),
+                'Claude manifest',
+            );
+            await Deno.writeTextFile(join(home, 'AGENTS.override.md'), 'user override');
+            await Deno.writeTextFile(join(home, 'config.toml'), 'native discovery settings');
+        }
+        await fixture.run(['codex']);
+        for (const project of projects) {
+            fixture.context.context.repositoryRoot = project;
+            Deno.env.set('CODEX_HOME', 'invalid-relative');
+            await fixture.run(['--local', 'codex']);
+        }
+        Deno.env.set('CODEX_HOME', globalHome);
+        expect(fixture.errors).toEqual([]);
+        const snapshots = new Map<string, Uint8Array>();
+        for (const home of homes) {
+            const prefix = home === globalHome ? '' : '.codex/';
+            const paths = [
+                'AGENTS.md',
+                `${prefix}agents/worker.toml`,
+                `${prefix}skills/code/SKILL.md`,
+                `${prefix}skills/implement/SKILL.md`,
+                `${prefix}skills/implement/agents/openai.yaml`,
+                `${prefix}skills/example/SKILL.md`,
+                `${prefix}skills/example/agents/openai.yaml`,
+                `${prefix}skills/example/nested/help.md`,
+                `${prefix}skills/example/nested/image.png`,
+            ];
+            expect(await Deno.readTextFile(join(home, 'AGENTS.md'))).toBe('general $example');
+            expect(await Deno.readTextFile(join(home, `${prefix}skills/example/SKILL.md`))).toBe(
+                '---\nname: "example"\ndescription: "Example"\n---\n$missing',
+            );
+            expect(
+                await Deno.readTextFile(join(home, `${prefix}skills/example/agents/openai.yaml`)),
+            ).toBe('policy:\n  allow_implicit_invocation: true\n');
+            expect(
+                await Deno.readTextFile(join(home, `${prefix}skills/implement/agents/openai.yaml`)),
+            ).toBe('policy:\n  allow_implicit_invocation: false\n');
+            expect(
+                await Deno.readTextFile(join(home, `${prefix}skills/example/nested/help.md`)),
+            ).toBe('<skill>example</skill>');
+            expect(
+                await Deno.readFile(join(home, `${prefix}skills/example/nested/image.png`)),
+            ).toEqual(binary);
+            expect(await Deno.readTextFile(join(home, `${prefix}agents/worker.toml`))).toContain(
+                'name = "worker"\n',
+            );
+            const manifestPath = join(home, Path.INSTALL_MANIFEST_NAME);
+            const manifest = await InstallManifest.load(manifestPath);
+            expect(manifest?.version).toBe(1);
+            expect(manifest?.files.toSorted((a, b) => a.path.localeCompare(b.path))).toEqual(
+                (await InstallManifest.capture(home, paths)).files.toSorted((a, b) =>
+                    a.path.localeCompare(b.path),
+                ),
+            );
+            snapshots.set(home, await Deno.readFile(manifestPath));
+        }
+        const uninstall = new Uninstall();
+        const remove = async (args: string[]): Promise<void> => {
+            await uninstall.run({
+                ...fixture.context,
+                parsedArguments: uninstall.parseArguments(args),
+            });
+        };
+        await remove([]);
+        for (const project of projects) {
+            expect(await Deno.readFile(join(project, Path.INSTALL_MANIFEST_NAME))).toEqual(
+                snapshots.get(project),
+            );
+            fixture.context.context.repositoryRoot = project;
+            Deno.env.set('CODEX_HOME', 'invalid-relative');
+            await remove(['--local', 'codex']);
+        }
+        for (const home of homes) {
+            expect(await InstallManifest.load(join(home, Path.INSTALL_MANIFEST_NAME))).toBeNull();
+            await expect(Deno.stat(join(home, 'AGENTS.md'))).rejects.toBeInstanceOf(
+                Deno.errors.NotFound,
+            );
+            const prefix = home === globalHome ? '' : '.codex/';
+            await expect(Deno.stat(join(home, `${prefix}skills`))).rejects.toBeInstanceOf(
+                Deno.errors.NotFound,
+            );
+            await expect(Deno.stat(join(home, `${prefix}agents`))).rejects.toBeInstanceOf(
+                Deno.errors.NotFound,
+            );
+            expect(await Deno.readTextFile(join(home, '.claude', Path.INSTALL_MANIFEST_NAME))).toBe(
+                'Claude manifest',
+            );
+            expect(await Deno.readTextFile(join(home, 'AGENTS.override.md'))).toBe('user override');
+            expect(await Deno.readTextFile(join(home, 'config.toml'))).toBe(
+                'native discovery settings',
+            );
+        }
+        await expect(fixture.run(['codex'])).rejects.toThrow('CODEX_HOME must be an absolute path');
+        await expect(remove(['codex'])).rejects.toThrow('CODEX_HOME must be an absolute path');
+    } finally {
+        if (override === undefined) {
+            Deno.env.delete('CODEX_HOME');
+        } else {
+            Deno.env.set('CODEX_HOME', override);
+        }
+    }
+});
+
+for (const local of [false, true]) {
+    Deno.test(
+        `Real Codex ${local ? 'local' : 'global'} validates all translations and destinations before writes and retains no-source installs`,
+        async () => {
+            const get = Harness.get;
+            await using fixture = await setupInstall(local);
+            Harness.get = get;
+            const override = Deno.env.get('CODEX_HOME');
+            Deno.env.set('CODEX_HOME', local ? 'invalid-relative' : fixture.home);
+            const home = local ? fixture.root : fixture.home;
+            const prefix = local ? '.codex/' : '';
+            const manifestPath = join(home, Path.INSTALL_MANIFEST_NAME);
+            try {
+                const instructions = join(fixture.root, 'instructions');
+                await Deno.remove(instructions, { recursive: true });
+                await fixture.run(['codex']);
+                expect(await InstallManifest.load(manifestPath)).toBeNull();
+                await Deno.mkdir(instructions);
+                await Deno.writeTextFile(join(instructions, 'AGENTS.md'), 'original');
+                await fixture.run(['codex']);
+                const before = await Deno.readFile(manifestPath);
+                await Deno.remove(join(instructions, 'AGENTS.md'));
+                await fixture.run(['codex']);
+                expect(await Deno.readFile(manifestPath)).toEqual(before);
+                expect(await Deno.readTextFile(join(home, 'AGENTS.md'))).toBe('original');
+                await Deno.writeTextFile(join(instructions, 'AGENTS.md'), 'changed');
+                await Deno.mkdir(join(instructions, 'skills/valid'), { recursive: true });
+                await Deno.writeTextFile(
+                    join(instructions, 'skills/valid/SKILL.md'),
+                    '---\nname: valid\ndescription: Valid\n---\nvalid',
+                );
+                const assertUnchanged = async (): Promise<void> => {
+                    expect(await Deno.readFile(manifestPath)).toEqual(before);
+                    expect(await Deno.readTextFile(join(home, 'AGENTS.md'))).toBe('original');
+                    await expect(
+                        Deno.stat(join(home, `${prefix}skills/valid/SKILL.md`)),
+                    ).rejects.toBeInstanceOf(Deno.errors.NotFound);
+                };
+                await Deno.mkdir(join(instructions, 'skills/invalid'));
+                for (const bytes of [new TextEncoder().encode('invalid'), new Uint8Array([255])]) {
+                    await Deno.writeFile(join(instructions, 'skills/invalid/SKILL.md'), bytes);
+                    const count = fixture.errors.length;
+                    await fixture.run(['codex', '--force', '--yes']);
+                    expect(fixture.errors).toHaveLength(count + 1);
+                    await assertUnchanged();
+                }
+                await Deno.remove(join(instructions, 'skills/invalid'), { recursive: true });
+                await Deno.mkdir(join(instructions, 'agents/review'), { recursive: true });
+                const agent = join(instructions, 'agents/review/worker.md');
+                for (const bytes of [new TextEncoder().encode('invalid'), new Uint8Array([255])]) {
+                    await Deno.writeFile(agent, bytes);
+                    const count = fixture.errors.length;
+                    await fixture.run(['codex', '--force', '--yes']);
+                    expect(fixture.errors).toHaveLength(count + 1);
+                    await assertUnchanged();
+                }
+                await Deno.copyFile('assets/instructions/agents/worker.md', agent);
+                await Deno.copyFile(agent, join(instructions, 'agents/worker.md'));
+                let count = fixture.errors.length;
+                await fixture.run(['codex', '--force', '--yes']);
+                expect(fixture.errors).toHaveLength(count + 1);
+                await assertUnchanged();
+                await Deno.remove(join(instructions, 'agents/worker.md'));
+                await Deno.mkdir(join(home, `${prefix}agents`), { recursive: true });
+                const destination = join(home, `${prefix}agents/worker.toml`);
+                await Deno.symlink(join(home, 'AGENTS.md'), destination);
+                count = fixture.errors.length;
+                await fixture.run(['codex', '--force', '--yes']);
+                expect(fixture.errors).toHaveLength(count + 1);
+                await assertUnchanged();
+                await Deno.remove(destination);
+                await Deno.mkdir(destination);
+                count = fixture.errors.length;
+                await fixture.run(['codex', '--force', '--yes']);
+                expect(fixture.errors).toHaveLength(count + 1);
+                await assertUnchanged();
+            } finally {
+                if (override === undefined) {
+                    Deno.env.delete('CODEX_HOME');
+                } else {
+                    Deno.env.set('CODEX_HOME', override);
+                }
+            }
+        },
+    );
+}
