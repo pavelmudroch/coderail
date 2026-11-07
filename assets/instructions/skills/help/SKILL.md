@@ -122,6 +122,3 @@ meaningfully different choices.
 A guidance request does not authorize creating artifacts, changing statuses,
 or starting implementation. When the user also requests execution, follow
 the relevant skill within that authorized scope.
-
-Two existing issues surfaced: forge (instructions/skills/forge/SKILL.md:148) says regorge instead of reforge; ticket (instructions/skills/ticket/
-SKILL.md:61) includes obsolete requires and deactivate examples. Neither was changed.
