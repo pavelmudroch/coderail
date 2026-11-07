@@ -999,3 +999,324 @@ for (const local of [false, true]) {
         },
     );
 }
+
+for (const local of [false, true]) {
+    Deno.test(
+        `Real Codex ${local ? 'local' : 'global'} reconciles owned invocation policies`,
+        async () => {
+            const get = Harness.get;
+            await using fixture = await setupInstall(local);
+            Harness.get = get;
+            const override = Deno.env.get('CODEX_HOME');
+            Deno.env.set('CODEX_HOME', fixture.home);
+            const home = local ? fixture.root : fixture.home;
+            const prefix = local ? '.codex/' : '';
+            const skill = `${prefix}skills/example/SKILL.md`;
+            const policy = `${prefix}skills/example/agents/openai.yaml`;
+            const source = join(fixture.root, 'instructions/skills/example/SKILL.md');
+            const manifestPath = join(home, Path.INSTALL_MANIFEST_NAME);
+            const sourceText = (flag: boolean | undefined): string =>
+                `---\nname: example\ndescription: Example\n${flag === undefined ? '' : `disable-model-invocation: ${flag}\n`}---\nbody`;
+            const owned = async (): Promise<string[]> =>
+                ((await InstallManifest.load(manifestPath))?.files ?? []).map((file) => file.path);
+            try {
+                await Deno.mkdir(join(fixture.root, 'instructions/skills/example'), {
+                    recursive: true,
+                });
+                for (const flag of [true, false]) {
+                    await Deno.writeTextFile(source, sourceText(flag));
+                    await fixture.run(['codex']);
+                    expect(await Deno.readTextFile(join(home, policy))).toBe(
+                        `policy:\n  allow_implicit_invocation: ${!flag}\n`,
+                    );
+                    await Deno.writeTextFile(source, sourceText(undefined));
+                    await fixture.run(['codex']);
+                    await expect(Deno.stat(join(home, policy))).rejects.toBeInstanceOf(
+                        Deno.errors.NotFound,
+                    );
+                    expect(await owned()).not.toContain(policy);
+                    expect(await Deno.readTextFile(join(home, skill))).toBe(sourceText(undefined));
+                }
+                expect(fixture.errors).toEqual([]);
+                for (const mode of ['plain', 'no', 'reject', 'accept', 'yes']) {
+                    await Deno.writeTextFile(source, sourceText(true));
+                    await fixture.run(['codex', '--force', '--yes']);
+                    await Deno.writeTextFile(join(home, policy), 'custom policy');
+                    const entry = ((await InstallManifest.load(manifestPath))?.files ?? []).find(
+                        (file) => file.path === policy,
+                    );
+                    await Deno.writeTextFile(source, sourceText(undefined));
+                    const prompts: string[] = [];
+                    Log.confirm = (message): boolean => {
+                        prompts.push(message);
+                        return mode === 'accept';
+                    };
+                    const errors = fixture.errors.length;
+                    await fixture.run([
+                        'codex',
+                        ...(mode === 'plain' ? [] : ['--force']),
+                        ...(mode === 'no' ? ['--no'] : mode === 'yes' ? ['--yes'] : []),
+                    ]);
+                    expect(fixture.errors.length).toBe(errors + (mode === 'plain' ? 1 : 0));
+                    if (mode === 'yes' || mode === 'accept') {
+                        await expect(Deno.stat(join(home, policy))).rejects.toBeInstanceOf(
+                            Deno.errors.NotFound,
+                        );
+                        expect(await owned()).not.toContain(policy);
+                    } else {
+                        expect(await Deno.readTextFile(join(home, policy))).toBe('custom policy');
+                        expect(
+                            ((await InstallManifest.load(manifestPath))?.files ?? []).find(
+                                (file) => file.path === policy,
+                            ),
+                        ).toEqual(entry);
+                    }
+                    expect(prompts).toEqual(
+                        mode === 'accept' || mode === 'reject'
+                            ? [`Remove modified file "${policy}"?`]
+                            : [],
+                    );
+                }
+                // A policy supplied by the source is still an output, not obsolete.
+                await Deno.mkdir(join(fixture.root, 'instructions/skills/example/agents'));
+                await Deno.writeTextFile(
+                    join(fixture.root, 'instructions/skills/example/agents/openai.yaml'),
+                    'source policy',
+                );
+                await fixture.run(['codex']);
+                expect(await Deno.readTextFile(join(home, policy))).toBe('source policy');
+                await Deno.remove(join(fixture.root, 'instructions/skills/example/agents'), {
+                    recursive: true,
+                });
+                // Omitted skills and a wholly absent source never prune ownership.
+                await Deno.remove(source);
+                const before = await Deno.readFile(manifestPath);
+                await fixture.run(['codex']);
+                expect(await Deno.readFile(manifestPath)).toEqual(before);
+                await Deno.remove(join(fixture.root, 'instructions'), { recursive: true });
+                await fixture.run(['codex']);
+                expect(await Deno.readFile(manifestPath)).toEqual(before);
+                // Unowned policies survive even forced installs.
+                await InstallManifest.save(manifestPath, {
+                    version: 1,
+                    files: ((await InstallManifest.load(manifestPath))?.files ?? []).filter(
+                        (file) => file.path !== policy,
+                    ),
+                });
+                await Deno.mkdir(join(fixture.root, 'instructions/skills/example'), {
+                    recursive: true,
+                });
+                await Deno.writeTextFile(source, sourceText(undefined));
+                await fixture.run(['codex', '--force', '--yes']);
+                expect(await Deno.readTextFile(join(home, policy))).toBe('source policy');
+                expect(await owned()).not.toContain(policy);
+                await Deno.writeTextFile(source, sourceText(true));
+                const errors = fixture.errors.length;
+                await fixture.run(['codex']);
+                expect(fixture.errors).toHaveLength(errors + 1);
+                expect(await Deno.readTextFile(join(home, policy))).toBe('source policy');
+                await fixture.run(['codex', '--force', '--no']);
+                expect(await Deno.readTextFile(join(home, policy))).toBe('source policy');
+                expect(await owned()).not.toContain(policy);
+                await fixture.run(['codex', '--force', '--yes']);
+                expect(await Deno.readTextFile(join(home, policy))).toBe(
+                    'policy:\n  allow_implicit_invocation: false\n',
+                );
+                expect(await owned()).toContain(policy);
+            } finally {
+                if (override === undefined) {
+                    Deno.env.delete('CODEX_HOME');
+                } else {
+                    Deno.env.set('CODEX_HOME', override);
+                }
+            }
+        },
+    );
+}
+
+for (const local of [false, true]) {
+    Deno.test(
+        `Real Codex ${local ? 'local' : 'global'} preflights removals and persists partial execution`,
+        async () => {
+            const get = Harness.get;
+            await using fixture = await setupInstall(local);
+            Harness.get = get;
+            const override = Deno.env.get('CODEX_HOME');
+            Deno.env.set('CODEX_HOME', fixture.home);
+            const home = local ? fixture.root : fixture.home;
+            const prefix = local ? '.codex/' : '';
+            const instructions = join(fixture.root, 'instructions');
+            const manifestPath = join(home, Path.INSTALL_MANIFEST_NAME);
+            const policy = (name: string): string => `${prefix}skills/${name}/agents/openai.yaml`;
+            const source = (name: string): string => join(instructions, `skills/${name}/SKILL.md`);
+            const text = (name: string, flagged: boolean): string =>
+                `---\nname: ${name}\ndescription: Example\n${flagged ? 'disable-model-invocation: true\n' : ''}---\nbody`;
+            const remove = Deno.remove;
+            const write = Fs.write;
+            const save = InstallManifest.save;
+            try {
+                for (const name of ['first', 'second']) {
+                    await Deno.mkdir(join(instructions, `skills/${name}`), { recursive: true });
+                    await Deno.writeTextFile(source(name), text(name, true));
+                }
+                await fixture.run(['codex']);
+                const baseline = await Deno.readFile(manifestPath);
+                for (const name of ['first', 'second']) {
+                    await Deno.writeTextFile(source(name), text(name, false));
+                }
+                await Deno.writeTextFile(join(instructions, 'AGENTS.md'), 'new general');
+                const assertUntouched = async (): Promise<void> => {
+                    expect(await Deno.readFile(manifestPath)).toEqual(baseline);
+                    expect(await Deno.readTextFile(join(home, policy('first')))).toBe(
+                        'policy:\n  allow_implicit_invocation: false\n',
+                    );
+                    expect(
+                        await Deno.readTextFile(join(home, `${prefix}skills/first/SKILL.md`)),
+                    ).toContain('name: "first"');
+                    expect(await Deno.readTextFile(join(home, 'AGENTS.md'))).toBe('instructions');
+                };
+                // A later unsafe removal destination prevents earlier writes and removals.
+                await remove(join(home, policy('second')));
+                for (const kind of ['directory', 'symlink']) {
+                    if (kind === 'directory') {
+                        await Deno.mkdir(join(home, policy('second')));
+                    } else {
+                        await Deno.symlink(join(home, 'AGENTS.md'), join(home, policy('second')));
+                    }
+                    const count = fixture.errors.length;
+                    await fixture.run(['codex', '--force', '--yes']);
+                    expect(fixture.errors).toHaveLength(count + 1);
+                    await assertUntouched();
+                    await remove(join(home, policy('second')));
+                }
+                await Deno.writeTextFile(
+                    join(home, policy('second')),
+                    'policy:\n  allow_implicit_invocation: false\n',
+                );
+                // A later write destination also prevents every planned removal.
+                await remove(join(home, 'AGENTS.md'));
+                await Deno.symlink(source('first'), join(home, 'AGENTS.md'));
+                const count = fixture.errors.length;
+                await fixture.run(['codex', '--force', '--yes']);
+                expect(fixture.errors).toHaveLength(count + 1);
+                expect(await Deno.readFile(manifestPath)).toEqual(baseline);
+                expect(await Deno.readTextFile(join(home, policy('first')))).toContain('policy:');
+                await remove(join(home, 'AGENTS.md'));
+                await Deno.writeTextFile(join(home, 'AGENTS.md'), 'instructions');
+                // Safety is checked again after writes, immediately before each removal.
+                Fs.write = async (path, content): Promise<void> => {
+                    await write(path, content);
+                    if (path === join(home, 'AGENTS.md')) {
+                        await remove(join(home, policy('second')));
+                        await Deno.symlink(join(home, 'AGENTS.md'), join(home, policy('second')));
+                    }
+                };
+                await fixture.run(['codex']);
+                expect(fixture.errors).toHaveLength(count + 2);
+                await expect(Deno.stat(join(home, policy('first')))).rejects.toBeInstanceOf(
+                    Deno.errors.NotFound,
+                );
+                let manifest = await InstallManifest.load(manifestPath);
+                expect(manifest?.files.map((file) => file.path)).not.toContain(policy('first'));
+                expect(manifest?.files.map((file) => file.path)).toContain(policy('second'));
+                expect(await Deno.readTextFile(join(home, 'AGENTS.md'))).toBe('new general');
+                Fs.write = write;
+                await remove(join(home, policy('second')));
+                // Missing owned policies retire ownership too, even if all writes are declined.
+                await Deno.writeTextFile(join(home, `${prefix}skills/first/SKILL.md`), 'modified');
+                await Deno.writeTextFile(join(home, `${prefix}skills/second/SKILL.md`), 'modified');
+                await Deno.writeTextFile(join(home, 'AGENTS.md'), 'modified');
+                await fixture.run(['codex', '--force', '--no']);
+                manifest = await InstallManifest.load(manifestPath);
+                expect(manifest?.files.map((file) => file.path)).not.toContain(policy('second'));
+                expect(await Deno.readTextFile(join(home, 'AGENTS.md'))).toBe('modified');
+                // A failed removal keeps its original ownership; successful removals persist.
+                for (const name of ['first', 'second']) {
+                    await Deno.writeTextFile(source(name), text(name, true));
+                }
+                await fixture.run(['codex', '--force', '--yes']);
+                const before = await InstallManifest.load(manifestPath);
+                for (const name of ['first', 'second']) {
+                    await Deno.writeTextFile(source(name), text(name, false));
+                }
+                Deno.remove = (path, options): Promise<void> =>
+                    path === join(home, policy('second'))
+                        ? Promise.reject(new Error('remove failed'))
+                        : remove(path, options);
+                await fixture.run(['codex']);
+                manifest = await InstallManifest.load(manifestPath);
+                expect(manifest?.files.map((file) => file.path)).not.toContain(policy('first'));
+                expect(manifest?.files.find((file) => file.path === policy('second'))).toEqual(
+                    before?.files.find((file) => file.path === policy('second')),
+                );
+                expect(await Deno.readTextFile(join(home, policy('second')))).toContain('policy:');
+                InstallManifest.save = (): Promise<void> =>
+                    Promise.reject(new Error('save failed'));
+                await fixture.run(['codex']);
+                const failure = fixture.errors.at(-1)?.[1];
+                expect(failure).toBeInstanceOf(AggregateError);
+                expect((failure as AggregateError).errors).toHaveLength(2);
+                InstallManifest.save = save;
+                // Disappearance between inspection and removal also retires ownership.
+                Deno.remove = async (path, options): Promise<void> => {
+                    await remove(path, options);
+                    throw new Deno.errors.NotFound('already removed');
+                };
+                await fixture.run(['codex']);
+                expect(
+                    (await InstallManifest.load(manifestPath))?.files.map((file) => file.path),
+                ).not.toContain(policy('second'));
+            } finally {
+                Deno.remove = remove;
+                Fs.write = write;
+                if (override === undefined) {
+                    Deno.env.delete('CODEX_HOME');
+                } else {
+                    Deno.env.set('CODEX_HOME', override);
+                }
+            }
+        },
+    );
+}
+
+Deno.test('Real Codex obsolete policy removals stay within the selected scope', async () => {
+    const get = Harness.get;
+    await using fixture = await setupInstall();
+    Harness.get = get;
+    fixture.context.context.repositoryRoot = fixture.root;
+    const override = Deno.env.get('CODEX_HOME');
+    Deno.env.set('CODEX_HOME', fixture.home);
+    try {
+        const source = join(fixture.root, 'instructions/skills/example/SKILL.md');
+        await Deno.mkdir(join(fixture.root, 'instructions/skills/example'), { recursive: true });
+        await Deno.writeTextFile(
+            source,
+            '---\nname: example\ndescription: Example\ndisable-model-invocation: true\n---\nbody',
+        );
+        await fixture.run(['codex']);
+        await fixture.run(['--local', 'codex']);
+        const globalManifest = join(fixture.home, Path.INSTALL_MANIFEST_NAME);
+        const globalBefore = await Deno.readFile(globalManifest);
+        const globalPolicy = join(fixture.home, 'skills/example/agents/openai.yaml');
+        const globalBytes = await Deno.readFile(globalPolicy);
+        await Deno.writeTextFile(source, '---\nname: example\ndescription: Example\n---\nbody');
+        await fixture.run(['--local', 'codex']);
+        expect(await Deno.readFile(globalManifest)).toEqual(globalBefore);
+        expect(await Deno.readFile(globalPolicy)).toEqual(globalBytes);
+        const localManifest = join(fixture.root, Path.INSTALL_MANIFEST_NAME);
+        const localBefore = await Deno.readFile(localManifest);
+        await expect(
+            Deno.stat(join(fixture.root, '.codex/skills/example/agents/openai.yaml')),
+        ).rejects.toBeInstanceOf(Deno.errors.NotFound);
+        await fixture.run(['codex']);
+        expect(await Deno.readFile(localManifest)).toEqual(localBefore);
+        await expect(Deno.stat(globalPolicy)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+        expect(fixture.errors).toEqual([]);
+    } finally {
+        if (override === undefined) {
+            Deno.env.delete('CODEX_HOME');
+        } else {
+            Deno.env.set('CODEX_HOME', override);
+        }
+    }
+});

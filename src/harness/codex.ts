@@ -63,6 +63,11 @@ export class CodexConnector implements HarnessConnector {
         return outputs;
     }
 
+    obsoleteSkillFiles(name: string, translatedFiles: ConnectorFile[]): string[] {
+        const path = `${this.#prefix}skills/${name}/agents/openai.yaml`;
+        return translatedFiles.some((file) => file.path === path) ? [] : [path];
+    }
+
     translateGlobalInstructions(file: ConnectorFile): Promise<ConnectorFile[]> {
         return Promise.resolve().then(() => [
             { path: 'AGENTS.md', content: encodeTranslated(decode(file)) },

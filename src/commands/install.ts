@@ -189,9 +189,9 @@ async function performHarnessInstallation(
 ): Promise<void> {
     using spinner = Log.spinner(`Installing instructions for ${harness.name}`);
     spinner.addStep('translating files...');
-    const translatedFiles = await translateFiles(harness, instructionFiles);
+    const { translatedFiles, obsoletePaths } = await translateFiles(harness, instructionFiles);
     spinner.addStep('installing files...');
-    const installedCount = await installFiles(translatedFiles, harness.home, args);
+    const installedCount = await installFiles(translatedFiles, obsoletePaths, harness.home, args);
     Log.output(
         installedCount > 0
             ? `Successfully installed instructions for ${harness.name}`
@@ -201,6 +201,7 @@ async function performHarnessInstallation(
 
 async function installFiles(
     translatedFiles: ConnectorFile[],
+    obsoletePaths: string[],
     harnessHome: string,
     args: InstallArguments,
 ): Promise<number> {
@@ -221,17 +222,34 @@ async function installFiles(
         }
         validateInstallationPaths(root, [...paths.values()]);
     }
+    const owned = new Set(manifest?.files.map((file) => file.path));
+    const removals = obsoletePaths.filter((path) => owned.has(path));
+    validateInstallationPaths(root, [...translatedFiles, ...removals.map((path) => ({ path }))]);
     const inspections = manifest === null ? [] : await InstallManifest.inspect(root, manifest);
     const filesToInstall = await planInstallation(root, translatedFiles, inspections, args);
+    const filesToRemove = await planRemovals(root, removals, inspections, args);
     const installedFiles: ManifestFile[] = [];
+    const removedPaths: string[] = [];
     const errors: unknown[] = [];
     try {
         await writeFiles(root, filesToInstall, installedFiles);
+        for (const path of filesToRemove) {
+            if (await inspectDestination(root, path)) {
+                try {
+                    await Deno.remove(descendantPath(root, path));
+                } catch (error) {
+                    if (!(error instanceof Deno.errors.NotFound)) {
+                        throw error;
+                    }
+                }
+            }
+            removedPaths.push(path);
+        }
     } catch (error) {
         errors.push(error);
     }
     try {
-        await updateManifest(installManifestPath, manifest, installedFiles);
+        await updateManifest(installManifestPath, manifest, installedFiles, removedPaths);
     } catch (error) {
         errors.push(error);
     }
@@ -241,7 +259,7 @@ async function installFiles(
             'Failed to install instructions or update install manifest.',
         );
     }
-    return installedFiles.length;
+    return installedFiles.length + removedPaths.length;
 }
 
 function validateInstallationPaths(root: string, files: { path: string }[]): void {
@@ -328,6 +346,29 @@ async function planInstallation(
     return filesToInstall;
 }
 
+async function planRemovals(
+    root: string,
+    paths: string[],
+    inspections: Inspection[],
+    args: InstallArguments,
+): Promise<string[]> {
+    const statuses = new Map(inspections.map((inspection) => [inspection.path, inspection.status]));
+    const removals: string[] = [];
+    for (const path of paths) {
+        const exists = await inspectDestination(root, path);
+        if (exists && statuses.get(path) !== 'unchanged') {
+            if (!args.force) {
+                throw new Error(`Modified file "${path}" requires --force to remove.`);
+            }
+            if (args.no || (!args.yes && !Log.confirm(`Remove modified file "${path}"?`))) {
+                continue;
+            }
+        }
+        removals.push(path);
+    }
+    return removals;
+}
+
 async function writeFiles(
     root: string,
     files: ConnectorFile[],
@@ -362,11 +403,15 @@ async function updateManifest(
     path: string,
     manifest: Manifest | null,
     installedFiles: ManifestFile[],
+    removedPaths: string[],
 ): Promise<void> {
-    if (installedFiles.length === 0) {
+    if (installedFiles.length === 0 && removedPaths.length === 0) {
         return;
     }
     const files = new Map((manifest?.files ?? []).map((file) => [file.path, file]));
+    for (const path of removedPaths) {
+        files.delete(path);
+    }
     for (const file of installedFiles) {
         files.set(file.path, file);
     }
@@ -376,10 +421,14 @@ async function updateManifest(
 async function translateFiles(
     harness: HarnessConnector,
     instructionFiles: InstructionFiles,
-): Promise<ConnectorFile[]> {
+): Promise<{ translatedFiles: ConnectorFile[]; obsoletePaths: string[] }> {
     const translatedFiles: Promise<ConnectorFile[]>[] = [];
+    const obsoletePaths: string[] = [];
     for (const skill of instructionFiles.skills) {
-        const translatedFile = harness.translateSkill(skill.name, skill.files);
+        const translatedFile = harness.translateSkill(skill.name, skill.files).then((files) => {
+            obsoletePaths.push(...(harness.obsoleteSkillFiles?.(skill.name, files) ?? []));
+            return files;
+        });
         translatedFiles.push(translatedFile);
     }
     for (const subagent of instructionFiles.subagents) {
@@ -392,5 +441,5 @@ async function translateFiles(
         );
         translatedFiles.push(translatedFile);
     }
-    return (await Promise.all(translatedFiles)).flat();
+    return { translatedFiles: (await Promise.all(translatedFiles)).flat(), obsoletePaths };
 }

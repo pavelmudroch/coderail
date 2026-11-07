@@ -141,6 +141,9 @@ for (const scope of ['global', 'local'] as const) {
                         );
                     }
                     expect(await connector.translateSkill('example', [source])).toEqual(outputs);
+                    expect(connector.obsoleteSkillFiles('example', outputs)).toEqual(
+                        option === undefined ? [`${prefix}skills/example/agents/openai.yaml`] : [],
+                    );
                     expect(source).toEqual(before);
                 }
             }

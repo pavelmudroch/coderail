@@ -29,6 +29,11 @@ export interface HarnessConnector extends Disposable {
 
     /** Source paths are relative to the named skill's directory. */
     translateSkill(name: string, files: ConnectorFile[]): Promise<ConnectorFile[]>;
+    /** Native generated files eligible for retirement for this present skill only.
+     * Called after successful translation; returned paths must exclude current outputs.
+     * The installer removes only manifest-owned candidates.
+     */
+    obsoleteSkillFiles?(name: string, translatedFiles: ConnectorFile[]): string[];
     translateGlobalInstructions(file: ConnectorFile): Promise<ConnectorFile[]>;
     translateSubagent(file: ConnectorFile): Promise<ConnectorFile[]>;
 }
