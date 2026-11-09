@@ -9,7 +9,16 @@ Provide a maintainer ship tool accepting a major, minor, or patch version bump; 
 
 This is exploration, not authorization to release the current checkout. No source implementation or actual release is part of this exploration.
 
-## Established requirements and context
+## Implementation status
+
+Implemented in `tools/ship.ts`, package/publication helpers, and the stable
+and canary GitHub Actions workflows. Packages and upgrade consumption accept
+independently absent instruction and template resources. The source version is
+recorded in `src/cli/version.ts`; changelog entries describe documented releases.
+The initial context below records the baseline used for the design. Updating
+this plan does not publish a release.
+
+## Initial requirements and context (historical)
 
 - Current version is `0.1.0`; semver bumps would produce `1.0.0`, `0.2.0`, or `0.1.1`, respectively.
 - `CHANGELOG.md` uses Keep a Changelog with an empty `[Unreleased]` section and no released versions yet. The first ship requires authored entries before it can proceed.
@@ -67,7 +76,7 @@ This is exploration, not authorization to release the current checkout. No sourc
 
 - Promotion policy finalized during installer exploration: after upload and validation, automatically promote only if the version is higher than the currently designated latest, or no latest exists. Older maintenance releases stay available without promotion; rollback is manual in GitHub. Serialize promotion and recheck latest before deciding so concurrent builds cannot promote an older release over a newer one. This resolves the promotion-policy question below without adding a maintainer CLI flag.
 
-- Latest-release amendment agreed during [Stable release installer](../stable-release-installer/IDEA.md) exploration: create stable releases with `make_latest: "false"`, upload and validate the complete asset set, then promote the intended default with `make_latest: "true"`. Failed upload/validation must not promote the release. Older maintenance releases must not displace the intended default. No moving `latest` Git tag is needed; canary remains a prerelease. Installer and default upgrade consume GitHub's latest designation. The publisher implementation still needs alignment; the promotion policy/interface for distinguishing maintenance releases remains to be designed.
+- Latest-release amendment agreed during [Stable release installer](../stable-release-installer/IDEA.md) exploration: create stable releases with `make_latest: "false"`, upload and validate the complete asset set, then promote the intended default with `make_latest: "true"`. Failed upload/validation must not promote the release. Older maintenance releases must not displace the intended default. No moving `latest` Git tag is needed; canary remains a prerelease. Installer and default upgrade consume GitHub's latest designation. The publisher now implements the finalized promotion policy above.
 
 - Ship finalizes the changelog as shipped before committing/tagging/pushing; it does not track subsequent CI publication state or undo changelog entries on failure.
 - Use the newly versioned changelog section from the tagged revision as GitHub release notes.

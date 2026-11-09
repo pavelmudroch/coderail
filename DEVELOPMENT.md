@@ -62,5 +62,7 @@ This migration intentionally does not reformat existing code. Style checks will 
 formatting, missing-brace, and other lint violations until those files are fixed. Bun does not
 reproduce Deno's case-insensitive named import/export sorting; its optional full import sorting is left off
 to avoid reordering import declarations. Use the same Bun build locally and in CI to keep output
-consistent. No CI configuration currently exists in this repository.
+consistent. GitHub Actions workflows build and smoke-check stable and canary
+release packages. There is no dedicated pull-request workflow running application
+tests and style checks.
 

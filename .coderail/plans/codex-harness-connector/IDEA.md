@@ -31,7 +31,17 @@ uninstallation, covering skills, general instructions, and subagents.
 - Codex supports `.codex/skills` as well as `.agents/skills`, as clarified by
   the user. Do not assume skill installation requires a separate `.agents` root.
 
-## Current understanding
+## Implementation status
+
+Implemented in [ticket 0024](../../tickets/closed/0024-implement-functional-codex-harness-installation.md),
+with obsolete owned invocation-policy reconciliation completed in
+[ticket 0025](../../tickets/closed/0025-remove-obsolete-owned-codex-invocation-policies-on-reinstall.md).
+Global and local installs support skills, TOML subagents, and whole-file
+`AGENTS.md` ownership. The connector contract now includes an optional
+`obsoleteSkillFiles` hook; the version 1 manifest format is unchanged.
+The investigation notes below describe the baseline used for the design.
+
+## Initial investigation (historical)
 
 - `src/harness/codex.ts` is a placeholder. The existing connector contract binds
   a global or local installation target at construction, exposes one absolute

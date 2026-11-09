@@ -5,7 +5,17 @@ status: "ready"
 
 Create `install.sh` to bootstrap the latest stable GitHub release for the host platform, excluding canary.
 
-## Current understanding
+## Implementation status
+
+Implemented in `install.sh` and the existing upgrade and publication modules.
+The installer bootstraps or repairs Linux/macOS installations, reuses healthy
+installations, and preserves active or owned bootstrap executables during cleanup.
+Default stable selection uses GitHub’s latest designation. PATH setup, stable
+listing, and guarded release promotion are implemented. The PowerShell installer
+remains deferred. The investigation notes below describe the baseline used for
+the design.
+
+## Initial investigation (historical)
 
 - `install.sh` currently only declares the repository URL.
 - Existing installation and bootstrap contracts are recorded in [Upgrade command](../upgrade-command/IDEA.md): default root `~/.coderail`, custom roots supported, bootstrap executable under `<root>/libexec/`, then invoke its upgrade command by physical path. Runtime derives the root from that location.
@@ -15,7 +25,7 @@ Create `install.sh` to bootstrap the latest stable GitHub release for the host p
 
 ## Agreed release selection
 
-- Use GitHub's latest release designation for installer and default upgrade selection, with no moving Git tag. This supersedes the earlier highest-version default contract. The existing upgrade implementation still needs to be aligned.
+- Use GitHub's latest release designation for installer and default upgrade selection, with no moving Git tag. This supersedes the earlier highest-version default contract. The current upgrade implementation follows this selection rule.
 - Publisher should create releases with `make_latest: "false"`, upload and validate the complete asset set, then promote the intended default with `make_latest: "true"`. Older maintenance releases should not displace the intended default. Canary remains a prerelease and cannot be latest.
 - Resolve `/releases/latest` once and pin subsequent downloads and bootstrap upgrade to that release. Partial version selectors still select the highest matching stable version.
 

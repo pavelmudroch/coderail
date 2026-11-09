@@ -7,7 +7,8 @@ status: "ready"
 
 Implement harness connectors, starting with Claude because skill translation is
 expected to be simpler. This idea explores the first Claude connector delivery;
-Codex remains later work.
+Codex was delivered separately; see the
+[Codex connector](../codex-harness-connector/IDEA.md).
 
 ## Confirmed decisions
 
@@ -64,7 +65,16 @@ Codex remains later work.
   Preserve the referenced name, including names absent from the current bundle.
   Preserve all other content and do not mutate caller-owned inputs.
 
-## Current understanding
+## Implementation status
+
+Implemented in [ticket 0023](../../tickets/closed/0023-implement-functional-claude-harness-installation.md),
+with the promise-contract follow-up completed in
+[ticket 0026](../../tickets/closed/0026-restore-rejected-promises-for-invalid-claude-global-instructions.md).
+Global and local installs translate skills, Markdown subagents, and optional
+general instructions to `rules/coderail.md` under the selected Claude home.
+The investigation notes below describe the baseline used for the design.
+
+## Initial investigation (historical)
 
 - `src/harness/claude.ts` and `src/harness/codex.ts` are placeholders.
 - The existing `HarnessConnector` contract binds an installation target at

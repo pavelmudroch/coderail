@@ -11,6 +11,7 @@ run verification commands for the files you change.
 
 - [Installation](#installation)
 - [Start a project](#start-a-project)
+- [Agent instructions](#agent-instructions)
 - [Typical workflow](#typical-workflow)
 - [Ideas and tickets](#ideas-and-tickets)
 - [Verify your changes](#verify-your-changes)
@@ -98,6 +99,50 @@ cr ticket next
 configuration. Tickets and ideas are Markdown files under `.coderail`, so you can
 edit their contents and keep them in version control alongside your code.
 
+## Agent instructions
+
+Install CodeRail's bundled skills and subagents for Codex or Claude:
+
+```sh
+cr install codex
+cr install claude
+```
+
+Installation is global by default. Use `--local` from an initialized project to
+install into that project instead:
+
+```sh
+cr install --local codex
+cr uninstall --local codex
+```
+
+You can name both harnesses in one command. If you omit the harness, CodeRail uses
+`default_harness` from configuration; for example, `default_harness = codex`.
+
+| Harness | Global home | Project-local destinations |
+| --- | --- | --- |
+| Codex | `~/.codex`, or absolute `CODEX_HOME` | `.codex/skills/`, `.codex/agents/`, and `AGENTS.md` |
+| Claude | `~/.claude`, or absolute `CLAUDE_CONFIG_DIR` | `.claude/skills/`, `.claude/agents/`, and `.claude/rules/coderail.md` |
+
+Global skills and subagents go into `skills/` and `agents/` under the harness
+home. General instructions, when bundled, become Codex `AGENTS.md` or Claude
+`rules/coderail.md`. Codex subagents are generated as TOML files; Claude subagents
+remain Markdown. Local operations ignore global home overrides and target the
+nearest ancestor containing `.coderail`, including when invoked from a subdirectory.
+
+CodeRail tracks installed files in a separate `.coderail-install` manifest for
+each harness and scope. Unchanged owned files update without prompts; existing
+unowned files and modified owned files require `--force` and confirmation.
+For unattended conflict handling, combine `--force` with `--yes` to approve or
+`--no` to decline. Codex `AGENTS.md` is managed as a whole file, without merging
+existing project instructions.
+
+`cr uninstall <harness>` removes owned instruction files in the selected scope.
+Modified files require the same force and confirmation options; unrelated files
+are preserved. Missing instruction sources are allowed, and omitted skills are
+left installed. Reinstalling a present Codex skill whose invocation flag was
+removed retires its obsolete owned invocation-policy file under the same protections.
+
 ## Typical workflow
 
 Use CodeRail's skills with your coding agent to move from an idea to reviewed,
@@ -109,8 +154,9 @@ as `explore` and `implement` refer to agent skills, not `cr` subcommands.
    your project needs, such as formatting, linting, type checking, and tests. See
    [Verify your changes](#verify-your-changes) for rule syntax and examples. Set
    these up before implementation so the agent can validate its work.
-3. **Start an agent session with the CodeRail skills available.** Give the agent
-   your goal and relevant project context, then invoke the skills below as work
+3. **Install instructions and start an agent session.** Use `cr install codex` or
+   `cr install claude` (add `--local` for this project only). Give the agent your
+   goal and relevant project context, then invoke the skills below as work
    progresses.
 4. **Explore.** Use `explore` to clarify the outcome, investigate the existing
    code, and agree on scope, behavior, important interfaces, and verification
@@ -224,8 +270,7 @@ For example, `cr --cwd /path/to/project ticket next` selects another project.
 
 Some commands listed in help are still under development: `loop`, `doctor`, and
 `template` are placeholders, and template installation through `cr init <template>`
-is simulated. Harness instruction installation and removal (`cr install` and
-`cr uninstall`) have unfinished Codex and Claude connectors.
+is simulated.
 
 ## Contributing
 

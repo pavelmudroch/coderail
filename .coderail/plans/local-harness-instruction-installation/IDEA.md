@@ -34,7 +34,15 @@ within the selected project.
   uninstallation will be handled separately and is outside this idea.
 - Without `--local`, preserve global installation and uninstallation behavior.
 
-## Current understanding
+## Implementation status
+
+Implemented in [ticket 0012](../../tickets/closed/0012-support-project-local-harness-instruction-installation.md).
+Both commands accept `--local`, discover the initialized project root, and pass
+the selected scope to connectors. Codex and Claude connectors are now functional;
+`uninstall --self` is no longer accepted. The investigation notes below describe
+the baseline used for the design.
+
+## Initial investigation (historical)
 
 - The working changes advertise `--local` in both commands' help, but neither
   parser accepts it yet. Install and uninstall currently target `harness.home`.

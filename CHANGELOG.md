@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Functional Codex and Claude instruction installation and removal in global and
+  project-local scopes, including skills, subagents, and optional general
+  instructions, with ownership tracking and existing-file protection.
+- Native Codex TOML subagents and skill invocation policies, plus harness-specific
+  skill references in translated instructions.
+
+### Fixed
+
+- Reinstalling a Codex skill removes obsolete owned invocation policies when its
+  invocation flag is omitted, while protecting modified and unrelated files.
+- Invalid UTF-8 Claude general instructions reject through the returned promise.
+- Installer cleanup preserves bootstrap executables that are active or recorded
+  as distribution-owned after activation, including interrupted installations.
+
 ## [0.1.1] - 2026-11-05
 
 ### Fixed

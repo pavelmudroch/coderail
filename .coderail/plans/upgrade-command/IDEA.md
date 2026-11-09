@@ -5,7 +5,17 @@ status: "ready"
 
 Explore implementation of `src/commands/upgrade.ts`.
 
-## Current understanding
+## Implementation status
+
+Implemented, including the [review follow-ups](REVIEW.md).
+Upgrade resolves and verifies releases, reconciles owned assets, activates the
+selected executable, and cleans up retired executables. Default stable selection
+uses GitHub’s designated latest release; instruction and template resources are
+independently optional. Release workflows and `install.sh` are also implemented
+in their linked plans. The investigation notes below describe the baseline used
+for the design; subsequent amendments are implemented unless explicitly deferred.
+
+## Initial investigation (historical)
 
 - The command is currently a stub: parsing discards all arguments, help handling returns false, and execution does nothing.
 - Help describes stable version selection and mutually exclusive `--canary` for unreleased changes. Stable selection and canary publication assumptions are agreed below. Help will need to include optional `v` prefixes for partial versions too.
@@ -16,7 +26,7 @@ Explore implementation of `src/commands/upgrade.ts`.
 
 ## Agreed installation model and scope
 
-- Initial installation is bootstrapped by `install.sh` (not implemented yet). It downloads the latest tagged compiled executable appropriate to the OS/architecture, places it in a default or user-selected directory, and invokes its upgrade command.
+- Initial installation is bootstrapped by `install.sh`. It downloads the latest tagged compiled executable appropriate to the OS/architecture, places it in a default or user-selected directory, and invokes its upgrade command.
 - The executable is compiled from this TypeScript application. Subsequent distribution installation work belongs to `cr upgrade`.
 - Upgrade downloads the selected GitHub release archive containing assets and the compiled executable.
 - Upgrade replaces distribution assets while preserving non-conflicting user-created templates. A user-created template at an incoming release path may be overwritten with explicit force confirmation, including `--force --yes`.
@@ -51,7 +61,7 @@ Explore implementation of `src/commands/upgrade.ts`.
 - Mark GitHub's designated latest as `(latest)` and the running CLI's stable version as `(current)`. If both match the same release, use exactly `(latest, current)`. Compare normalized versions so a release tag's optional `v` prefix does not affect matching. Only mark current if it appears in the stable listing; a canary or unpublished running version does not add a synthetic release row.
 - Example: `1.5.0`, `1.4.3 (latest, current)`, `1.4.2`, each on its own line. When different, annotate the two respective rows separately with `(latest)` and `(current)`.
 
-- Omitted `--version`, or `--version latest`, selects GitHub's designated latest stable release via `/releases/latest`, rather than calculating the highest version. This agreed amendment is shared with [Stable release installer](../stable-release-installer/IDEA.md); the current implementation still requires alignment. Reject invalid stable identity, drafts and prereleases; fail clearly when no latest release exists. Resolve once and retain existing pinned publication/asset verification.
+- Omitted `--version`, or `--version latest`, selects GitHub's designated latest stable release via `/releases/latest`, rather than calculating the highest version. This agreed amendment is shared with [Stable release installer](../stable-release-installer/IDEA.md) and is implemented in the current release resolver. Reject invalid stable identity, drafts and prereleases; fail clearly when no latest release exists. Resolve once and retain existing pinned publication/asset verification.
 - `X` / `vX` selects the newest stable release matching that major version.
 - `X.Y` / `vX.Y` selects the newest stable release matching that major/minor version.
 - `X.Y.Z` / `vX.Y.Z` selects that exact release. Explicit selection permits downgrades.
@@ -66,7 +76,7 @@ Explore implementation of `src/commands/upgrade.ts`.
 - Agreed publishing assumption: GitHub Actions builds the pushed main tip automatically and publishes six platform archives to a dedicated `canary` prerelease, identifying the source commit in each build. Tagged stable releases publish the same six platform variants. Each archive contains its platform executable, instructions, and templates.
 - Failing tests do not block canary publication. Successful compilation and packaging are required to produce usable release artifacts.
 - Publish after all six archives are ready and prevent older builds from replacing newer canaries.
-- GitHub Actions implementation is deferred to separate work. For this upgrade exploration, assume these publishing workflows exist; define only the release-consumption contract upgrade needs.
+- GitHub Actions implementation belongs to the separate ship-tool plan and is now complete; this idea defines the release-consumption contract upgrade needs.
 - A push containing multiple commits ordinarily builds the resulting branch tip, not each intermediate commit. Upgrade must consume assets belonging to one resolved build using the agreed archive/build identity contract below.
 - Verified against current Deno docs: all six requested cross-compilation targets are supported; Windows arm64 requires Deno 2.9.3 or later. Local Deno is 2.9.8.
 - Technical references: https://docs.deno.com/runtime/reference/cli/compile/ ; https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows ; https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases . GitHub supports push-triggered workflows and multiple binary assets on a release.
@@ -116,12 +126,12 @@ Reference behavior: `src/commands/install.ts` (`planInstallation`, argument vali
 - Delegate helper/module boundaries, exact manifest/build metadata schemas, checksum filename, extraction implementation, locking, staging paths, and deferred cleanup mechanics to implementation, preserving the behavior described here.
 - Reuse existing non-interactive confirmation semantics: a conflict requiring a prompt without an interactive terminal fails during preflight unless `--yes` or `--no` supplies the answer.
 - Same-version reconciliation must not truncate/overwrite the running executable. Reuse a verified matching executable or stage a distinct physical executable before activation; deleting the active executable is never required for reconciliation.
-- GitHub Actions and `install.sh` implementation are separate future work. Upgrade tests should use release/package fixtures rather than depend on those workflows already being deployed.
+- GitHub Actions and `install.sh` were implemented in their separate plans. Upgrade tests should use release/package fixtures rather than depend on those workflows already being deployed.
 - Stable release workflow: the maintainer tags the chosen commit and pushes the tag; the assumed workflow builds that exact revision, creates the corresponding GitHub Release, and attaches the compiled packages/checksums. Automatic GitHub source archives remain separate and are not upgrade inputs.
 
 ## Agreed release consumption contract
 
-- Subsequent agreed amendment: [Ship tool and release publishing](../ship-tool-and-release-publishing/IDEA.md#agreed-optional-resources) allows empty or entirely missing `instructions/` and `templates/` independently in source and release packages. Treat either as an empty incoming set for that resource while preserving existing ownership/conflict rules. This supersedes any requirement below for either resource's contents to be present. Current consumer implementation still needs this adjustment.
+- Subsequent agreed amendment: [Ship tool and release publishing](../ship-tool-and-release-publishing/IDEA.md#agreed-optional-resources) allows empty or entirely missing `instructions/` and `templates/` independently in source and release packages. Treat either as an empty incoming set for that resource while preserving existing ownership/conflict rules. This supersedes any requirement below for either resource's contents to be present. The current consumer implements this adjustment.
 - Subsequent publication amendment: [Publication and recovery](../ship-tool-and-release-publishing/IDEA.md#agreed-publication-and-recovery) uses no GitHub drafts. All six packages must be built and checked before creating a public release, but asset uploads follow creation and can fail partially. This supersedes the earlier assumption of complete assets before visibility. Upgrade retains its existing refusal of missing/changing assets before installation mutation; publication recovery is manual.
 - One ZIP archive per Deno target triple, named `coderail-<target>.zip`, attached to each stable release and the canary prerelease.
 - Archive root contains `cr` (or `cr.exe`), `instructions/`, `templates/`, and `build.json`; no repository `assets/` level.
