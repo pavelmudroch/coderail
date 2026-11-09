@@ -12,7 +12,7 @@ Transform an initial goal into an implementation-ready idea or idea tree through
 
 1. Identify the target idea or establish a new goal.
 2. Discover available Coderail commands and conventions.
-3. Load the target idea, relevant ancestors, and referenced artifacts as needed.
+3. Inspect the current idea tree using `cr idea --json`. Load the target idea, relevant ancestors, and referenced artifacts as needed.
 4. Assess current understanding and select the most valuable next activity.
 5. Repeat the following activities as needed:
    - **Decompose:** Read [decomposition](references/decomposition.md). Identify independent concerns, propose boundaries and dependencies, and agree on consequential structural changes before applying them.
