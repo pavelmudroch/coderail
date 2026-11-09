@@ -172,7 +172,9 @@ as `explore` and `implement` refer to agent skills, not `cr` subcommands.
    `walkthrough` to understand the implementation and discuss improvements with
    the agent. It records agreed follow-up work in the idea's `REVIEW.md`. Address
    that work, verify any changes, and review again as needed.
-8. **Commit.** Stage the final reviewed changes and use `commit` to create
+8. **Update documentation.** Use `docs` to synchronize user documentation with
+   the implemented behavior.
+9. **Commit.** Stage the final reviewed changes and use `commit` to create
    logically coherent commits from the staged diff.
 
 ## Ideas and tickets
