@@ -2,11 +2,12 @@
 id: "0031"
 slug: "review-loop-iterations-and-reselect-recorded-follow-up-work"
 title: "Review loop iterations and reselect recorded follow-up work"
-status: "open"
+status: "closed"
 created_at: "2026-11-10T09:06:53.780Z"
-updated_at: "2026-11-10T09:06:53.780Z"
+updated_at: "2026-11-10T12:20:36.568Z"
 dependencies:
   - "0030"
+reason: "done"
 ---
 
 # Review loop iterations and reselect recorded follow-up work
@@ -17,10 +18,10 @@ normal ready-ticket selection then drives implementation of that work.
 
 ## Tasks
 
-1. [ ] Add review CLI, settings, and preflight tests
-2. [ ] Add review boundary, findings, ordering, and failure tests
-3. [ ] Integrate review invocation and findings-driven reselection
-4. [ ] Document review behavior and verify modified files
+1. [x] Add review CLI, settings, and preflight tests
+2. [x] Add review boundary, findings, ordering, and failure tests
+3. [x] Integrate review invocation and findings-driven reselection
+4. [x] Document review behavior and verify modified files
 
 ## Task details
 
@@ -105,3 +106,28 @@ skill via fake outcomes; implementation/testing of that skill stays out of scope
 - [Repository verification instructions](../../../AGENTS.md)
 - Prerequisite: ticket 0030 (loop, stage execution, logs, and Git boundaries).
 - Consumer: ticket 0032 adds independent opt-in commit after this review stage.
+
+## Implementation and validation
+
+Implemented optional `-r`/`--auto-review`, native review settings, deduplicated
+preflight probes, fresh review sessions with ticket/change/index context, review
+JSONL records, resulting ticket validation, and staging followed by normal
+selection. Added fake review outcomes and temporary Git coverage; updated README
+and usage. The review skill remains a manually supplied prerequisite.
+
+Passed:
+
+- `cr verify ./src/commands/loop.ts`
+- `cr verify ./src/commands/loop/run-loop.ts`
+- `cr verify ./tests/commands/loop.test.ts`
+- `cr verify ./tests/commands/loop/run-loop.test.ts`
+
+The CLI and runner suites pass 15 tests with 100% line coverage for both source
+files. Configured mutation checks passed with no surviving mutations; generated
+mutants were classified as type errors. Cases include distinct model/effort
+probes, disabled review, urgent/deferred findings, five attempts on a reopened
+ticket, dependent blocking, limit completion, same-file staged context, untracked
+files, outside index preservation, quiet reporting, and review failures before
+staging. Existing unrelated work and the index were preserved.
+
+Final combined `cr verify -s ./src/commands/loop.ts ./src/commands/loop/run-loop.ts ./tests/commands/loop.test.ts ./tests/commands/loop/run-loop.test.ts README.md` passed; all four TypeScript files were ok and README was skipped (no configured rule). `git diff --check` passed.

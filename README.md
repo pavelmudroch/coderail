@@ -179,7 +179,7 @@ as `explore` and `implement` refer to agent skills, not `cr` subcommands.
 6. **Implement and repeat.** Use `implement` with a ticket or let it select the
    next ready ticket. The agent implements its tasks, runs configured
    verification, fixes failures, and closes the ticket once it passes. Repeat
-   this loop for the remaining tickets; `cr loop` is currently a placeholder.
+   this loop for the remaining tickets, or use `cr loop` to implement ready tickets automatically.
 7. **Walk through the changes.** Stage the changes you want to review, then use
    `walkthrough` to understand the implementation and discuss improvements with
    the agent. It records agreed follow-up work in the idea's `REVIEW.md`. Address
@@ -188,6 +188,78 @@ as `explore` and `implement` refer to agent skills, not `cr` subcommands.
    the implemented behavior.
 9. **Commit.** Stage the final reviewed changes and use `commit` to create
    logically coherent commits from the staged diff.
+
+### Automated implementation
+
+Run `cr loop [codex|claude] [-l <positive-integer>] [-r] [-c] [-o model=<native-model>,effort=<native-effort>]`
+from an initialized project or a subfolder. The omitted harness uses `defaultHarness`.
+Saved `[loop.codex]` and `[loop.claude]` settings apply; common CLI values override
+saved stage values. Stage-specific `implement-model`/`implement-effort`,
+`review-model`/`review-effort`, and `commit-model`/`commit-effort` override common CLI values.
+Use `-r`/`--auto-review` to enable review with a manually supplied `review` skill.
+CodeRail does not provide that skill. Use `-c`/`--auto-commit` to enable the commit skill.
+The flags are independent and accept no boolean values:
+
+| Flags | Iteration stages |
+| --- | --- |
+| none | implement → stage |
+| `-r` | implement → review → stage |
+| `-c` | implement → stage → commit |
+| `-rc`, `-cr`, or `-r -c` | implement → review → stage → commit |
+
+The long flags can also be combined.
+
+The initialized project subtree must have no staged, unstaged, or untracked changes
+at startup. Other Git subtrees may have unstaged or untracked changes in either mode.
+Without auto-commit, outside staged changes are also allowed and preserved. With
+auto-commit, any outside staged changes are rejected before preflight, including
+in a parent Coderail project sharing the Git repository. For older
+projects, run `cr init` manually to migrate the project ignore rules before looping.
+
+Preflight runs a no-work probe for every distinct enabled implementation/review/commit
+model and effort combination before any implementation. Identical combinations
+share a probe; disabled review/commit settings are not probed. Each probe requires a
+successful session and exactly `OK`; this checks that execution works, but does
+not prove native effort application or rule out native model fallback. Every implementation runs in a fresh session, activates,
+verifies, and closes its selected ticket. Optional review then runs in another
+fresh session on the same harness, with the selected ticket context. It targets
+current unstaged changes against the index and new untracked files inside the
+initialized subtree, including changes to files with accumulated staged work.
+Prior staged work is context; implementation and review must preserve the index.
+
+Review records urgent fixes as actionable tasks on the reopened original ticket
+and deferred fixes as new follow-up tickets, choosing by urgency rather than
+scope alone. It does not implement fixes. A successful review with valid ticket
+state proceeds normally, including when the original ticket was reopened. The
+loop stages the initialized subtree, including recorded findings and ticket moves,
+optionally commits, then selects the lowest-ID dependency-ready open ticket again.
+Reopened tickets and ready follow-ups can run immediately; dependents of reopened work wait.
+Staging runs with every flag combination. Auto-commit runs in a fresh session on
+the same harness only when staging leaves a staged diff, skipping empty commits.
+The commit skill receives the staged diff as its immutable scope and preserves
+initially unstaged and untracked content. It may create one or more commits.
+Success requires successful session completion, at least one new commit, and no
+remaining staged, unstaged, or untracked work inside the initialized subtree.
+Outside dirty work remains untouched. Pushing is always user-controlled.
+
+Without `--limit` the loop continues until no ready tickets remain. Limits count
+implementation attempts, including repeated attempts on reopened tickets, with no
+implicit reopen cap. Review and commit do not add attempts. `--limit 1 -rc` finishes
+review, staging, and commit before stopping, even when review reopens the ticket;
+the final summary then identifies the unfinished ticket. Empty and
+dependency-blocked queues are successful stops.
+A failed session, incomplete ticket closure, Git/log failure, or Ctrl+C stops the
+loop immediately and preserves partial work, the index, and any created commits
+without rollback, automatic retry, amend, or recovery.
+
+Raw agent output is saved under `.coderail/loop/<UTC-timestamp>-<random-id>/`:
+`preflight.jsonl` for probes and `<ticket-id>.jsonl` for implementation, review, and commit
+output (`step: "implement"`, `"review"`, or `"commit"`). Repeated attempts append to
+the same selected ticket log.
+Each appended record has `timestamp`, `step`, `stream`, and `output`; chunks and
+receipt timestamps are preserved. Agent text does not appear in terminal lifecycle
+output. Quiet and non-interactive modes retain contextual completion lines, durations,
+and a final attempt count, stop reason, and unfinished ticket when present.
 
 ## Ideas and tickets
 
@@ -327,7 +399,7 @@ Use `cr --help`, `cr <command> --help`, or a subcommand's help, such as
 `--cwd <path>`, `--non-interactive`, `--no-color`, `--verbose`, and `--quiet`.
 For example, `cr --cwd /path/to/project ticket next` selects another project.
 
-Some commands listed in help are still under development: `loop`, `doctor`, and
+Some commands listed in help are still under development: `doctor` and
 `template` are placeholders, and template installation through `cr init <template>`
 is simulated.
 

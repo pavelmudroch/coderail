@@ -1,12 +1,9 @@
 import { Cli } from '@cli';
 import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Log } from '@log';
-import { Path } from '@path';
-import { join } from '@std/path';
 
-import { areDependenciesSatisfied } from './helpers/are-dependencies-satisfied.ts';
 import { formatJson, formatText } from './helpers/format.ts';
-import { resolveTicket, type Ticket, TICKET_STATUS } from './helpers/resolve-ticket.ts';
+import { getReadyTickets } from './helpers/get-ready-tickets.ts';
 
 type NextArguments = {
     help: boolean;
@@ -99,46 +96,7 @@ export class Next implements Command<NextArguments> {
     async run(context: RunContext<NextArguments>): Promise<void> {
         const cwd = context.context.currentWorkingDirectory;
         try {
-            const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'open');
-            const ids: string[] = [];
-            try {
-                for await (const entry of Deno.readDir(directory)) {
-                    if (!entry.isFile) {
-                        continue;
-                    }
-                    const match = /^(\d{4,})-.+\.md$/.exec(entry.name);
-                    const id = match?.[1];
-                    if (id !== undefined) {
-                        ids.push(id);
-                    }
-                }
-            } catch (error) {
-                if (!(error instanceof Deno.errors.NotFound)) {
-                    throw error;
-                }
-            }
-            ids.sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
-            const tickets: Ticket[] = [];
-            for (const id of ids) {
-                const ticket = await resolveTicket(cwd, id);
-                if (ticket.status !== TICKET_STATUS.OPEN) {
-                    continue;
-                }
-                let satisfied = true;
-                for (const dependency of ticket.dependencies) {
-                    if (!(await areDependenciesSatisfied(cwd, dependency))) {
-                        satisfied = false;
-                        break;
-                    }
-                }
-                if (!satisfied) {
-                    continue;
-                }
-                tickets.push(ticket);
-                if (tickets.length === context.parsedArguments.args.limit) {
-                    break;
-                }
-            }
+            const tickets = await getReadyTickets(cwd, context.parsedArguments.args.limit);
             if (context.parsedArguments.args.json) {
                 Log.output(formatJson(tickets));
                 return;

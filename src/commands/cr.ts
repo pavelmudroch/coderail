@@ -61,7 +61,7 @@ export class Cr implements Command<GlobalArguments> {
             '  -h, --help           Show this help message and exit.',
             '      --version        Show the version information and exit.',
             '  -v, --verbose        Turn on verbose logging.',
-            '  -q, --quiet          Turn off all logging except errors.',
+            '  -q, --quiet          Suppress logs except errors and loop completion lines.',
             '      --cwd <path>     Set the current working directory.',
             '      --no-color       Disable colored output.',
             '      --non-interactive',

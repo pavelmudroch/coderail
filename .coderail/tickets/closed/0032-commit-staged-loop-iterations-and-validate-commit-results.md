@@ -2,11 +2,12 @@
 id: "0032"
 slug: "commit-staged-loop-iterations-and-validate-commit-results"
 title: "Commit staged loop iterations and validate commit results"
-status: "open"
+status: "closed"
 created_at: "2026-11-10T09:06:53.948Z"
-updated_at: "2026-11-10T09:06:53.948Z"
+updated_at: "2026-11-10T12:45:14.824Z"
 dependencies:
   - "0031"
+reason: "done"
 ---
 
 # Commit staged loop iterations and validate commit results
@@ -17,10 +18,10 @@ initialized project clean; preserve resulting work on any failure.
 
 ## Tasks
 
-1. [ ] Add commit CLI, preflight, and startup-index tests
-2. [ ] Add commit ordering, postcondition, and end-to-end workflow tests
-3. [ ] Implement optional commit execution and Git postconditions
-4. [ ] Complete user documentation and verify modified files
+1. [x] Add commit CLI, preflight, and startup-index tests
+2. [x] Add commit ordering, postcondition, and end-to-end workflow tests
+3. [x] Implement optional commit execution and Git postconditions
+4. [x] Complete user documentation and verify modified files
 
 ## Task details
 
@@ -115,3 +116,40 @@ the complete idea's workflow matrix uses no live authenticated model calls.
 - [Repository verification instructions](../../../AGENTS.md)
 - Prerequisite: ticket 0031 (review integration), transitively 0030 (base loop).
 - Settings and runner contracts: tickets 0029 and 0028.
+
+
+## Implementation and validation
+
+Implemented independent `-c`/`--auto-commit` and combined `-rc`/`-cr` flags,
+commit settings/preflight, outside-index startup rejection, staged-diff skipping,
+and new-commit/clean-project postconditions. Commit uses the shared fresh-session
+executor, JSONL logging, cancellation, and disposal. Reopened tickets remain in
+limit-stop summaries. README and CLI help describe all four workflow modes.
+
+Passing per-file verification commands:
+
+```sh
+cr verify ./src/commands/loop.ts
+cr verify ./src/commands/loop/git.ts
+cr verify ./src/commands/loop/run-loop.ts
+cr verify ./tests/commands/loop.test.ts
+cr verify ./tests/commands/loop/git.test.ts
+cr verify ./tests/commands/loop/run-loop.test.ts
+```
+
+All source coverage checks passed at 100%; all test-file mutation checks passed
+with no survivors. The three suites contain 25 passing tests, including temporary
+Git repositories and a full command-level `--limit 1 -rc` workflow that reopens
+the selected ticket during review. Tests cover all four review/commit modes,
+preflight combinations, nested scope, outside dirty work, split commits,
+reselection, no-diff skips, Git/session/log failures, cancellation, and cleanup.
+All harness calls were fakes; no live authenticated model calls were used.
+
+Final scoped verification passed:
+
+```sh
+cr verify -s README.md ./src/commands/loop.ts ./src/commands/loop/git.ts ./src/commands/loop/run-loop.ts ./tests/commands/loop.test.ts ./tests/commands/loop/git.test.ts ./tests/commands/loop/run-loop.test.ts
+```
+
+All six source/test files passed; README had no applicable verification rule.
+`git diff --check` passed. Existing unrelated work and the Git index were preserved.

@@ -2,13 +2,14 @@
 id: "0030"
 slug: "implement-the-preflighted-ticket-loop-with-scoped-staging-and-logs"
 title: "Implement the preflighted ticket loop with scoped staging and logs"
-status: "open"
+status: "closed"
 created_at: "2026-11-10T09:06:53.599Z"
-updated_at: "2026-11-10T09:06:53.599Z"
+updated_at: "2026-11-10T11:48:26.422Z"
 dependencies:
   - "0027"
   - "0028"
   - "0029"
+reason: "done"
 ---
 
 # Implement the preflighted ticket loop with scoped staging and logs
@@ -20,14 +21,14 @@ review and commit are added by tickets 0031 and 0032.
 
 ## Tasks
 
-1. [ ] Add CLI, shared selection, and preflight tests
-2. [ ] Add Git-boundary and multi-iteration workflow tests
-3. [ ] Add JSONL, lifecycle reporting, and cancellation tests
-4. [ ] Implement CLI wiring and extract shared ready-ticket selection
-5. [ ] Implement project-scoped Git startup checks and staging
-6. [ ] Implement streamed stage execution, preflight, and iteration orchestration
-7. [ ] Implement lifecycle reporting and document the implementation-only loop
-8. [ ] Verify every modified source and test file
+1. [x] Add CLI, shared selection, and preflight tests
+2. [x] Add Git-boundary and multi-iteration workflow tests
+3. [x] Add JSONL, lifecycle reporting, and cancellation tests
+4. [x] Implement CLI wiring and extract shared ready-ticket selection
+5. [x] Implement project-scoped Git startup checks and staging
+6. [x] Implement streamed stage execution, preflight, and iteration orchestration
+7. [x] Implement lifecycle reporting and document the implementation-only loop
+8. [x] Verify every modified source and test file
 
 ## Task details
 
@@ -199,3 +200,20 @@ repositories, requiring no authenticated sessions.
 - [Repository verification instructions](../../../AGENTS.md)
 - Prerequisites: tickets 0027 (initialization), 0028 (runner), 0029 (settings).
 - Extensions: tickets 0031 (review), 0032 (commit).
+
+## Verification results
+
+Completed 2026-11-10. All tasks passed with fake harness execution and real temporary
+Git repositories; no authenticated agent sessions were required.
+
+The final command passed for every implementation source/test file (100% configured
+coverage and passing configured mutation checks). Documentation files had no matching
+verification rules and were reported as skipped.
+
+```sh
+cr verify -s ./src/commands/loop.ts ./src/commands/loop/git.ts ./src/commands/loop/run-loop.ts ./src/commands/ticket/helpers/get-ready-tickets.ts ./src/commands/ticket/next.ts ./src/commands/cr.ts ./tests/commands/loop.test.ts ./tests/commands/loop/git.test.ts ./tests/commands/loop/run-loop.test.ts ./tests/commands/ticket/helpers/get-ready-tickets.test.ts README.md assets/instructions/skills/implement/SKILL.md
+```
+
+Additional checks passed: `git diff --check`, `cr loop --help`, and
+`cr --cwd /tmp loop --help` (help without an initialized project).
+Existing staged prerequisite work and its index entries were preserved.
