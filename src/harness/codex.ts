@@ -90,7 +90,7 @@ export class CodexConnector implements HarnessConnector {
             await markdown.content.cancel();
             translated = text;
         } else {
-            delete markdown.frontmatter['disable-model-invocation'];
+            markdown.frontmatter['disable-model-invocation'] = undefined;
             translated = await readText(Md.toStream(markdown));
             // Serialization canonicalizes metadata only; preserve the source BOM.
             if (text.startsWith('\uFEFF')) {

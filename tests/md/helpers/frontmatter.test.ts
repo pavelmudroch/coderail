@@ -86,10 +86,17 @@ Deno.test('Md frontmatter rejects malformed or unsupported syntax with line numb
 });
 
 Deno.test('Md frontmatter rejects unsupported values when stringifying', () => {
-    for (const value of [NaN, Infinity, 'a\nb', 'a\rb', null, {}, [[1]], undefined]) {
-        expect(() => stringifyFrontmatter({ value } as Frontmatter)).toThrow(TypeError);
+    for (const value of [NaN, Infinity, 'a\nb', 'a\rb', null, {}, [[1]], [undefined]]) {
+        expect(() => stringifyFrontmatter({ value } as unknown as Frontmatter)).toThrow(TypeError);
     }
     expect(() => stringifyFrontmatter({ 'bad\nkey': true })).toThrow(TypeError);
+});
+
+Deno.test('Md frontmatter omits undefined properties when stringifying', () => {
+    expect(stringifyFrontmatter({ omitted: undefined })).toBe('');
+    expect(stringifyFrontmatter({ before: 'one', omitted: undefined, after: true })).toBe(
+        'before: "one"\nafter: true',
+    );
 });
 
 Deno.test('Md frontmatter treats prototype property names as ordinary keys', () => {

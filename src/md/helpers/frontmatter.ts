@@ -1,5 +1,5 @@
 export type Scalar = string | number | boolean;
-export type Frontmatter = Record<string, Scalar | Scalar[]>;
+export type Frontmatter = Record<string, Scalar | Scalar[] | undefined>;
 
 /** Parses the text inside frontmatter delimiters; error lines are relative to that text. */
 export function parseFrontmatter(content: string): Frontmatter {
@@ -174,6 +174,9 @@ export function stringifyFrontmatter(frontmatter: Frontmatter): string {
     const lines: string[] = [];
     for (const [key, value] of Object.entries(frontmatter)) {
         const name = /^[A-Za-z_][A-Za-z0-9_-]*$/.test(key) ? key : scalar(key);
+        if (value === undefined) {
+            continue;
+        }
         if (Array.isArray(value)) {
             if (value.length === 0) {
                 lines.push(`${name}: []`);
