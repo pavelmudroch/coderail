@@ -132,6 +132,7 @@ async function setupInstall(local = false): Promise<InstallFixture> {
         return {
             name,
             home,
+            run: () => Promise.reject(new Error('Installation must not run sessions.')),
             translateSkill: () => Promise.resolve([]),
             translateSubagent: () => Promise.resolve([]),
             translateGlobalInstructions: () => Promise.resolve(files),

@@ -3,7 +3,8 @@ import { homedir } from 'node:os';
 import { Md } from '@md';
 import { basename, isAbsolute, join, resolve } from '@std/path';
 
-import type { ConnectorFile, HarnessConnector, InstallationTarget } from './connector.ts';
+import { type ConnectorFile, type HarnessConnector, type InstallationTarget } from './connector.ts';
+import { type Runner, type RunRequest, startRunner } from './runner/runner.ts';
 
 export class CodexConnector implements HarnessConnector {
     readonly name = 'codex';
@@ -21,6 +22,51 @@ export class CodexConnector implements HarnessConnector {
             }
             this.home = resolve(override || join(homedir(), '.codex'));
         }
+    }
+
+    run(request: RunRequest): Promise<Runner> {
+        return Promise.resolve().then(() => {
+            const args = ['exec', '--json'];
+            if (request.model !== undefined) {
+                args.push('--model', request.model);
+            }
+            if (request.effort !== undefined) {
+                args.push('--config', `model_reasoning_effort=${JSON.stringify(request.effort)}`);
+            }
+            args.push('-');
+            let answer: string | undefined;
+            let completed = false;
+            let failed = false;
+            return startRunner(
+                'codex',
+                args,
+                request,
+                (event) => {
+                    if (event.type === 'turn.failed' || event.type === 'error') {
+                        failed = true;
+                    }
+                    if (event.type === 'turn.completed') {
+                        completed = true;
+                    }
+                    const item = event.item as Record<string, unknown> | undefined;
+                    if (
+                        event.type === 'item.completed' &&
+                        item?.type === 'agent_message' &&
+                        typeof item.text === 'string'
+                    ) {
+                        answer = item.text;
+                    }
+                },
+                () => {
+                    if (failed || !completed || answer === undefined) {
+                        throw new Error(
+                            'Codex did not complete successfully with a final assistant answer.',
+                        );
+                    }
+                    return answer;
+                },
+            );
+        });
     }
 
     async translateSkill(name: string, files: ConnectorFile[]): Promise<ConnectorFile[]> {

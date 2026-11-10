@@ -6,6 +6,7 @@ import { join, resolve } from '@std/path';
 
 import { ClaudeConnector } from '../../src/harness/claude.ts';
 import type { ConnectorFile } from '../../src/harness/connector.ts';
+import { executionTests } from './execution.test.ts';
 
 const encoder = new TextEncoder();
 function file(path: string, text: string): ConnectorFile {
@@ -187,3 +188,11 @@ Deno.test('Claude annotates unexpected parser failures with their source path', 
         Md.parse = parse;
     }
 });
+
+executionTests(
+    'claude',
+    (scope) =>
+        new ClaudeConnector(
+            scope === 'global' ? { scope } : { scope, projectRoot: '/installation-only' },
+        ),
+);

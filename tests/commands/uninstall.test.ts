@@ -138,6 +138,7 @@ async function setupUninstall(
         return {
             name,
             home: root,
+            run: () => Promise.reject(new Error('Installation must not run sessions.')),
             translateSkill: () => Promise.resolve([]),
             translateGlobalInstructions: () => Promise.resolve([]),
             translateSubagent: () => Promise.resolve([]),

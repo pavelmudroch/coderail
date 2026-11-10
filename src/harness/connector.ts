@@ -1,3 +1,7 @@
+import type { Runner, RunRequest } from './runner/runner.ts';
+
+export type { Runner, RunRequest };
+
 /** Installation scope is fixed for the lifetime of a connector. */
 export type InstallationTarget =
     | {
@@ -15,7 +19,7 @@ export interface ConnectorFile {
 }
 
 /**
- * Supplies native locations and byte-based translations only. Shared operations own
+ * Supplies native installation translations and fresh session execution. Shared operations own
  * discovery/loading, aggregate path validation, manifests, and filesystem mutation.
  * Input records and bytes remain caller-owned and must not be modified.
  * Translations may produce multiple files, with all bytes materialized and paths
@@ -26,6 +30,8 @@ export interface HarnessConnector extends Disposable {
     readonly name: string;
     /** Absolute installation home. */
     readonly home: string;
+
+    run(request: RunRequest): Promise<Runner>;
 
     /** Source paths are relative to the named skill's directory. */
     translateSkill(name: string, files: ConnectorFile[]): Promise<ConnectorFile[]>;
