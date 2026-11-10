@@ -2,6 +2,16 @@ import type { Command, GlobalArguments } from '@commands';
 import { Log } from '@log';
 import { dirname, fromFileUrl, join, resolve } from '@std/path';
 
+export const projectIgnoreLines = [
+    '*',
+    '!.gitignore',
+    '!coderail.conf',
+    '!plans/',
+    '!plans/**',
+    '!tickets/',
+    '!tickets/**',
+] as const;
+
 export type RuntimeContext = {
     currentWorkingDirectory: string;
     installRoot: string;
@@ -36,6 +46,24 @@ export async function createContext(
         throw new Error(
             `No initialized project found from "${currentWorkingDirectory}". Run "cr init" first.`,
         );
+    }
+
+    if (repositoryRoot !== undefined && command.requiresInit) {
+        let lines: string[] = [];
+        try {
+            lines = (
+                await Deno.readTextFile(join(repositoryRoot, '.coderail', '.gitignore'))
+            ).split(/\r?\n/);
+        } catch (error) {
+            if (!(error instanceof Deno.errors.NotFound)) {
+                throw error;
+            }
+        }
+        if (lines[0] !== '*' || !projectIgnoreLines.every((line) => lines.includes(line))) {
+            throw new Error(
+                `Project at "${repositoryRoot}" is incompletely initialized. Run "cr init" from that directory.`,
+            );
+        }
     }
 
     return { currentWorkingDirectory, installRoot, resourceRoot, repositoryRoot };

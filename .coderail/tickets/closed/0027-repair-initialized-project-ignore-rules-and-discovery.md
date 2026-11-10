@@ -2,10 +2,11 @@
 id: "0027"
 slug: "repair-initialized-project-ignore-rules-and-discovery"
 title: "Repair initialized project ignore rules and discovery"
-status: "open"
+status: "closed"
 created_at: "2026-11-10T09:06:46.591Z"
-updated_at: "2026-11-10T09:06:46.591Z"
+updated_at: "2026-11-10T09:33:17.535Z"
 dependencies: []
+reason: "done"
 ---
 
 # Repair initialized project ignore rules and discovery
@@ -16,10 +17,10 @@ by rerunning `cr init`; all commands requiring initialization share this check.
 
 ## Tasks
 
-1. [ ] Add initialization repair and nearest-project regression tests
-2. [ ] Create and idempotently repair the managed ignore file
-3. [ ] Validate initialization at the nearest project boundary
-4. [ ] Verify modified files and document the migration
+1. [x] Add initialization repair and nearest-project regression tests
+2. [x] Create and idempotently repair the managed ignore file
+3. [x] Validate initialization at the nearest project boundary
+4. [x] Verify modified files and document the migration
 
 ## Task details
 
@@ -102,3 +103,21 @@ failures and repeat until passing. Confirm docs match the tested behavior.
 - [Context tests](../../../tests/runtime/context.test.ts)
 - [Repository verification instructions](../../../AGENTS.md)
 - Consumer: ticket 0030, the implementation loop.
+
+## Implementation notes
+
+- Init creates and idempotently repairs the managed ignore file, preserving custom
+  bytes and leaving Git's index, root ignore file, and local exclude untouched.
+- Required-line validation is shared with runtime context creation. Discovery
+  keeps the nearest directory boundary, including incomplete projects; commands
+  without initialization requirements can still run for repair.
+- Updated initialization fixtures and README migration instructions; repaired this
+  repository's own `.coderail/.gitignore` by running `cr init`.
+- Passed individual `cr verify` checks for `src/commands/init.ts`,
+  `src/runtime/context.ts`, `tests/commands/init.test.ts`,
+  `tests/runtime/context.test.ts`, and `tests/commands/verify.test.ts`.
+  Both modified source files reached 100% line coverage. Mutation checks reported
+  no survivors (generated mutations were classified as type errors).
+- Passed `cr verify -s` over all seven implementation files, excluding this ticket;
+  README and the ignore file were skipped because they have no verification rule.
+  `git diff --check` passed.

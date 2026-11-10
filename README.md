@@ -96,8 +96,19 @@ cr ticket next
 ```
 
 `cr init` creates `.coderail/coderail.conf` without replacing an existing
-configuration. Tickets and ideas are Markdown files under `.coderail`, so you can
-edit their contents and keep them in version control alongside your code.
+configuration. It also creates or repairs `.coderail/.gitignore`, preserving
+custom content. Runtime output is ignored; the configuration, ignore file, plans,
+and tickets remain eligible for version control, including nested content.
+Already tracked files stay tracked; init does not remove them from Git's index.
+
+For existing projects, rerun `cr init` from the project root to repair the ignore
+rules. Commands requiring initialization check the nearest `.coderail` directory
+and report incomplete initialization with `cr init` guidance. They do not skip
+an incomplete nested project in favor of an initialized parent. Init remains
+available to repair it.
+
+Tickets and ideas are Markdown files under `.coderail`, so you can edit their
+contents and keep them in version control alongside your code.
 
 ## Agent instructions
 

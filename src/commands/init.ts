@@ -4,6 +4,7 @@ import { Fs } from '@fs';
 import { Log } from '@log';
 import { join } from '@std/path';
 
+import { projectIgnoreLines } from '../runtime/context.ts';
 import type { RunContext } from './helpers/command.ts';
 
 type InitArguments = {
@@ -84,6 +85,28 @@ export class Init implements Command<InitArguments> {
             }
             await Fs.write(filePath, defaultConfigContent());
             Log.notice(`Created new configuration file at "${filePath}".`);
+        }
+        const ignorePath = join(directoryPath, '.gitignore');
+        let original = '';
+        try {
+            original = await Deno.readTextFile(ignorePath);
+        } catch (error) {
+            if (!(error instanceof Deno.errors.NotFound)) {
+                throw error;
+            }
+        }
+        const lines = original.split(/\r?\n/);
+        let repaired = lines[0] === '*' ? original : '*\n' + original;
+        for (const line of projectIgnoreLines.slice(1)) {
+            if (!lines.includes(line)) {
+                if (!repaired.endsWith('\n')) {
+                    repaired += '\n';
+                }
+                repaired += line + '\n';
+            }
+        }
+        if (repaired !== original) {
+            await Fs.write(ignorePath, new Blob([repaired]).stream());
         }
         spinner.setMessage('Installing templates...');
         for (const template of parsedArguments.args.templates) {

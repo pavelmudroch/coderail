@@ -92,7 +92,7 @@ Deno.test(
     'Runtime::createContext finds initialization in cwd and ancestors without Git',
     async () => {
         await using f = await fixture();
-        await Deno.mkdir(join(f.project, '.coderail'));
+        await initialize(f.project);
         const child = join(f.project, 'nested', 'child');
         await Deno.mkdir(child, { recursive: true });
         for (const cwd of [f.project, child]) {
@@ -108,8 +108,8 @@ Deno.test(
 Deno.test('Runtime::createContext selects the nearest initialized project', async () => {
     await using f = await fixture();
     const nested = join(f.project, 'nested');
-    await Deno.mkdir(join(f.project, '.coderail'));
-    await Deno.mkdir(join(nested, '.coderail'), { recursive: true });
+    await initialize(f.project);
+    await initialize(nested);
     expect((await createContext(globals(nested), { requiresInit: true })).repositoryRoot).toBe(
         nested,
     );
@@ -132,7 +132,7 @@ Deno.test(
     'Runtime::createContext ignores a file named .coderail and continues upward',
     async () => {
         await using f = await fixture();
-        await Deno.mkdir(join(f.root, '.coderail'));
+        await initialize(f.root);
         await Deno.writeTextFile(join(f.project, '.coderail'), 'not a directory');
         expect(
             (await createContext(globals(f.project), { requiresInit: true })).repositoryRoot,
@@ -144,6 +144,7 @@ Deno.test('Runtime::createContext follows links to initialization directories', 
     await using f = await fixture();
     const configuration = join(f.root, 'configuration');
     await Deno.mkdir(configuration);
+    await Deno.writeTextFile(join(configuration, '.gitignore'), ignoreContent);
     await Deno.symlink(configuration, join(f.project, '.coderail'), { type: 'dir' });
     expect((await createContext(globals(f.project), { requiresInit: true })).repositoryRoot).toBe(
         f.project,
@@ -223,7 +224,7 @@ Deno.test(
                 expect(context.installRoot).toBe(await Deno.realPath(root));
                 expect(context.resourceRoot).toBe(context.installRoot);
                 const instructions = await getInstructionFiles(context.resourceRoot ?? '');
-                expect(new TextDecoder().decode(instructions.globalInstructionFile.content)).toBe(
+                expect(new TextDecoder().decode(instructions.globalInstructionFile?.content)).toBe(
                     'global',
                 );
                 expect(instructions.skills[0]?.files[0]?.path).toBe('SKILL.md');
@@ -243,6 +244,95 @@ Deno.test(
         await Deno.mkdir(join(sourceInstructions, 'agents'));
         await Deno.writeTextFile(join(sourceInstructions, 'AGENTS.md'), 'source');
         const instructions = await getInstructionFiles(context.resourceRoot ?? '');
-        expect(new TextDecoder().decode(instructions.globalInstructionFile.content)).toBe('source');
+        expect(new TextDecoder().decode(instructions.globalInstructionFile?.content)).toBe(
+            'source',
+        );
     },
 );
+
+const ignoreContent =
+    '*\n!.gitignore\n!coderail.conf\n!plans/\n!plans/**\n!tickets/\n!tickets/**\n';
+
+async function initialize(root: string): Promise<void> {
+    await Deno.mkdir(join(root, '.coderail'), { recursive: true });
+    await Deno.writeTextFile(join(root, '.coderail', '.gitignore'), ignoreContent);
+}
+
+Deno.test('Runtime rejects incomplete nearest projects while permitting repair', async () => {
+    await using f = await fixture();
+    await initialize(f.project);
+    const nested = join(f.project, 'nested');
+    const child = join(nested, 'child');
+    await Deno.mkdir(child, { recursive: true });
+    await Deno.mkdir(join(nested, '.coderail'));
+    const path = join(nested, '.coderail', '.gitignore');
+    const cases = [
+        undefined,
+        '',
+        '# custom\n' + ignoreContent,
+        ...ignoreContent
+            .trimEnd()
+            .split('\n')
+            .map((missing) =>
+                ignoreContent
+                    .split('\n')
+                    .filter((line) => line !== missing)
+                    .join('\n'),
+            ),
+    ];
+    for (const content of cases) {
+        if (content !== undefined) {
+            await Deno.writeTextFile(path, content);
+        }
+        for (const cwd of [nested, child]) {
+            await expect(createContext(globals(cwd), { requiresInit: true })).rejects.toThrow(
+                `Project at "${nested}" is incompletely initialized. Run "cr init"`,
+            );
+            expect(
+                (await createContext(globals(cwd), { requiresInit: false })).repositoryRoot,
+            ).toBe(nested);
+        }
+    }
+    await Deno.writeTextFile(path, ignoreContent + '# custom\nplans/**');
+    expect((await createContext(globals(child), { requiresInit: true })).repositoryRoot).toBe(
+        nested,
+    );
+});
+
+Deno.test('Runtime discovers a project at the filesystem root', async () => {
+    await using f = await fixture();
+    const stat = Deno.stat;
+    const readTextFile = Deno.readTextFile;
+    const root = resolve('/');
+    Deno.stat = (path): ReturnType<typeof Deno.stat> =>
+        path === join(root, '.coderail')
+            ? Promise.resolve({ isDirectory: true } as Deno.FileInfo)
+            : stat(path);
+    Deno.readTextFile = (path, options): Promise<string> =>
+        path === join(root, '.coderail', '.gitignore')
+            ? Promise.resolve(ignoreContent)
+            : readTextFile(path, options);
+    try {
+        expect(
+            (await createContext(globals(f.project), { requiresInit: true })).repositoryRoot,
+        ).toBe(root);
+    } finally {
+        Deno.stat = stat;
+        Deno.readTextFile = readTextFile;
+    }
+});
+
+Deno.test('Runtime propagates ignore file read errors', async () => {
+    await using f = await fixture();
+    await initialize(f.project);
+    const read = Deno.readTextFile;
+    const failure = new Deno.errors.PermissionDenied('ignore file inaccessible');
+    Deno.readTextFile = (): Promise<string> => Promise.reject(failure);
+    try {
+        await expect(createContext(globals(f.project), { requiresInit: true })).rejects.toBe(
+            failure,
+        );
+    } finally {
+        Deno.readTextFile = read;
+    }
+});

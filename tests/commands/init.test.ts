@@ -188,3 +188,107 @@ Deno.test('Init preserves existing and dangling configuration symlinks', async (
         await Deno.remove(root, { recursive: true });
     }
 });
+
+const requiredIgnoreLines = [
+    '*',
+    '!.gitignore',
+    '!coderail.conf',
+    '!plans/',
+    '!plans/**',
+    '!tickets/',
+    '!tickets/**',
+];
+
+Deno.test('Init repairs ignore rules once while preserving custom content', async () => {
+    const root = await Deno.makeTempDir();
+    const path = join(root, '.coderail', '.gitignore');
+    try {
+        const command = new Init();
+        await command.run(context(root));
+        expect(await Deno.readTextFile(path)).toBe(requiredIgnoreLines.join('\n') + '\n');
+        for (const custom of [
+            '',
+            '# custom\n*\n!plans/\ncustom',
+            '*\n# custom\n!tickets/\n',
+            '# custom\r\n*\r\n',
+        ]) {
+            await Deno.writeTextFile(path, custom);
+            const expected = custom.startsWith('*\n') ? custom : '*\n' + custom;
+            const missing = requiredIgnoreLines
+                .slice(1)
+                .filter((line) => !custom.split(/\r?\n/).includes(line));
+            const repaired =
+                expected + (expected.endsWith('\n') ? '' : '\n') + missing.join('\n') + '\n';
+            await command.run(context(root));
+            expect(await Deno.readTextFile(path)).toBe(repaired);
+            await command.run(context(root));
+            expect(await Deno.readTextFile(path)).toBe(repaired);
+        }
+        const complete = requiredIgnoreLines.join('\n') + '\n# custom\nplans/**';
+        await Deno.writeTextFile(path, complete);
+        await command.run(context(root));
+        expect(await Deno.readTextFile(path)).toBe(complete);
+    } finally {
+        await Deno.remove(root, { recursive: true });
+    }
+});
+
+Deno.test('Init ignores runtime output without untracking existing files', async () => {
+    const root = await Deno.makeTempDir();
+    async function git(...args: string[]): Promise<string> {
+        const result = await new Deno.Command('git', {
+            args: ['-C', root, ...args],
+            stdout: 'piped',
+            stderr: 'piped',
+        }).output();
+        expect(result.code).toBe(0);
+        return new TextDecoder().decode(result.stdout);
+    }
+    try {
+        await git('init', '-q');
+        await Deno.mkdir(join(root, '.coderail'));
+        await Deno.writeTextFile(join(root, '.coderail', 'tracked-runtime'), 'tracked');
+        await git('add', '.');
+        await Deno.writeTextFile(join(root, '.gitignore'), '# root rules\n');
+        const exclude = await Deno.readTextFile(join(root, '.git', 'info', 'exclude'));
+        await new Init().run(context(root));
+        const visible = [
+            '.gitignore',
+            'coderail.conf',
+            'plans/IDEA.md',
+            'plans/nested/content.md',
+            'tickets/open/ticket.md',
+            'tickets/nested/deep/content.md',
+        ];
+        for (const path of [...visible, 'output/run/log.txt', 'runtime.json']) {
+            const target = join(root, '.coderail', path);
+            await Deno.mkdir(join(target, '..'), { recursive: true });
+            if (!['.gitignore', 'coderail.conf'].includes(path)) {
+                await Deno.writeTextFile(target, 'content');
+            }
+        }
+        const eligible = (await git('ls-files', '--others', '--exclude-standard', '.coderail'))
+            .trim()
+            .split('\n');
+        expect(eligible.sort()).toEqual(visible.map((path) => '.coderail/' + path).sort());
+        expect(await git('ls-files', '.coderail/tracked-runtime')).toBe(
+            '.coderail/tracked-runtime\n',
+        );
+        expect(await Deno.readTextFile(join(root, '.gitignore'))).toBe('# root rules\n');
+        expect(await Deno.readTextFile(join(root, '.git', 'info', 'exclude'))).toBe(exclude);
+    } finally {
+        await Deno.remove(root, { recursive: true });
+    }
+});
+
+Deno.test('Init propagates ignore file read errors', async () => {
+    const root = await Deno.makeTempDir();
+    try {
+        await Deno.mkdir(join(root, '.coderail', '.gitignore'), { recursive: true });
+        await expect(new Init().run(context(root))).rejects.toBeInstanceOf(
+            Deno.errors.IsADirectory,
+        );
+    } finally {
+        await Deno.remove(root, { recursive: true });
+    }
+});

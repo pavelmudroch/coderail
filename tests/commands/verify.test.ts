@@ -246,7 +246,7 @@ Deno.test(
             const missing = await invoke('verify', '.');
             expect(missing.code).toBe(1);
             expect(missing.stderr).toContain('cr init');
-            await Deno.mkdir(`${root}/.coderail`);
+            expect((await invoke('init')).code).toBe(0);
             await Deno.writeTextFile(`${root}/a`, '');
             expect((await invoke('verify', 'a')).stdout).toContain('a skipped\nNo tests found');
             await new Deno.Command('git', { args: ['init', '-q', root] }).output();

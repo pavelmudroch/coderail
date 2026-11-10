@@ -1,0 +1,7 @@
+*
+!.gitignore
+!coderail.conf
+!plans/
+!plans/**
+!tickets/
+!tickets/**
