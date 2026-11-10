@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instructions, with ownership tracking and existing-file protection.
 - Native Codex TOML subagents and skill invocation policies, plus harness-specific
   skill references in translated instructions.
+- `docs` skill for synchronizing documentation with implemented changes and
+  `mentor` skill for guiding users through ticket implementation and verification.
+- `cr loop` implements dependency-ready tickets in fresh Codex or Claude sessions,
+  verifies ticket closure, and stages each successful attempt within the initialized
+  project. Supports attempt limits, optional review and commits, and raw JSONL logs.
+- Per-harness loop model and effort settings, with stage-specific configuration
+  and CLI overrides checked by execution preflight before implementation.
+- Non-interactive Codex and Claude execution with streaming output and process-group
+  cleanup on cancellation or execution failure.
 
 ### Changed
 
@@ -29,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Invalid UTF-8 Claude general instructions reject through the returned promise.
 - Installer cleanup preserves bootstrap executables that are active or recorded
   as distribution-owned after activation, including interrupted installations.
+- `cr init` repairs project ignore rules while preserving custom content, keeping
+  nested plans and tickets eligible for version control and runtime output ignored.
+  Commands requiring initialization report incomplete projects with repair guidance.
+- Exploration inspects the existing idea tree before choosing where to record work.
 
 ## [0.1.1] - 2026-11-05
 

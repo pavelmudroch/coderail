@@ -180,6 +180,9 @@ as `explore` and `implement` refer to agent skills, not `cr` subcommands.
    next ready ticket. The agent implements its tasks, runs configured
    verification, fixes failures, and closes the ticket once it passes. Repeat
    this loop for the remaining tickets, or use `cr loop` to implement ready tickets automatically.
+   To write the code yourself, use `mentor` with a ticket or the next ready ticket.
+   It explains each task, waits until you are ready for review, guides corrections,
+   and closes the ticket after all tasks and verification pass.
 7. **Walk through the changes.** Stage the changes you want to review, then use
    `walkthrough` to understand the implementation and discuss improvements with
    the agent. It records agreed follow-up work in the idea's `REVIEW.md`. Address
