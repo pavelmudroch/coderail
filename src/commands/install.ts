@@ -375,6 +375,7 @@ async function writeFiles(
     installedFiles: ManifestFile[],
 ): Promise<void> {
     for (const file of files) {
+        Log.notice(`Installing file: ${file.path}`);
         const digest = new Uint8Array(
             await crypto.subtle.digest('SHA-256', new Uint8Array(file.content)),
         );
@@ -425,6 +426,7 @@ async function translateFiles(
     const translatedFiles: Promise<ConnectorFile[]>[] = [];
     const obsoletePaths: string[] = [];
     for (const skill of instructionFiles.skills) {
+        Log.notice(`Translating skill: ${skill.name}`);
         const translatedFile = harness.translateSkill(skill.name, skill.files).then((files) => {
             obsoletePaths.push(...(harness.obsoleteSkillFiles?.(skill.name, files) ?? []));
             return files;
@@ -432,10 +434,12 @@ async function translateFiles(
         translatedFiles.push(translatedFile);
     }
     for (const subagent of instructionFiles.subagents) {
+        Log.notice(`Translating subagent file: ${subagent.path}`);
         const translatedFile = harness.translateSubagent(subagent);
         translatedFiles.push(translatedFile);
     }
     if (instructionFiles.globalInstructionFile !== null) {
+        Log.notice(`Translating global instructions`);
         const translatedFile = harness.translateGlobalInstructions(
             instructionFiles.globalInstructionFile,
         );
