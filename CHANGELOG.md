@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native Codex TOML subagents and skill invocation policies, plus harness-specific
   skill references in translated instructions.
 
+### Changed
+
+- Renamed the workflow guidance skill from `help` to `compass`.
+
 ### Fixed
 
 - Reinstalling a Codex skill removes obsolete owned invocation policies when its

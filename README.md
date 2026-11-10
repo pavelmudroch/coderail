@@ -169,7 +169,7 @@ as `explore` and `implement` refer to agent skills, not `cr` subcommands.
 3. **Install instructions and start an agent session.** Use `cr install codex` or
    `cr install claude` (add `--local` for this project only). Give the agent your
    goal and relevant project context, then invoke the skills below as work
-   progresses.
+   progresses. Use `compass` for workflow guidance and help choosing the next step.
 4. **Explore.** Use `explore` to clarify the outcome, investigate the existing
    code, and agree on scope, behavior, important interfaces, and verification
    expectations. The agent records these decisions in an implementation-ready

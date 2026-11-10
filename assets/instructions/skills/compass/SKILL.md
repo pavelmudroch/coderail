@@ -1,5 +1,5 @@
 ---
-name: help
+name: compass
 description: Provides guidance for coderail workflow, answering questions and offering help.
 disable-model-invocation: true
 ---
@@ -13,7 +13,7 @@ Answer specific questions directly. Inspect project state only when it affects t
 For starting or continuing work, establish:
 
 - the desired outcome;
-- relevant existing ideas, specifications, or tickets;
+- relevant existing ideas or tickets;
 - unresolved decisions or blockers.
 
 Reuse available context. Use <skill>question</skill> when missing information
@@ -25,10 +25,10 @@ Inspect only what the question requires:
 
 - Project instructions and relevant Coderail skills.
 - Whether cr is available and the project has .coderail/.
-- cr idea map --json for idea paths, hierarchy, and statuses.
-- Relevant IDEA.md, SPEC.md, and ticket contents.
+- cr idea --json for idea paths, hierarchy, and statuses.
+- Relevant IDEA.md, referenced artifacts, and ticket contents.
 - Active tickets and cr ticket next for eligible open tickets.
-- .coderail/test_map and configuration when validation or setup matters.
+- .coderail/coderail.conf when validation or setup matters.
 
 Run project commands from the project root.
 
@@ -44,10 +44,9 @@ existence alone.
 
 The usual progression is:
 
-forge → spec → ticket → implement
+explore → ticket → implement
 
-  <skill>forge</skill> resolves intent, scope, and significant decisions in IDEA.md.
-  <skill>spec</skill> turns an approved ready idea into SPEC.md.
+  <skill>explore</skill> resolves intent, scope, behavior, and significant design decisions in IDEA.md or an idea tree.
   <skill>ticket</skill> creates small, actionable implementation tickets.
   <skill>implement</skill> implements an eligible ticket, validates it, and closes it.
 
@@ -65,13 +64,11 @@ mandatory for every change: clear, bounded work can start with a standalone tick
 Current situation and suggested Guidance
 * CLI unavailable - Explain installation using the available installation documentation, then verify cr --version.
 * Project not initialized - Recommend cr init from the project root.
-* New or unresolved idea - Recommend forge with the desired outcome or existing idea path.
-* Idea is open - Identify unresolved decisions and recommend continuing forge.
-* Idea is split - Select a relevant child; do not specify the split parent.
-* Ready idea needs a specification - Recommend spec with its IDEA.md path.
-* Specification is incomplete or stale - Recommend completing or updating it through spec.
-* Specification is ready - Check existing tickets, then recommend ticket for uncovered work.
-* Clear, bounded task without a specification - Recommend ticket directly when context is sufficient.
+* New or unresolved idea - Recommend explore with the desired outcome or existing idea path.
+* Idea is open - Identify unresolved decisions and recommend continuing explore.
+* Idea is split - Inspect shared decisions and relevant children; recommend explore for unresolved work.
+* Ready idea - Check existing tickets, then recommend ticket for uncovered work.
+* Clear, bounded task without an idea - Recommend ticket directly when context is sufficient.
 * Ticket is already active - Inspect remaining tasks and validation; recommend resuming it without activating it again.
 * Open ticket has satisfied dependencies - Recommend implement with its ticket ID.
 * No eligible tickets - Inspect active work, dependencies, and unfinished planning before concluding there is nothing to do.
@@ -80,13 +77,13 @@ Respect the user's chosen scope and priorities. Queue order alone does not
 establish product priority.
 
 Dependencies are satisfied by tickets closed as done, or duplicates whose
-reference chain resolves to done. Deferred or dismissed tickets do not
+reference chain resolves to done. Dismissed tickets do not
 satisfy dependencies.
 
 ## Setup and validation
 
-cr init creates a comment-only test map. Recommend configuring
-.coderail/test_map before implementation validation.
+cr init creates a configuration file with commented examples. Recommend configuring
+verification rules in .coderail/coderail.conf before implementation validation.
 
 Explain relevant commands:
 
@@ -99,10 +96,10 @@ the changes passed validation.
 
 ## Current implementation boundaries
 
-Implemented command groups: init, upgrade, idea, ticket, and test.
+Implemented commands include init, install, uninstall, upgrade, idea, ticket, verify, and loop.
 
-install, uninstall, doctor, status, and loop are currently placeholders
-despite appearing in top-level help. Template initialization is also unfinished.
+doctor and template management are currently placeholders despite appearing in
+top-level help. Template initialization is also unfinished.
 
 Do not recommend unavailable commands or legacy syntax. Verify support against
 the available implementation when these capabilities change.
