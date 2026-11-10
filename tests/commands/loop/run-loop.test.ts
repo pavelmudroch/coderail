@@ -4,6 +4,8 @@ import { join } from '@std/path';
 
 import { assertCleanProject, stageProject } from '../../../src/commands/loop/git.ts';
 import { preflightPrompt, runLoop } from '../../../src/commands/loop/run-loop.ts';
+import { ClaudeConnector } from '../../../src/harness/claude.ts';
+import { CodexConnector } from '../../../src/harness/codex.ts';
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
     const result = await new Deno.Command('git', {
@@ -61,8 +63,9 @@ function connector(
     execute: (request: RunRequest, index: number) => Promise<string>,
     calls: RunRequest[],
     disposed: number[],
-): Pick<HarnessConnector, 'run'> {
+): Pick<HarnessConnector, 'run' | 'translatePrompt'> {
     return {
+        translatePrompt: (prompt) => prompt.replaceAll(/<skill>([^<]+)<\/skill>/g, '$$$1'),
         run: async (request): Promise<Runner> => {
             calls.push(request);
             const finalMessage = await execute(request, calls.length);
@@ -88,6 +91,50 @@ function connector(
         },
     };
 }
+
+Deno.test(
+    'Loop sends native skill invocations through the selected harness translator',
+    async () => {
+        for (const [Connector, prefix] of [
+            [CodexConnector, '$'],
+            [ClaudeConnector, '/'],
+        ] as const) {
+            await fixture(async (root, project) => {
+                using native = new Connector({ scope: 'local', projectRoot: project });
+                const calls: RunRequest[] = [];
+                const harness = connector(
+                    async (request) => {
+                        expect(request.prompt).not.toContain('<skill>');
+                        if (request.prompt.startsWith(`${prefix}implement`)) {
+                            await close(project, '0001');
+                        } else if (request.prompt.includes(`${prefix}commit`)) {
+                            await git(root, 'commit', '-qm', 'completed ticket');
+                        }
+                        return 'OK';
+                    },
+                    calls,
+                    [],
+                );
+                harness.translatePrompt = (prompt) => native.translatePrompt(prompt);
+                const result = await runLoop({
+                    projectRoot: project,
+                    connector: harness,
+                    settings: {},
+                    reviewSettings: {},
+                    commitSettings: {},
+                    signal: new AbortController().signal,
+                });
+                expect(result.attempts).toBe(1);
+                expect(calls.map((call) => call.prompt)).toEqual([
+                    preflightPrompt,
+                    expect.stringContaining(`${prefix}implement`),
+                    expect.stringContaining('<review-instructions>'),
+                    expect.stringContaining(`${prefix}commit`),
+                ]);
+            });
+        }
+    },
+);
 
 Deno.test(
     'Loop scopes startup and staging to nested project, preserving outside index',
@@ -360,11 +407,11 @@ Deno.test(
                             projectRoot: project,
                             connector: connector(
                                 async (request) => {
-                                    if (request.prompt.startsWith('Use the implement')) {
+                                    if (request.prompt.startsWith('$implement')) {
                                         elapsed += 152000;
                                         await close(project, '0001');
                                     }
-                                    if (request.prompt.startsWith('Use the commit')) {
+                                    if (request.prompt.includes('$commit')) {
                                         await git(project, 'commit', '-qm', 'iteration');
                                     }
                                     return 'OK';
@@ -458,7 +505,8 @@ Deno.test(
                     }
                     return file;
                 };
-                const harness: Pick<HarnessConnector, 'run'> = {
+                const harness: Pick<HarnessConnector, 'run' | 'translatePrompt'> = {
+                    translatePrompt: (prompt) => prompt,
                     run: async (): Promise<Runner> => {
                         const index = ++runs;
                         if (index === 2) {
@@ -716,7 +764,7 @@ Deno.test('Loop probes distinct enabled review settings before any implementatio
                         if (mode === 'invalid' && request.model === 'review') {
                             throw new Error('invalid review settings');
                         }
-                    } else if (request.prompt.startsWith('Use the implement')) {
+                    } else if (request.prompt.startsWith('$implement')) {
                         await close(project, '0001');
                     }
                     return 'OK';
@@ -756,7 +804,7 @@ Deno.test('Loop probes distinct enabled review settings before any implementatio
                 expect(
                     calls.slice(0, probes).every((call) => call.prompt === preflightPrompt),
                 ).toBe(true);
-                expect(calls[probes]?.prompt).toContain('Use the implement');
+                expect(calls[probes]?.prompt).toContain('$implement');
                 expect(calls).toHaveLength(probes + (mode === 'disabled' ? 1 : 2));
                 if (mode !== 'disabled') {
                     expect(calls.at(-1)?.model).toBe(
@@ -789,7 +837,7 @@ Deno.test(
                         if (request.prompt === preflightPrompt) {
                             return 'OK';
                         }
-                        if (request.prompt.startsWith('Use the implement')) {
+                        if (request.prompt.startsWith('$implement')) {
                             const id =
                                 /000\d-ticket.md/.exec(request.prompt)?.[0].slice(0, 4) ?? '';
                             selected.push(id);
@@ -802,18 +850,18 @@ Deno.test(
                         } else {
                             reviews++;
                             expect(request.cwd).toBe(project);
-                            expect(request.prompt).toContain('Use the review skill');
-                            expect(request.prompt).toContain('git diff -- .');
+                            expect(request.prompt).toContain('<review-instructions>');
                             expect(request.prompt).toContain(
-                                'git ls-files --others --exclude-standard -- .',
+                                'Review only unstaged and untracked changes',
                             );
-                            expect(request.prompt).toContain('urgency');
-                            expect(request.prompt).toContain('Do not implement fixes');
                             expect(request.prompt).toContain(
-                                'Do not stage, unstage, reset, or commit',
+                                'Inspect unstaged changes with `git diff`',
+                            );
+                            expect(request.prompt).toContain(
+                                'Do not modify implementation files, stage changes, or create commits',
                             );
                             expect(request.prompt).toContain('Selected ticket context:');
-                            expect(request.prompt).toContain('status: closed');
+                            expect(request.prompt).toContain('"status":"closed"');
                             expect(await git(root, 'show', ':outside')).toBe('outside staged');
                             expect(await git(project, 'show', ':nested/shared')).toBe(
                                 reviews === 1 ? 'baseline' : `attempt ${selected.length - 1}`,
@@ -918,7 +966,7 @@ Deno.test(
                         if (request.prompt === preflightPrompt) {
                             return 'OK';
                         }
-                        if (request.prompt.startsWith('Use the implement')) {
+                        if (request.prompt.startsWith('$implement')) {
                             await close(project, '0001');
                             await Deno.writeTextFile(join(project, 'work'), 'preserved');
                             if (mode === 'log') {
@@ -1020,9 +1068,9 @@ Deno.test(
                             if (mode === 'invalid' && request.model === 'commit') {
                                 throw new Error('invalid commit settings');
                             }
-                        } else if (request.prompt.startsWith('Use the implement')) {
+                        } else if (request.prompt.startsWith('$implement')) {
                             await close(project, '0001');
-                        } else if (request.prompt.startsWith('Use the commit')) {
+                        } else if (request.prompt.includes('$commit')) {
                             await git(project, 'commit', '-qm', 'iteration');
                         }
                         return 'OK';
@@ -1059,7 +1107,7 @@ Deno.test(
                     expect(calls.filter((call) => call.prompt === preflightPrompt)).toHaveLength(
                         probes,
                     );
-                    expect(calls[probes]?.prompt).toContain('Use the implement');
+                    expect(calls[probes]?.prompt).toContain('$implement');
                     expect(calls.at(-1)?.model).toBe(
                         mode === 'disabled'
                             ? 'review'
@@ -1128,7 +1176,7 @@ Deno.test(
                         if (request.prompt === preflightPrompt) {
                             return 'OK';
                         }
-                        if (request.prompt.startsWith('Use the implement')) {
+                        if (request.prompt.startsWith('$implement')) {
                             stages.push('implement');
                             const id =
                                 /000\d-ticket.md/.exec(request.prompt)?.[0].slice(0, 4) ?? '';
@@ -1138,7 +1186,7 @@ Deno.test(
                                 join(project, 'work'),
                                 `attempt ${selected.length}`,
                             );
-                        } else if (request.prompt.startsWith('Use the review')) {
+                        } else if (request.prompt.startsWith('<review-context>')) {
                             stages.push('review');
                             reviews++;
                             expect(await git(project, 'diff', '--cached')).toBe('');
@@ -1151,8 +1199,8 @@ Deno.test(
                         } else {
                             stages.push('commit');
                             commits++;
-                            expect(request.prompt).toContain('Use the commit skill');
-                            expect(request.prompt).toContain('immutable');
+                            expect(request.prompt).toContain('$commit');
+                            expect(request.prompt).toContain('staged scope');
                             expect(request.prompt).toContain(project);
                             expect(await git(project, 'diff', '--cached')).not.toBe('');
                             expect(await git(project, 'diff', '--', '.')).toBe('');
@@ -1242,7 +1290,7 @@ Deno.test('Commit skips empty staged diffs and empty or blocked queues', async (
                 connector: connector(
                     async (request) => {
                         if (request.prompt !== preflightPrompt) {
-                            expect(request.prompt).toContain('Use the implement');
+                            expect(request.prompt).toContain('$implement');
                             await close(project, '0001');
                             // Model implementation that already recorded the complete result.
                             await git(project, 'add', '.');
@@ -1301,13 +1349,13 @@ Deno.test('Commit failures stop without rollback, retry, or another iteration', 
                     if (request.prompt === preflightPrompt) {
                         return 'OK';
                     }
-                    if (request.prompt.startsWith('Use the implement')) {
+                    if (request.prompt.startsWith('$implement')) {
                         await close(project, '0001');
                         await Deno.writeTextFile(join(project, 'work'), 'preserved');
                         if (mode === 'stage') {
                             await Deno.writeTextFile(join(root, '.git/index.lock'), 'locked');
                         }
-                    } else if (request.prompt.startsWith('Use the review')) {
+                    } else if (request.prompt.startsWith('<review-context>')) {
                         throw new Error('review failed');
                     } else {
                         commitStarted = true;
@@ -1339,10 +1387,11 @@ Deno.test('Commit failures stop without rollback, retry, or another iteration', 
                 calls,
                 disposed,
             );
-            const harness: Pick<HarnessConnector, 'run'> = {
+            const harness: Pick<HarnessConnector, 'run' | 'translatePrompt'> = {
+                translatePrompt: (prompt) => fake.translatePrompt(prompt),
                 run: async (request) => {
                     const runner = await fake.run(request);
-                    if (mode === 'result' && request.prompt.startsWith('Use the commit')) {
+                    if (mode === 'result' && request.prompt.includes('$commit')) {
                         runner.result = () => Promise.reject(new Error('failed completion'));
                     }
                     return runner;
@@ -1380,9 +1429,9 @@ Deno.test('Commit failures stop without rollback, retry, or another iteration', 
                     }),
                 ).rejects.toThrow();
                 expect(commitStarted).toBe(!['log', 'between', 'stage', 'review'].includes(mode));
-                expect(
-                    calls.filter((call) => call.prompt.startsWith('Use the implement')),
-                ).toHaveLength(1);
+                expect(calls.filter((call) => call.prompt.startsWith('$implement'))).toHaveLength(
+                    1,
+                );
                 expect(disposed).toHaveLength(
                     calls.length - (['session', 'git', 'review'].includes(mode) ? 1 : 0),
                 );
@@ -1427,13 +1476,13 @@ Deno.test('Loop command completes --limit 1 -rc before reporting a reopened tick
         let connectorDisposed = false;
         const fake = connector(
             async (request) => {
-                if (request.prompt.startsWith('Use the implement')) {
+                if (request.prompt.startsWith('$implement')) {
                     await close(project, '0001');
                 }
-                if (request.prompt.startsWith('Use the review')) {
+                if (request.prompt.startsWith('<review-context>')) {
                     await reopen(project);
                 }
-                if (request.prompt.startsWith('Use the commit')) {
+                if (request.prompt.includes('$commit')) {
                     expect(request.model).toBe('commit-native');
                     await git(project, 'commit', '-qm', 'reviewed iteration');
                 }
@@ -1531,9 +1580,9 @@ Deno.test('Loop failure visibility retains detailed context at every log level',
                                 const stage =
                                     request.prompt === preflightPrompt
                                         ? 'preflight'
-                                        : request.prompt.startsWith('Use the implement')
+                                        : request.prompt.startsWith('$implement')
                                           ? 'implement'
-                                          : request.prompt.startsWith('Use the review')
+                                          : request.prompt.startsWith('<review-context>')
                                             ? 'review'
                                             : 'commit';
                                 if (stage === mode) {

@@ -193,11 +193,25 @@ as `explore` and `implement` refer to agent skills, not `cr` subcommands.
 
 Run `cr loop [codex|claude] [-l <positive-integer>] [-r] [-c] [-o model=<native-model>,effort=<native-effort>]`
 from an initialized project or a subfolder. The omitted harness uses `defaultHarness`.
+Install the selected `codex` or `claude` CLI on PATH and configure its authentication
+and permissions for non-interactive execution. Install CodeRail's instructions
+with `cr install <harness>` (or `cr install --local <harness>`) and configure project
+verification before starting. Sessions use the native CLI configuration; CodeRail
+does not add permission-bypass flags.
+
+For example, implement one ticket and stage its changes:
+
+```sh
+cr loop codex --limit 1
+```
+
 Saved `[loop.codex]` and `[loop.claude]` settings apply; common CLI values override
 saved stage values. Stage-specific `implement-model`/`implement-effort`,
 `review-model`/`review-effort`, and `commit-model`/`commit-effort` override common CLI values.
-Use `-r`/`--auto-review` to enable review with a manually supplied `review` skill.
-CodeRail does not provide that skill. Use `-c`/`--auto-commit` to enable the commit skill.
+Use `-r`/`--auto-review` to enable CodeRail's built-in review instructions; no
+separate review skill is required. Use `-c`/`--auto-commit` to enable the commit skill.
+Implementation and commit prompts invoke the installed skills using native syntax:
+`$implement` and `$commit` for Codex, `/implement` and `/commit` for Claude.
 The flags are independent and accept no boolean values:
 
 | Flags | Iteration stages |
@@ -227,9 +241,12 @@ current unstaged changes against the index and new untracked files inside the
 initialized subtree, including changes to files with accumulated staged work.
 Prior staged work is context; implementation and review must preserve the index.
 
-Review records urgent fixes as actionable tasks on the reopened original ticket
-and deferred fixes as new follow-up tickets, choosing by urgency rather than
-scope alone. It does not implement fixes. A successful review with valid ticket
+Review checks the selected ticket's requirements and acceptance criteria, runs
+relevant checks, and records concrete findings. It reopens the original ticket for
+required corrections within its scope and creates separate tickets for necessary
+independent work. It defers non-blocking findings and does not implement fixes.
+The reviewer finishes with `pass` or `needs fix`; the loop checks ticket state
+rather than parsing that decision. A successful review session with valid ticket
 state proceeds normally, including when the original ticket was reopened. The
 loop stages the initialized subtree, including recorded findings and ticket moves,
 optionally commits, then selects the lowest-ID dependency-ready open ticket again.
@@ -249,8 +266,10 @@ review, staging, and commit before stopping, even when review reopens the ticket
 the final summary then identifies the unfinished ticket. Empty and
 dependency-blocked queues are successful stops.
 A failed session, incomplete ticket closure, Git/log failure, or Ctrl+C stops the
-loop immediately and preserves partial work, the index, and any created commits
-without rollback, automatic retry, amend, or recovery.
+loop immediately and leaves resulting files, index state, and any created commits
+in place without rollback, automatic retry, amend, or recovery. Cancellation and
+execution failures terminate the running harness process group, including tool
+descendants.
 
 Raw agent output is saved under `.coderail/loop/<UTC-timestamp>-<random-id>/`:
 `preflight.jsonl` for probes and `<ticket-id>.jsonl` for implementation, review, and commit
@@ -317,8 +336,7 @@ harness's section applies.
 
 `cr loop` accepts overrides such as
 `cr loop codex -o model=gpt-6.1-sol,effort=medium,implement-model=gpt-6.1-terra`.
-CLI parsing and execution are not yet implemented. Model and effort resolve
-independently, highest priority first:
+Model and effort resolve independently, highest priority first:
 
 1. Stage-specific CLI option, such as `commit-model` or `review-effort`.
 2. Common CLI option, `model` or `effort`.
@@ -328,9 +346,9 @@ independently, highest priority first:
 
 A common CLI model therefore overrides a saved `commit_model`; an explicit
 `commit-model` CLI option supplies an exception. A model override does not change
-effort precedence. Availability will be validated by execution preflight for all
-enabled stages before implementation begins, rather than a static compatibility
-table. Effort labels do not imply equal reasoning budgets across providers, and
+effort precedence. Execution preflight checks all enabled stages before
+implementation begins. There is no static compatibility table.
+Effort labels do not imply equal reasoning budgets across providers, and
 preflight does not guarantee detection of silent provider fallback.
 
 ## Verify your changes

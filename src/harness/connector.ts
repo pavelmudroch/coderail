@@ -33,6 +33,9 @@ export interface HarnessConnector extends Disposable {
 
     run(request: RunRequest): Promise<Runner>;
 
+    /** Converts neutral skill references to native invocation syntax. */
+    translatePrompt(prompt: string): string;
+
     /** Source paths are relative to the named skill's directory. */
     translateSkill(name: string, files: ConnectorFile[]): Promise<ConnectorFile[]>;
     /** Native generated files eligible for retirement for this present skill only.

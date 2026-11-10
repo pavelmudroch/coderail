@@ -155,6 +155,7 @@ Deno.test(
                             [Symbol.asyncDispose]: () => Promise.resolve(),
                         });
                     },
+                    translatePrompt: (prompt) => prompt,
                     translateSkill: () => Promise.resolve([]),
                     translateGlobalInstructions: () => Promise.resolve([]),
                     translateSubagent: () => Promise.resolve([]),

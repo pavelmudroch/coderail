@@ -12,13 +12,14 @@ import {
     hasStagedChanges,
     stageProject,
 } from './git.ts';
+import { reviewInstructions } from './review-instructions.ts';
 
 export const preflightPrompt = 'Do not use tools or read or modify files. Reply with exactly: OK';
 
 type LoopResult = { attempts: number; reason: string; logDirectory: string };
 type LoopRequest = {
     projectRoot: string;
-    connector: Pick<HarnessConnector, 'run'>;
+    connector: Pick<HarnessConnector, 'run' | 'translatePrompt'>;
     settings: Pick<RunRequest, 'model' | 'effort'>;
     reviewSettings?: Pick<RunRequest, 'model' | 'effort'>;
     commitSettings?: Pick<RunRequest, 'model' | 'effort'>;
@@ -79,7 +80,7 @@ export async function runLoop(request: LoopRequest): Promise<LoopResult> {
         });
         await using runner = await connector.run({
             cwd: projectRoot,
-            prompt,
+            prompt: connector.translatePrompt(prompt),
             ...stageSettings,
             signal,
         });
@@ -199,12 +200,9 @@ export async function runLoop(request: LoopRequest): Promise<LoopResult> {
                     'implement',
                     join(logDirectory, `${ticket.id}.jsonl`),
                     [
-                        `Use the implement skill to implement ticket ${JSON.stringify(
-                            ticket.path,
-                        )}.`,
+                        '<skill>implement</skill>',
+                        `@${JSON.stringify(ticket.path)}`,
                         `The initialized project root is ${JSON.stringify(projectRoot)}.`,
-                        'Activate the ticket, complete every task, verify changes, and close it with reason done or duplicate.',
-                        'Preserve existing staged work and the index baseline. Do not stage, unstage, reset, or commit changes; the loop owns staging.',
                     ].join('\n'),
                 );
                 const completed = await resolveTicket(projectRoot, ticket.id);
@@ -224,16 +222,13 @@ export async function runLoop(request: LoopRequest): Promise<LoopResult> {
                         'review',
                         join(logDirectory, `${ticket.id}.jsonl`),
                         [
-                            'Use the review skill to review the current implementation attempt.',
+                            '<review-context>',
                             `The initialized project root is ${JSON.stringify(projectRoot)}.`,
                             `Selected ticket context: ${JSON.stringify(completed)}`,
-                            await Deno.readTextFile(completed.path),
-                            'Review only current unstaged changes relative to the index (git diff -- .) and new untracked files (git ls-files --others --exclude-standard -- .) inside this initialized subtree.',
-                            'Include same-file changes against accumulated staged work. Prior staged work is context, not the review target.',
-                            'Preserve existing staged work and the index baseline. Do not stage, unstage, reset, or commit changes; the loop owns staging.',
-                            'Choose findings handling by urgency, not scope alone: add actionable tasks and reopen the original ticket for urgent fixes; create new follow-up tickets for deferred fixes.',
-                            'Do not implement fixes. Leave the original ticket open when reopened, or closed with reason done or duplicate when completion stands. Do not leave it active.',
-                            'Record findings in tickets; no separate machine-readable findings response is required. The loop stages the result and reselects ready work normally.',
+                            '</review-context>',
+                            '<review-instructions>',
+                            reviewInstructions,
+                            '</review-instructions>',
                         ].join('\n'),
                         reviewSettings,
                     );
@@ -270,13 +265,10 @@ export async function runLoop(request: LoopRequest): Promise<LoopResult> {
                         'commit',
                         join(logDirectory, `${ticket.id}.jsonl`),
                         [
-                            'Use the commit skill to commit the currently staged changes.',
                             `The initialized project root and staged scope is ${JSON.stringify(
                                 projectRoot,
                             )}.`,
-                            'Treat the initial staged diff as the complete and immutable commit scope; create one or more coherent commits.',
-                            'Preserve all initially unstaged and untracked changes, including outside this initialized subtree.',
-                            'Do not amend existing commits or push. On failure, stop and preserve the resulting work, index, and commits without retry or recovery.',
+                            '<skill>commit</skill>',
                         ].join('\n'),
                         commitSettings,
                     );

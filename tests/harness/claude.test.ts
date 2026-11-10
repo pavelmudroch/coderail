@@ -14,6 +14,18 @@ function file(path: string, text: string): ConnectorFile {
 }
 const metadata = '---\nname: example\ndescription: Example skill\n---\n';
 
+Deno.test('Claude translates prompt skill references and preserves surrounding text', () => {
+    using connector = new ClaudeConnector({ scope: 'local', projectRoot: '/project' });
+    expect(
+        connector.translatePrompt(
+            '<skill>implement</skill> <skill>commit</skill> <skill>implement</skill>',
+        ),
+    ).toBe('/implement /commit /implement');
+    const plain = 'Unicode žluťoučký 🐈\n<other>keep</other> $existing /existing';
+    expect(connector.translatePrompt(plain)).toBe(plain);
+    expect(connector.translatePrompt('')).toBe('');
+});
+
 Deno.test('Claude binds an absolute home once and ignores global overrides locally', () => {
     const original = Deno.env.get('CLAUDE_CONFIG_DIR');
     try {

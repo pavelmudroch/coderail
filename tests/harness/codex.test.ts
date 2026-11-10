@@ -17,6 +17,18 @@ const references =
     '<skill>absent</skill> <skill>one</skill> <skill>one</skill>\r\n```\r\n<skill>two</skill>\r\n```\r\nUnicode žluťoučký 🐈';
 const replaced = '$absent $one $one\r\n```\r\n$two\r\n```\r\nUnicode žluťoučký 🐈';
 
+Deno.test('Codex translates prompt skill references and preserves surrounding text', () => {
+    using connector = new CodexConnector({ scope: 'local', projectRoot: '/project' });
+    expect(
+        connector.translatePrompt(
+            '<skill>implement</skill> <skill>commit</skill> <skill>implement</skill>',
+        ),
+    ).toBe('$implement $commit $implement');
+    const plain = 'Unicode žluťoučký 🐈\n<other>keep</other> $existing /existing';
+    expect(connector.translatePrompt(plain)).toBe(plain);
+    expect(connector.translatePrompt('')).toBe('');
+});
+
 Deno.test('Codex binds absolute homes once and ignores every global override locally', () => {
     const original = Deno.env.get('CODEX_HOME');
     try {

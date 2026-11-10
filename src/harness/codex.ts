@@ -69,6 +69,10 @@ export class CodexConnector implements HarnessConnector {
         });
     }
 
+    translatePrompt(prompt: string): string {
+        return prompt.replaceAll(/<skill>([^<]+)<\/skill>/g, '$$$1');
+    }
+
     async translateSkill(name: string, files: ConnectorFile[]): Promise<ConnectorFile[]> {
         const root = files.find((file) => file.path === 'SKILL.md');
         if (!root) {
@@ -96,7 +100,10 @@ export class CodexConnector implements HarnessConnector {
         const prefix = `${this.#prefix}skills/${name}/`;
         const outputs = files.map((file) => ({
             path: `${prefix}${file.path}`,
-            content: file === root ? encodeTranslated(translated) : file.content.slice(),
+            content:
+                file === root
+                    ? new TextEncoder().encode(this.translatePrompt(translated))
+                    : file.content.slice(),
         }));
         if (flag !== undefined) {
             outputs.push({
@@ -116,7 +123,10 @@ export class CodexConnector implements HarnessConnector {
 
     translateGlobalInstructions(file: ConnectorFile): Promise<ConnectorFile[]> {
         return Promise.resolve().then(() => [
-            { path: 'AGENTS.md', content: encodeTranslated(decode(file)) },
+            {
+                path: 'AGENTS.md',
+                content: new TextEncoder().encode(this.translatePrompt(decode(file))),
+            },
         ]);
     }
 
@@ -129,7 +139,7 @@ export class CodexConnector implements HarnessConnector {
             developer_instructions: body,
         };
         const text = Object.entries(fields)
-            .map(([key, value]) => `${key} = ${tomlString(replaceSkills(value))}\n`)
+            .map(([key, value]) => `${key} = ${tomlString(this.translatePrompt(value))}\n`)
             .join('');
         return [
             {
@@ -190,14 +200,6 @@ async function readText(stream: ReadableStream<string>): Promise<string> {
         text += chunk;
     }
     return text;
-}
-
-function replaceSkills(text: string): string {
-    return text.replaceAll(/<skill>([^<]+)<\/skill>/g, '$$$1');
-}
-
-function encodeTranslated(text: string): Uint8Array {
-    return new TextEncoder().encode(replaceSkills(text));
 }
 
 /** TOML basic strings require escaping C0 controls and DEL, while retaining Unicode. */

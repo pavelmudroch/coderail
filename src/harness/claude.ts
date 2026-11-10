@@ -58,6 +58,10 @@ export class ClaudeConnector implements HarnessConnector {
         });
     }
 
+    translatePrompt(prompt: string): string {
+        return prompt.replaceAll(/<skill>([^<]+)<\/skill>/g, '/$1');
+    }
+
     async translateSkill(name: string, files: ConnectorFile[]): Promise<ConnectorFile[]> {
         const root = files.find((file) => file.path === 'SKILL.md');
         if (!root) {
@@ -68,7 +72,7 @@ export class ClaudeConnector implements HarnessConnector {
             const path = `skills/${name}/${file.path}`;
             return {
                 path,
-                content: translateText(
+                content: this.#translateText(
                     { ...file, path },
                     extname(file.path).toLowerCase() === '.md',
                 ),
@@ -80,7 +84,7 @@ export class ClaudeConnector implements HarnessConnector {
         return Promise.resolve().then(() => [
             {
                 path: 'rules/coderail.md',
-                content: translateText(file, true),
+                content: this.#translateText(file, true),
             },
         ]);
     }
@@ -90,9 +94,27 @@ export class ClaudeConnector implements HarnessConnector {
         return [
             {
                 path: `agents/${file.path}`,
-                content: translateText(file, true),
+                content: this.#translateText(file, true),
             },
         ];
+    }
+
+    #translateText(file: ConnectorFile, markdown: boolean): Uint8Array {
+        let text: string;
+        try {
+            // Keep the BOM in translated output, although metadata parsing ignores it.
+            text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(file.content);
+        } catch (cause) {
+            if (markdown) {
+                throw new Error(`${file.path}: invalid UTF-8 Markdown.`, { cause });
+            }
+            return file.content.slice();
+        }
+        // NUL marks binary supporting assets even when all bytes happen to be valid UTF-8.
+        if (!markdown && text.includes('\0')) {
+            return file.content.slice();
+        }
+        return new TextEncoder().encode(this.translatePrompt(text));
     }
 
     [Symbol.dispose](): void {}
@@ -124,22 +146,4 @@ async function validateMetadata(file: ConnectorFile, name: string): Promise<void
             cause,
         });
     }
-}
-
-function translateText(file: ConnectorFile, markdown: boolean): Uint8Array {
-    let text: string;
-    try {
-        // Keep the BOM in translated output, although metadata parsing ignores it.
-        text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(file.content);
-    } catch (cause) {
-        if (markdown) {
-            throw new Error(`${file.path}: invalid UTF-8 Markdown.`, { cause });
-        }
-        return file.content.slice();
-    }
-    // NUL marks binary supporting assets even when all bytes happen to be valid UTF-8.
-    if (!markdown && text.includes('\0')) {
-        return file.content.slice();
-    }
-    return new TextEncoder().encode(text.replaceAll(/<skill>([^<]+)<\/skill>/g, '/$1'));
 }

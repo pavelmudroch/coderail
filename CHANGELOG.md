@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Renamed the workflow guidance skill from `help` to `compass`.
+- Loop implementation and commit prompts use native Codex or Claude skill syntax.
+  Auto-review uses built-in instructions without requiring a separate review skill,
+  reopening tickets for corrections within scope and creating tickets for independent work.
 
 ### Fixed
 
