@@ -14,6 +14,7 @@ run verification commands for the files you change.
 - [Agent instructions](#agent-instructions)
 - [Typical workflow](#typical-workflow)
 - [Ideas and tickets](#ideas-and-tickets)
+- [Configuration](#configuration)
 - [Verify your changes](#verify-your-changes)
 - [Upgrading](#upgrading)
 - [Help & Current Limitations](#command-help-and-current-limitations)
@@ -214,6 +215,51 @@ cr ticket close 0001
 Create a dependent ticket with `cr ticket create --depends-on 0001 "Add search filters"`.
 Use `cr ticket reopen 0001` to reopen a closed ticket. Idea and ticket commands
 support `--json` for scripts.
+
+## Configuration
+
+Save project settings in `.coderail/coderail.conf`, or global defaults in
+`coderail.conf` under the CodeRail installation directory. Project loop settings
+override global values by harness and individual key; omitted keys retain global
+defaults.
+
+Loop model and effort preferences use harness-specific sections:
+
+```toml
+[loop.codex]
+model = "gpt-6.1-sol"
+effort = "medium"
+commit_model = "gpt-6.1-terra"
+commit_effort = "low"
+
+[loop.claude]
+model = "opus"
+effort = "high"
+commit_model = "haiku"
+```
+
+Each section accepts `model`, `effort`, `implement_model`, `implement_effort`,
+`review_model`, `review_effort`, `commit_model`, and `commit_effort`. Values must
+be nonblank strings and retain their native harness meaning. Only the selected
+harness's section applies.
+
+`cr loop` accepts overrides such as
+`cr loop codex -o model=gpt-6.1-sol,effort=medium,implement-model=gpt-6.1-terra`.
+CLI parsing and execution are not yet implemented. Model and effort resolve
+independently, highest priority first:
+
+1. Stage-specific CLI option, such as `commit-model` or `review-effort`.
+2. Common CLI option, `model` or `effort`.
+3. Stage-specific saved setting.
+4. Common saved setting.
+5. Native harness default, with the setting omitted from the request.
+
+A common CLI model therefore overrides a saved `commit_model`; an explicit
+`commit-model` CLI option supplies an exception. A model override does not change
+effort precedence. Availability will be validated by execution preflight for all
+enabled stages before implementation begins, rather than a static compatibility
+table. Effort labels do not imply equal reasoning budgets across providers, and
+preflight does not guarantee detection of silent provider fallback.
 
 ## Verify your changes
 

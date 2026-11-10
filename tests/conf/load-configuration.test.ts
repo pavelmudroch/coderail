@@ -322,3 +322,115 @@ Deno.test('Conf::loadConfiguration validates and merges global actions independe
         'verify.pre.0.0: Expected a string at line 2, column 9',
     );
 });
+
+Deno.test(
+    'Conf::loadConfiguration accepts partial loop settings and preserves native strings',
+    async () => {
+        for (const harness of ['codex', 'claude']) {
+            for (const [source, target] of [
+                ['model', 'model'],
+                ['effort', 'effort'],
+                ['implement_model', 'implementModel'],
+                ['implement_effort', 'implementEffort'],
+                ['review_model', 'reviewModel'],
+                ['review_effort', 'reviewEffort'],
+                ['commit_model', 'commitModel'],
+                ['commit_effort', 'commitEffort'],
+            ] as const) {
+                expect(
+                    (await read(`[loop.${harness}]\n${source} = " native/value:Custom "`)).loop,
+                ).toEqual({ [harness]: { [target]: ' native/value:Custom ' } });
+            }
+        }
+        expect((await read('[loop]')).loop).toEqual({});
+        expect((await read('[loop.codex]\n[loop.claude]')).loop).toEqual({ codex: {}, claude: {} });
+    },
+);
+
+Deno.test(
+    'Conf::loadConfiguration merges loop settings by harness and individual key',
+    async () => {
+        expect(
+            (
+                await read(
+                    `[loop.codex]
+model = "project-model"
+review_effort = "project-review"
+[loop.claude]
+commit_model = "project-commit"
+`,
+                    `[loop.codex]
+model = "global-model"
+effort = "global-effort"
+implement_model = "global-implement"
+review_effort = "global-review"
+[loop.claude]
+model = "global-claude"
+commit_effort = "global-commit"
+`,
+                )
+            ).loop,
+        ).toEqual({
+            codex: {
+                model: 'project-model',
+                effort: 'global-effort',
+                implementModel: 'global-implement',
+                reviewEffort: 'project-review',
+            },
+            claude: {
+                model: 'global-claude',
+                commitModel: 'project-commit',
+                commitEffort: 'global-commit',
+            },
+        });
+        for (const local of ['', '[loop]', '[loop.codex]', '[loop.claude]']) {
+            expect((await read(local, '[loop.codex]\ncommit_model = "saved"')).loop?.codex).toEqual(
+                { commitModel: 'saved' },
+            );
+        }
+    },
+);
+
+Deno.test(
+    'Conf::loadConfiguration rejects invalid loop sections and settings with locations',
+    async () => {
+        for (const section of ['loop', 'loop.codex', 'loop.claude']) {
+            const prefix = section === 'loop' ? '' : '[loop]\n';
+            const key = section.split('.').at(-1);
+            for (const value of ['null', 'true', '1', '"text"', '[]']) {
+                const failures = await errors(`${prefix}${key} = ${value}`);
+                expect(failures[0]?.message).toContain(`${section}: Expected an object at line`);
+            }
+            expect((await errors(`[[${section}]]`))[0]?.message).toContain(
+                `${section}: Expected an object at line`,
+            );
+        }
+        for (const harness of ['codex', 'claude']) {
+            for (const key of [
+                'model',
+                'effort',
+                'implement_model',
+                'implement_effort',
+                'review_model',
+                'review_effort',
+                'commit_model',
+                'commit_effort',
+            ]) {
+                for (const value of ['null', 'false', '1', '[]', '""', '"  "']) {
+                    expect((await errors(`[loop.${harness}]\n${key} = ${value}`))[0]?.message).toBe(
+                        `loop.${harness}.${key}: Expected a nonblank string at line 2, column ${key.length + 4}`,
+                    );
+                }
+                expect((await errors(`[loop.${harness}.${key}]`))[0]?.message).toContain(
+                    `loop.${harness}.${key}: Expected a nonblank string at line`,
+                );
+            }
+            expect((await errors(`[loop.${harness}]\nunknown = "x"`))[0]?.message).toBe(
+                `loop.${harness}.unknown: Unknown property at line 2, column 1`,
+            );
+        }
+        expect((await errors('[loop.other]'))[0]?.message).toBe(
+            'loop.other: Unknown property at line 1, column 7',
+        );
+    },
+);

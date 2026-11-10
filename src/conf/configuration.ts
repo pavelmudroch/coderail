@@ -13,10 +13,22 @@ export type Verify = {
     post?: CommandDefinition[];
 };
 
+export type LoopSettings = {
+    model?: string;
+    effort?: string;
+    implementModel?: string;
+    implementEffort?: string;
+    reviewModel?: string;
+    reviewEffort?: string;
+    commitModel?: string;
+    commitEffort?: string;
+};
+
 export type Configuration = UtilityTypes.Prettify<{
     defaultHarness?: string;
     logLevel: 'verbose' | 'quiet' | 'normal';
     noColor: boolean;
     nonInteractive: boolean;
+    loop?: Partial<Record<'codex' | 'claude', LoopSettings>>;
     verify: Verify;
 }>;

@@ -175,9 +175,49 @@ function validateConfigurationResult(
         }
     }
 
+    function loopSettings(value: unknown, path: Path): void {
+        if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+            report(path, 'Expected an object');
+            return;
+        }
+        for (const [key, member] of Object.entries(value)) {
+            const memberPath = [...path, key];
+            switch (key) {
+                case 'model':
+                case 'effort':
+                case 'implementModel':
+                case 'implementEffort':
+                case 'reviewModel':
+                case 'reviewEffort':
+                case 'commitModel':
+                case 'commitEffort':
+                    if (typeof member !== 'string' || member.trim() === '') {
+                        report(memberPath, 'Expected a nonblank string');
+                    }
+                    break;
+                default:
+                    report(memberPath, 'Unknown property', 'key');
+            }
+        }
+    }
+
     for (const [key, value] of Object.entries(possibleConfiguration)) {
         const path = [key];
         switch (key) {
+            case 'loop':
+                if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+                    report(path, 'Expected an object');
+                    break;
+                }
+                for (const [harness, settings] of Object.entries(value)) {
+                    const nested = [...path, harness];
+                    if (harness === 'codex' || harness === 'claude') {
+                        loopSettings(settings, nested);
+                    } else {
+                        report(nested, 'Unknown property', 'key');
+                    }
+                }
+                break;
             case 'defaultHarness':
                 string(value, path);
                 break;
@@ -230,6 +270,14 @@ function mergeConfiguration(base: Configuration, override: Partial<Configuration
     }
     if (override.nonInteractive !== undefined) {
         base.nonInteractive = override.nonInteractive;
+    }
+    if (override.loop !== undefined) {
+        const loop = (base.loop ??= {});
+        for (const harness of ['codex', 'claude'] as const) {
+            if (override.loop[harness] !== undefined) {
+                loop[harness] = { ...loop[harness], ...override.loop[harness] };
+            }
+        }
     }
     if (override.verify !== undefined) {
         base.verify.rules.push(...(override.verify.rules ?? []));

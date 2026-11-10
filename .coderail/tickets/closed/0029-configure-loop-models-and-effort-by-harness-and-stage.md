@@ -2,10 +2,11 @@
 id: "0029"
 slug: "configure-loop-models-and-effort-by-harness-and-stage"
 title: "Configure loop models and effort by harness and stage"
-status: "open"
+status: "closed"
 created_at: "2026-11-10T09:06:47.026Z"
-updated_at: "2026-11-10T09:06:47.026Z"
+updated_at: "2026-11-10T10:33:31.325Z"
 dependencies: []
+reason: "done"
 ---
 
 # Configure loop models and effort by harness and stage
@@ -17,11 +18,11 @@ preflight wiring belong to ticket 0030.
 
 ## Tasks
 
-1. [ ] Add configuration validation and per-key merge tests
-2. [ ] Add independent stage-setting precedence tests
-3. [ ] Extend configuration types, validation, and merging
-4. [ ] Implement stage-setting resolution and document saved settings
-5. [ ] Verify every modified source and test file
+1. [x] Add configuration validation and per-key merge tests
+2. [x] Add independent stage-setting precedence tests
+3. [x] Extend configuration types, validation, and merging
+4. [x] Implement stage-setting resolution and document saved settings
+5. [x] Verify every modified source and test file
 
 ## Task details
 
@@ -92,6 +93,28 @@ Expected outcome: record passing commands/results after fixing any failures.
 Validation: run `cr verify ./src/<path-to-file>.ts` for each modified source file
 and `cr verify ./tests/<path-to-file>.test.ts` for each modified test file; repeat
 affected checks after fixes until passing.
+
+## Verification results
+
+All required per-file checks passed:
+
+- `cr verify ./src/conf/configuration.ts`
+- `cr verify ./src/conf/load-configuration.ts`
+- `cr verify ./src/commands/loop/resolve-stage-settings.ts`
+- `cr verify ./tests/conf/load-configuration.test.ts`
+- `cr verify ./tests/commands/loop/resolve-stage-settings.test.ts`
+
+Final combined verification passed:
+
+```sh
+cr verify -s ./src/conf/configuration.ts ./src/conf/load-configuration.ts ./src/commands/loop/resolve-stage-settings.ts ./tests/conf/load-configuration.test.ts ./tests/commands/loop/resolve-stage-settings.test.ts README.md
+```
+
+The 12 focused tests passed. Both executable source files reached 100% line
+coverage. Configured mutation checks reported no surviving mutations (all
+generated mutations were classified as type errors). The type-only configuration
+file passed lint; README had no applicable verification rule and was skipped.
+`git diff --check` passed.
 
 ## References
 
