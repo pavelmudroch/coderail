@@ -1,486 +1,121 @@
 # CodeRail
 
-CodeRail helps you stay involved in the development loop with coding agents, so
-you understand what was built, how the system works, and the public APIs and
-interfaces it exposes—even when an agent implements most of it autonomously.
+CodeRail helps you build software with coding agents while staying involved in
+what gets built and understanding how it works. It combines agent skills with a
+small CLI for organizing ideas, tracking tickets, and running project checks.
+It works with Codex and Claude.
 
-Use the `cr` command-line tool to organize ideas and tickets in your project and
-run verification commands for the files you change.
+## Table of contents
 
-## Table of Contents
-
+- [Why CodeRail?](#why-coderail)
 - [Installation](#installation)
-- [Start a project](#start-a-project)
-- [Agent instructions](#agent-instructions)
 - [Typical workflow](#typical-workflow)
-- [Ideas and tickets](#ideas-and-tickets)
-- [Configuration](#configuration)
-- [Verify your changes](#verify-your-changes)
-- [Upgrading](#upgrading)
-- [Diagnosing setup problems](#diagnosing-setup-problems)
-- [Help & Current Limitations](#command-help-and-current-limitations)
-- [Contributing](#contributing)
+  - [1. Set up your project](#1-set-up-your-project)
+  - [2. Explore the idea](#2-explore-the-idea)
+  - [3. Create actionable tickets](#3-create-actionable-tickets)
+  - [4. Implement and verify](#4-implement-and-verify)
+  - [5. Walk through the changes](#5-walk-through-the-changes)
+  - [6. Update documentation and commit](#6-update-documentation-and-commit)
+- [Further reading](#further-reading)
 - [License](#license)
+
+## Why CodeRail?
+
+Delegating implementation should still leave you able to explain the design,
+review the changes, and maintain the result. CodeRail gives that collaboration a
+repeatable structure: agree on the outcome, break it into verifiable work, let an
+agent implement it, and walk through the result together.
+
+Ideas, decisions, and tickets live in Markdown files alongside your code, so they
+survive agent sessions and can be kept in version control. You choose how much
+implementation to delegate: let the agent write the code, or use guided mentoring
+to write it yourself.
 
 ## Installation
 
-On Linux or macOS, download and run `install.sh` with either command:
+On Linux or macOS, copy and run:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | sh
 ```
 
-```sh
-wget -qO- https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | sh
-```
-
-The installer supports x86_64 and ARM64 on Linux (GNU) and macOS. It requires
-either `curl` or `wget`, plus `jq`, `unzip`, and either `sha256sum` or `shasum`,
-along with standard shell utilities. The installer prefers `curl` and falls back
-to `wget` when `curl` is unavailable. You do not need Deno or Bun to run the packaged CLI.
-
-Installation downloads the latest stable release, verifies its SHA-256 checksum,
-and installs into `~/.coderail` by default. To choose another directory, pass
-`CODERAIL_INSTALL_ROOT` to the shell running the installer:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | CODERAIL_INSTALL_ROOT="$HOME/.local/share/coderail" sh
-```
-
-The installer asks before adding its `bin` directory to PATH. Accept the prompt
-and open a new shell, then check the installation:
-
-```sh
-cr --version
-cr --help
-```
-
-If you skip PATH setup, follow the printed instructions or run
-`~/.coderail/bin/cr` directly. Running the installer again upgrades or reconciles
-the selected installation with the latest stable release.
-
-A healthy installation uses its existing CLI for the upgrade without downloading
-another bootstrap executable. A broken or incomplete installation downloads a
-verified bootstrap and applies the usual upgrade conflict checks. The installer
-does not force overwrites: resolve reported conflicts before rerunning it. User
-created templates and unrelated files are preserved. A different
-`CODERAIL_INSTALL_ROOT` creates a separate installation; it does not move an
-existing one.
-
-Piped installation can ask for PATH consent through a controlling terminal.
-Without a terminal, it prints manual setup instructions. To explicitly skip
-prompts and shell configuration edits, run:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | sh -s -- --non-interactive
-```
-
-PATH setup belongs to `cr upgrade` and exposes only the selected root's `bin`
-directory. If editing your shell configuration fails, installation still succeeds
-and prints manual instructions. Open a new shell or reload the indicated profile
-after setup; the installer cannot update its parent shell's environment.
-
-If installation fails or is interrupted, it removes its temporary downloads and
-unused bootstrap executable. Files already installed, active executables and user
-data remain in place; there is no automatic rollback. Fix the reported issue and
-rerun the installer to repair the selected root. Windows installation through
-PowerShell is not yet supported.
-
-## Start a project
-
-Run these commands from your project's root directory:
-
-```sh
-cd /path/to/your/project
-cr init
-cr ticket create "Add a search page"
-cr ticket next
-```
-
-`cr init` creates `.coderail/config` without replacing an existing
-configuration. It also creates or repairs `.coderail/.gitignore`, preserving
-custom content. Runtime output is ignored; the configuration, ignore file, plans,
-and tickets remain eligible for version control, including nested content.
-Already tracked files stay tracked; init does not remove them from Git's index.
-
-For existing projects, rerun `cr init` from the project root to repair the ignore
-rules. Commands requiring initialization check the nearest `.coderail` directory
-and report incomplete initialization with `cr init` guidance. They do not skip
-an incomplete nested project in favor of an initialized parent. Init remains
-available to repair it.
-
-Tickets and ideas are Markdown files under `.coderail`, so you can edit their
-contents and keep them in version control alongside your code.
-
-## Agent instructions
-
-Install CodeRail's bundled skills and subagents for Codex or Claude:
-
-```sh
-cr install codex
-cr install claude
-```
-
-Installation is global by default. Use `--local` from an initialized project to
-install into that project instead:
-
-```sh
-cr install --local codex
-cr uninstall --local codex
-```
-
-You can name both harnesses in one command. If you omit the harness, CodeRail uses
-`default_harness` from configuration; for example, `default_harness = codex`.
-
-| Harness | Global home | Project-local destinations |
-| --- | --- | --- |
-| Codex | `~/.codex`, or absolute `CODEX_HOME` | `.codex/skills/`, `.codex/agents/`, and `AGENTS.md` |
-| Claude | `~/.claude`, or absolute `CLAUDE_CONFIG_DIR` | `.claude/skills/`, `.claude/agents/`, and `.claude/rules/coderail.md` |
-
-Global skills and subagents go into `skills/` and `agents/` under the harness
-home. General instructions, when bundled, become Codex `AGENTS.md` or Claude
-`rules/coderail.md`. Codex subagents are generated as TOML files; Claude subagents
-remain Markdown. Local operations ignore global home overrides and target the
-nearest ancestor containing `.coderail`, including when invoked from a subdirectory.
-
-CodeRail tracks installed files in a separate `.coderail-install` manifest for
-each harness and scope. Unchanged owned files update without prompts; existing
-unowned files and modified owned files require `--force` and confirmation.
-For unattended conflict handling, combine `--force` with `--yes` to approve or
-`--no` to decline. Codex `AGENTS.md` is managed as a whole file, without merging
-existing project instructions.
-
-`cr uninstall <harness>` removes owned instruction files in the selected scope.
-Modified files require the same force and confirmation options; unrelated files
-are preserved. Missing instruction sources are allowed, and omitted skills are
-left installed. Reinstalling a present Codex skill whose invocation flag was
-removed retires its obsolete owned invocation-policy file under the same protections.
+Accept the installer's PATH setup prompt, then open a new shell and run `cr --version`.
+See the [installation guide](docs/INSTALLATION.md#installation) for prerequisites,
+alternative commands, and custom installation paths.
 
 ## Typical workflow
 
-Use CodeRail's skills with your coding agent to move from an idea to reviewed,
-committed changes. Invoke skills through your agent's skill interface; names such
-as `explore` and `implement` refer to agent skills, not `cr` subcommands.
+**Explore → ticket → implement → walk through → document → commit.**
 
-1. **Initialize the project.** Run `cr init` from the project root.
-2. **Configure verification.** Edit `.coderail/config` to define the checks
-   your project needs, such as formatting, linting, type checking, and tests. See
-   [Verify your changes](#verify-your-changes) for rule syntax and examples. Set
-   these up before implementation so the agent can validate its work.
-3. **Install instructions and start an agent session.** Use `cr install codex` or
-   `cr install claude` (add `--local` for this project only). Give the agent your
-   goal and relevant project context, then invoke the skills below as work
-   progresses. Use `compass` for workflow guidance and help choosing the next step.
-4. **Explore.** Use `explore` to clarify the outcome, investigate the existing
-   code, and agree on scope, behavior, important interfaces, and verification
-   expectations. The agent records these decisions in an implementation-ready
-   idea or idea tree.
-5. **Create tickets.** Use `ticket` to turn the agreed design into small,
-   actionable tickets with explicit dependencies and validation criteria.
-6. **Implement and repeat.** Use `implement` with a ticket or let it select the
-   next ready ticket. The agent implements its tasks, runs configured
-   verification, fixes failures, and closes the ticket once it passes. Repeat
-   this loop for the remaining tickets, or use `cr loop` to implement ready tickets automatically.
-   To write the code yourself, use `mentor` with a ticket or the next ready ticket.
-   It explains each task, waits until you are ready for review, guides corrections,
-   and closes the ticket after all tasks and verification pass.
-7. **Walk through the changes.** Stage the changes you want to review, then use
-   `walkthrough` to understand the implementation and discuss improvements with
-   the agent. It records agreed follow-up work in the idea's `REVIEW.md`. Address
-   that work, verify any changes, and review again as needed.
-8. **Update documentation.** Use `docs` to synchronize user documentation with
-   the implemented behavior.
-9. **Commit.** Stage the final reviewed changes and use `commit` to create
-   logically coherent commits from the staged diff.
+Start by agreeing on what to build and the important design decisions. Turn that
+understanding into small tickets, implement and verify them, then review the
+changes together. Repeat as needed before updating documentation and committing.
 
-### Automated implementation
+The steps below use CodeRail's agent skills. Invoke them through your coding
+agent's skill interface; names such as `explore` and `implement` are skills,
+not CLI commands. Use `compass` skill with your agent whenever you need guidance
+on the next step.
 
-Run `cr loop [codex|claude] [-l <positive-integer>] [-r] [-c] [-o model=<native-model>,effort=<native-effort>]`
-from an initialized project or a subfolder. The omitted harness uses `defaultHarness`.
-Install the selected `codex` or `claude` CLI on PATH and configure its authentication
-and permissions for non-interactive execution. Install CodeRail's instructions
-with `cr install <harness>` (or `cr install --local <harness>`) and configure project
-verification before starting. Sessions use the native CLI configuration; CodeRail
-does not add permission-bypass flags.
+### 1. Set up your project
 
-For example, implement one ticket and stage its changes:
+[Install CodeRail](docs/INSTALLATION.md#installation), then initialize your project
+and [install the skills](docs/COMMANDS.md#agent-instructions) for Codex or Claude.
+Configure [verification rules](docs/COMMANDS.md#verify-your-changes) for your
+formatter, linter, type checker, and tests before starting implementation.
 
-```sh
-cr loop codex --limit 1
-```
+See [project setup](docs/COMMANDS.md#start-a-project) for the commands.
 
-Saved `[loop.codex]` and `[loop.claude]` settings apply; common CLI values override
-saved stage values. Stage-specific `implement-model`/`implement-effort`,
-`review-model`/`review-effort`, and `commit-model`/`commit-effort` override common CLI values.
-Use `-r`/`--auto-review` to enable CodeRail's built-in review instructions; no
-separate review skill is required. Use `-c`/`--auto-commit` to enable the commit skill.
-Implementation and commit prompts invoke the installed skills using native syntax:
-`$implement` and `$commit` for Codex, `/implement` and `/commit` for Claude.
-The flags are independent and accept no boolean values:
+### 2. Explore the idea
 
-| Flags | Iteration stages |
-| --- | --- |
-| none | implement → stage |
-| `-r` | implement → review → stage |
-| `-c` | implement → stage → commit |
-| `-rc`, `-cr`, or `-r -c` | implement → review → stage → commit |
+Start an agent session in your project and invoke `explore` with your goal—for
+example, “Add search to the documentation.” Work with the agent to clarify the
+outcome, scope, behavior, and important interfaces. The agent investigates the
+existing code and records agreed decisions and verification expectations in an
+idea or idea tree.
 
-The long flags can also be combined.
+Finish exploration when the consequential decisions are settled and the remaining
+implementation choices can be delegated.
 
-The initialized project subtree must have no staged, unstaged, or untracked changes
-at startup. Other Git subtrees may have unstaged or untracked changes in either mode.
-Without auto-commit, outside staged changes are also allowed and preserved. With
-auto-commit, any outside staged changes are rejected before preflight, including
-in a parent Coderail project sharing the Git repository. For older
-projects, run `cr init` manually to migrate the project ignore rules before looping.
+### 3. Create actionable tickets
 
-Preflight runs a no-work probe for every distinct enabled implementation/review/commit
-model and effort combination before any implementation. Identical combinations
-share a probe; disabled review/commit settings are not probed. Each probe requires a
-successful session and exactly `OK`; this checks that execution works, but does
-not prove native effort application or rule out native model fallback. Every implementation runs in a fresh session, activates,
-verifies, and closes its selected ticket. Optional review then runs in another
-fresh session on the same harness, with the selected ticket context. It targets
-current unstaged changes against the index and new untracked files inside the
-initialized subtree, including changes to files with accumulated staged work.
-Prior staged work is context; implementation and review must preserve the index.
+Invoke `ticket` with the ready idea. The agent breaks the work into small tickets
+with explicit dependencies, tasks, and validation criteria. Review the scope so
+each ticket has a clear outcome.
 
-Review checks the selected ticket's requirements and acceptance criteria, runs
-relevant checks, and records concrete findings. It reopens the original ticket for
-required corrections within its scope and creates separate tickets for necessary
-independent work, using the installed `ticket` skill for ticket changes. It defers
-non-blocking findings and does not implement fixes.
-The reviewer finishes with `pass` or `needs fix`; the loop checks ticket state
-rather than parsing that decision. A successful review session with valid ticket
-state proceeds normally, including when the original ticket was reopened. The
-loop stages the initialized subtree, including recorded findings and ticket moves,
-optionally commits, then selects the lowest-ID dependency-ready open ticket again.
-Reopened tickets and ready follow-ups can run immediately; dependents of reopened work wait.
-Staging runs with every flag combination. Auto-commit runs in a fresh session on
-the same harness only when staging leaves a staged diff, skipping empty commits.
-The commit skill receives the staged diff as its immutable scope and preserves
-initially unstaged and untracked content. It may create one or more commits.
-Success requires successful session completion, at least one new commit, and no
-remaining staged, unstaged, or untracked work inside the initialized subtree.
-Outside dirty work remains untouched. Pushing is always user-controlled.
+### 4. Implement and verify
 
-Without `--limit` the loop continues until no ready tickets remain. Limits count
-implementation attempts, including repeated attempts on reopened tickets, with no
-implicit reopen cap. Review and commit do not add attempts. `--limit 1 -rc` finishes
-review, staging, and commit before stopping, even when review reopens the ticket;
-the final summary then identifies the unfinished ticket. Empty and
-dependency-blocked queues are successful stops.
-A failed session, incomplete ticket closure, Git/log failure, or Ctrl+C stops the
-loop immediately and leaves resulting files, index state, and any created commits
-in place without rollback, automatic retry, amend, or recovery. Cancellation and
-execution failures terminate the running harness process group, including tool
-descendants.
+Invoke `implement` with a ticket, or let it select the next ready one. The agent
+works through its tasks, runs the configured checks, fixes failures, and closes
+the ticket after its tasks and verification pass. Repeat for the remaining tickets.
 
-Raw agent output is saved under `.coderail/loop/<UTC-timestamp>-<random-id>/`:
-`preflight.jsonl` for probes and `<ticket-id>.jsonl` for implementation, review, and commit
-output (`step: "implement"`, `"review"`, or `"commit"`). Repeated attempts append to
-the same selected ticket log.
-Each appended record has `timestamp`, `step`, `stream`, and `output`; chunks and
-receipt timestamps are preserved. Agent text does not appear in terminal lifecycle
-output. Quiet and non-interactive modes retain contextual completion lines, durations,
-and a final attempt count, stop reason, and unfinished ticket when present.
+If you want to write the code yourself, invoke `mentor` instead. It explains the
+tasks, reviews your work when you are ready, and guides corrections and verification.
+For unattended ticket processing with optional review and commits, see
+[automated implementation](docs/AUTOMATION.md).
 
-## Ideas and tickets
+### 5. Walk through the changes
 
-Capture an idea and display the idea tree:
+Stage the changes you want to review and invoke `walkthrough`. The agent explains
+what changed, how it works, and the design trade-offs. Discuss improvements and
+record agreed follow-up work in the idea's `REVIEW.md`.
 
-```sh
-cr idea create "Improve search"
-cr idea
-```
+Address that work, verify the changes, and review again as needed. This is where
+you build your own understanding of the implementation.
 
-Use `cr idea ready <idea>` when an idea is ready for further processing,
-`cr idea split <idea> "First part" "Second part"` to divide it, or
-`cr idea reopen <idea>` to reopen it. Use the idea identifier returned by the CLI.
+### 6. Update documentation and commit
 
-Tickets track implementation work. After creating a ticket, use its returned ID
-in subsequent commands; for example, if the ID is `0001`:
+Invoke `docs` to bring user documentation into line with the implemented behavior.
+Stage the final changes and invoke `commit` to create logically coherent commits
+from the staged diff.
 
-```sh
-cr ticket next --limit 1
-cr ticket activate 0001
-cr ticket close 0001
-```
+## Further reading
 
-`cr ticket next` lists open tickets whose dependencies are satisfied, ordered by ID.
-Create a dependent ticket with `cr ticket create --depends-on 0001 "Add search filters"`.
-Use `cr ticket reopen 0001` to reopen a closed ticket. Idea and ticket commands
-support `--json` for scripts.
-
-## Configuration
-
-Save project settings in `.coderail/config`, or global defaults in
-`config` under the CodeRail installation directory. Project loop settings
-override global values by harness and individual key; omitted keys retain global
-defaults.
-
-When upgrading from a version that uses `coderail.conf`, rename that file to
-`config` in `.coderail/` and in the installation directory, if present. The old
-filename is no longer read. In existing projects, run `cr init` after renaming
-to update `.coderail/.gitignore` so the new file stays tracked.
-
-Loop model and effort preferences use harness-specific sections:
-
-```toml
-[loop.codex]
-model = "gpt-6.1-sol"
-effort = "medium"
-commit_model = "gpt-6.1-terra"
-commit_effort = "low"
-
-[loop.claude]
-model = "opus"
-effort = "high"
-commit_model = "haiku"
-```
-
-Each section accepts `model`, `effort`, `implement_model`, `implement_effort`,
-`review_model`, `review_effort`, `commit_model`, and `commit_effort`. Values must
-be nonblank strings and retain their native harness meaning. Only the selected
-harness's section applies.
-
-`cr loop` accepts overrides such as
-`cr loop codex -o model=gpt-6.1-sol,effort=medium,implement-model=gpt-6.1-terra`.
-Model and effort resolve independently, highest priority first:
-
-1. Stage-specific CLI option, such as `commit-model` or `review-effort`.
-2. Common CLI option, `model` or `effort`.
-3. Stage-specific saved setting.
-4. Common saved setting.
-5. Native harness default, with the setting omitted from the request.
-
-A common CLI model therefore overrides a saved `commit_model`; an explicit
-`commit-model` CLI option supplies an exception. A model override does not change
-effort precedence. Execution preflight checks all enabled stages before
-implementation begins. There is no static compatibility table.
-Effort labels do not imply equal reasoning budgets across providers, and
-preflight does not guarantee detection of silent provider fallback.
-
-## Verify your changes
-
-Configure verification rules in `.coderail/config`. For example, a project
-using Deno can check each TypeScript source file with:
-
-```toml
-[[verify.rules]]
-pattern = "src/${path:**/}${file:*}.ts"
-commands = [
-    ["deno", "check", "src/${path}${file}.ts"]
-]
-```
-
-The pattern captures directory and file names for substitution into command
-arguments. Replace the example command with your project's checks; any tools
-used by a rule must be installed separately.
-
-```sh
-cr verify ./src/main.ts
-cr verify ./src
-cr verify --changed
-cr verify --short --changed
-cr verify -s -c
-```
-
-`-c` or `--changed` selects files changed in Git. Files without applicable commands are
-reported as `skipped`. Matching commands run from the project root, and duplicate
-command results are reused. Rules can also declare `requires` paths; a rule is
-skipped when its required files are missing. Optional `[verify]` `pre` and `post`
-command arrays run once around matching work; place that section before rule entries.
-
-## Upgrading
-
-```sh
-cr upgrade
-cr upgrade --list
-cr upgrade --version 0.1.0
-cr upgrade --canary
-```
-
-`cr upgrade` installs the latest stable release or reconciles the current version.
-`--list` shows published stable versions without changing the installation.
-`--version` accepts a major, major.minor, or exact version; exact versions also
-allow downgrades. `--canary` selects the latest unreleased build.
-
-Unchanged managed files update without prompts, and user templates are preserved.
-Conflicting files require `--force` and confirmation. For non-interactive conflict
-handling, combine `--force` with `--yes` to approve or `--no` to decline.
-
-After activation, CodeRail offers to add the installation's `bin` directory to PATH.
-This requires separate consent, including when overwrite flags are supplied.
-Bash uses `~/.bashrc`, Zsh uses `~/.zshrc`, and Fish uses
-`~/.config/fish/config.fish`. Windows updates the current user's PATH.
-Open a new shell after setup.
-
-Piped stdin can use a controlling terminal for consent. Without a terminal, or with
-`--non-interactive`, CodeRail prints manual instructions without editing PATH.
-Unsupported shells also receive manual instructions. If PATH setup fails, use the
-executable's full path and follow the printed instructions to finish setup.
-
-## Diagnosing setup problems
-
-Run read-only diagnostics from any directory, including outside a project or when
-configuration is invalid:
-
-```sh
-cr doctor
-cr --cwd /path/to/project doctor
-cr --verbose doctor
-```
-
-Doctor checks:
-
-- Installation resource readability and, for packaged installations, the
-  distribution manifest, owned file integrity, launcher target, and installation
-  `bin` directory on PATH. Missing optional resource directories are allowed.
-- The nearest ancestor project with a `.coderail` directory, including incomplete
-  initialization: required configuration and ignore rules are checked without
-  falling back to an outer project.
-- Global and project configuration files and environment overrides. In source
-  development mode, the source repository's `.coderail/config` is also validated;
-  its settings apply only when it is the selected project.
-- Installed Codex and Claude instruction manifests and owned files, both globally
-  and in the selected project. A missing instruction manifest is allowed.
-- The configured default harness executable on PATH, including execute access on
-  Unix and extension lookup through PATHEXT on Windows. Doctor does not launch the
-  harness or check authentication, model access, or network connectivity.
-
-Installation checks run before project discovery and configuration validation.
-Independent checks continue after failures; unavailable dependent checks are
-reported as skipped. Outside a project, project and local instruction checks are
-skipped. With no default harness configured, the executable check is skipped.
-If any configuration source is invalid, Doctor reports its errors and continues
-with built-in defaults plus explicit global CLI flags.
-
-The final report on stdout lists failures, manual repair guidance, and skipped
-checks, even with `--quiet`. Exit status is `1` if any check fails and `0`
-otherwise; skipped checks alone do not fail the command.
-Use `--verbose` to show progress and diagnostic paths on stderr from the start.
-Verbosity from valid configuration takes effect after configuration validation.
-
-Doctor does not modify files. Follow the reported manual repair steps and rerun
-the checks. `cr doctor --repair` is accepted but remains unimplemented.
-
-## Command help and current limitations
-
-Use `cr --help`, `cr <command> --help`, or a subcommand's help, such as
-`cr ticket close --help`, for available options. Global options include
-`--cwd <path>`, `--non-interactive`, `--no-color`, `--verbose`, and `--quiet`.
-For example, `cr --cwd /path/to/project ticket next` selects another project.
-
-Some commands listed in help are still under development: `template` is a
-placeholder, and template installation through `cr init <template>` is simulated.
-Automatic repair through `cr doctor --repair` is not yet implemented.
-
-## Contributing
-
-See [Developing CodeRail](DEVELOPMENT.md) for source checks and tooling, and
-[Releasing CodeRail](RELEASING.md) for shipping, packaging, and publication.
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+- [Installation, upgrades, and diagnostics](docs/INSTALLATION.md)
+- [Commands, agent installation, configuration, and verification](docs/COMMANDS.md)
+- [Automated implementation](docs/AUTOMATION.md)
+- [Developing CodeRail](docs/DEVELOPMENT.md)
+- [Releasing CodeRail](docs/RELEASING.md)
+- [Release history](CHANGELOG.md)
 
 ## License
 

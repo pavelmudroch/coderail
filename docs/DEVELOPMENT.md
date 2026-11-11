@@ -1,7 +1,16 @@
 # Developing CodeRail
 
-[User guide](README.md) · [Release and packaging guide](RELEASING.md)
+[User guide](../README.md) · [Release and packaging guide](RELEASING.md)
 
+## Table of contents
+
+- [Runtime and tooling](#runtime-and-tooling)
+- [Style commands and configuration](#style-commands-and-configuration)
+- [Lint rules and compatibility](#lint-rules-and-compatibility)
+- [Application checks](#application-checks)
+- [Existing style violations and CI](#existing-style-violations-and-ci)
+
+## Runtime and tooling
 
 Deno remains the application runtime, compiler, test runner, and authoritative type checker.
 Bun is used only for style tooling; no package installation or `tsconfig.json` is needed.
@@ -11,6 +20,8 @@ This configuration was verified with the globally installed `1.4.4-canary.1+b9f2
 [official canary release](https://github.com/oven-sh/bun/releases/tag/canary).
 Install that build on your PATH (or use `bun upgrade --canary` to update an existing installation).
 Check `bun --revision` and `bun lint --help` before running the style commands.
+
+## Style commands and configuration
 
 | Command | Purpose |
 | --- | --- |
@@ -26,6 +37,8 @@ requires braces for every control-flow body, and `bun lint --fix` inserts them. 
 [formatter configuration](https://bun.com/docs/format). `bun/format`
 checks and fixes formatting during linting, so a separate formatter pass is unnecessary.
 `cr verify` also uses Bun's combined lint/fix pass before its existing Deno tests and coverage.
+
+## Lint rules and compatibility
 
 The old explicit Deno lint rules have Bun equivalents, including explicit return types, no `any`,
 unused variables, restricted-name shadowing, sparse arrays, and optional-chain assertions.
@@ -51,12 +64,16 @@ Deno checks globals and resolves `deno.json` mappings, `jsr:` specifiers, and UR
 Bun parses these imports without executing or resolving them. No extra npm tooling is added;
 the existing Deno-managed `npm:oxc-parser` dependency is unchanged.
 
+## Application checks
+
 Run application checks with Deno:
 
 ```sh
 deno check src/**/*.ts tests/**/*.ts tools/**/*.ts
 deno test -A
 ```
+
+## Existing style violations and CI
 
 This migration intentionally does not reformat existing code. Style checks will report existing
 formatting, missing-brace, and other lint violations until those files are fixed. Bun does not
@@ -65,4 +82,3 @@ to avoid reordering import declarations. Use the same Bun build locally and in C
 consistent. GitHub Actions workflows build and smoke-check stable and canary
 release packages. There is no dedicated pull-request workflow running application
 tests and style checks.
-

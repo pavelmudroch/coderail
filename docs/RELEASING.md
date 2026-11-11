@@ -1,6 +1,13 @@
 # Releasing CodeRail
 
-[User guide](README.md) · [Development guide](DEVELOPMENT.md)
+[User guide](../README.md) · [Development guide](DEVELOPMENT.md)
+
+## Table of contents
+
+- [Shipping releases](#shipping-releases)
+- [Packaging distributions](#packaging-distributions)
+- [Stable publication](#stable-publication)
+- [Canary publication](#canary-publication)
 
 ## Shipping releases
 
