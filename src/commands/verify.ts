@@ -35,7 +35,7 @@ export class Verify implements Command<VerifyArguments> {
                 args.short = true;
                 continue;
             }
-            if (arg === '--changed') {
+            if (arg === '-c' || arg === '--changed') {
                 args.changed = true;
                 continue;
             }
@@ -79,7 +79,7 @@ export class Verify implements Command<VerifyArguments> {
             '  -h, --help           Show this help message and exit.',
             '  -s, --short          Show a short output, verified file per line with status',
             '                       "ok", "fail", or "skipped" (no applicable commands).',
-            '      --changed        Include all changed files retrieved with git for',
+            '  -c, --changed        Include all changed files retrieved with git for',
             '                       verification.',
             '',
             'Arguments:',
