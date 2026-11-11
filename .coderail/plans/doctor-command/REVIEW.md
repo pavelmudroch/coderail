@@ -1,0 +1,10 @@
+# Doctor command review
+
+Review scope: `bee6b155e1c556813b94459217b7b32b50690248..f0abe455767ea0565905e97148ea1077c2900e08`.
+
+## Agreed changes
+
+- [ ] In `src/commands/doctor/installation.ts`, validate resource entry types before reading them. Reject unsupported types, including FIFOs, as findings without opening them; continue independent checks. Add regression coverage for a FIFO inside `instructions` or `templates` that verifies it is never opened and later checks still run.
+- [ ] In `src/commands/doctor/installation.ts`, check POSIX launcher target execute access with `access(X_OK)`, as the harness executable check does, rather than accepting any execute mode bit. Preserve regular-file and symlink checks. Add coverage for an owner-held target with mode `0601`, which must fail despite its other execute bit, and an accessible target that passes.
+- [ ] In `src/commands/doctor/installation.ts`, preserve whitespace in PATH entries when comparing installation bin membership; do not call `trim()`. On POSIX, `" /opt/coderail/bin/ "` is a relative path with literal space components, not `/opt/coderail/bin`. Correct the installation test that currently accepts a whitespace-padded entry, and cover rejection of that entry while retaining acceptance of a valid entry with a trailing slash.
+- [ ] Add `Log.notice` progress and diagnostic context throughout doctor orchestration and its checks: announce the current phase/check before potentially slow work and include useful resolved paths, configuration source locations, harness names, and executable candidates. Respect the existing verbose-only stderr behavior, including explicit `--verbose` during bootstrap before configuration is available. Keep the collected final results (failures, manual repair guidance, skipped checks, and success message) on `Log.output` after collection; progress notices must not replace or prematurely print results. Cover useful verbose progress, suppression at normal/quiet levels, and preservation of final output behavior.
