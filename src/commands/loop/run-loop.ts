@@ -228,6 +228,7 @@ export async function runLoop(request: LoopRequest): Promise<LoopResult> {
                             '</review-context>',
                             '<review-instructions>',
                             reviewInstructions,
+                            'To update or create ticket use <skill>ticket</skill>',
                             '</review-instructions>',
                         ].join('\n'),
                         reviewSettings,
