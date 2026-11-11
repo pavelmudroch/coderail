@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Renamed project configuration from `.coderail/coderail.conf` to `.coderail/config`
+  and installation-wide configuration from `coderail.conf` to `config`. The old
+  filename is no longer read; rename existing files and run `cr init` in existing
+  projects to update ignore rules.
 - Renamed the workflow guidance skill from `help` to `compass`.
 - Loop implementation and commit prompts use native Codex or Claude skill syntax.
   Auto-review uses built-in instructions without requiring a separate review skill,
