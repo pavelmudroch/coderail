@@ -14,13 +14,7 @@ export async function loadConfiguration(
     context: RuntimeContext,
     global: GlobalArguments,
 ): Promise<Configuration> {
-    const configuration: Configuration = {
-        defaultHarness: undefined,
-        logLevel: 'normal',
-        noColor: false,
-        nonInteractive: false,
-        verify: { pre: undefined, post: undefined, rules: [] },
-    };
+    const configuration = createConfiguration();
 
     using globalConfigurationFile = await getGlobalConfigurationFile(context.installRoot);
     if (globalConfigurationFile !== null) {
@@ -44,6 +38,74 @@ export async function loadConfiguration(
     mergeConfiguration(configuration, parseGlobalArguments(global));
 
     return configuration;
+}
+
+/** Fresh defaults, optionally applying explicit CLI flags without reading any source. */
+export function createConfiguration(global?: GlobalArguments): Configuration {
+    const configuration: Configuration = {
+        defaultHarness: undefined,
+        logLevel: 'normal',
+        noColor: false,
+        nonInteractive: false,
+        verify: { pre: undefined, post: undefined, rules: [] },
+    };
+    if (global) {
+        mergeConfiguration(configuration, parseGlobalArguments(global));
+    }
+    return configuration;
+}
+
+/** Validate every available source; a single failure discards the entire merged result. */
+export async function diagnoseConfiguration(
+    context: { installRoot?: string; repositoryRoots: string[]; validationRoots?: string[] },
+    global: GlobalArguments,
+    signal?: AbortSignal,
+): Promise<{ configuration: Configuration; errors: Error[] }> {
+    const configuration = createConfiguration();
+    const errors: Error[] = [];
+    async function attempt(
+        label: string,
+        read: () => Promise<Partial<Configuration>>,
+    ): Promise<void> {
+        signal?.throwIfAborted();
+        try {
+            mergeConfiguration(configuration, await read());
+            signal?.throwIfAborted();
+        } catch (cause) {
+            signal?.throwIfAborted();
+            errors.push(new Error(`${label}: ${String(cause)}`, { cause }));
+        }
+    }
+    const installRoot = context.installRoot;
+    if (installRoot !== undefined) {
+        await attempt('Global configuration', async () => {
+            using file = await getGlobalConfigurationFile(installRoot);
+            return file === null ? {} : await parseConfigurationFile(file);
+        });
+    }
+    for (const root of new Set(context.validationRoots)) {
+        if (context.repositoryRoots.includes(root)) {
+            continue;
+        }
+        await attempt(`Source repository configuration at "${root}"`, async () => {
+            using file = await getLocalConfigurationFile(root);
+            if (file !== null) {
+                await parseConfigurationFile(file);
+            }
+            return {};
+        });
+    }
+    for (const root of new Set(context.repositoryRoots)) {
+        await attempt(`Project configuration at "${root}"`, async () => {
+            using file = await getLocalConfigurationFile(root);
+            return file === null ? {} : await parseConfigurationFile(file);
+        });
+    }
+    await attempt('Environment configuration', () =>
+        Promise.resolve(parseEnvironmentVariables(Deno.env)),
+    );
+    mergeConfiguration(configuration, parseGlobalArguments(global));
+    return { configuration: errors.length ? createConfiguration(global) : configuration, errors };
 }
 
 function parseGlobalArguments(global: GlobalArguments): Partial<Configuration> {

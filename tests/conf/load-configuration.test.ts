@@ -434,3 +434,170 @@ Deno.test(
         );
     },
 );
+
+Deno.test(
+    'Conf diagnostics validate independent sources and discard all partial settings on failure',
+    async () => {
+        const { diagnoseConfiguration } = await import('../../src/conf/load-configuration.ts');
+        const root = await Deno.makeTempDir();
+        const project = join(root, 'project');
+        const global = globalArguments({
+            verbose: true,
+            noColor: true,
+            nonInteractive: true,
+            cwd: project,
+        });
+        try {
+            await Deno.mkdir(join(project, '.coderail'), { recursive: true });
+            await Deno.writeTextFile(
+                join(root, 'config'),
+                'default_harness = "saved"\n[[verify.rules]]\npattern = "*"\ncommands = []',
+            );
+            await Deno.writeTextFile(join(project, '.coderail', 'config'), 'log_level = "quiet"');
+            const context = { installRoot: root, repositoryRoots: [project] };
+            await withConfigurationEnvironment({}, async () => {
+                expect(
+                    (await diagnoseConfiguration(context, global)).configuration.defaultHarness,
+                ).toBe('saved');
+            });
+            await withConfigurationEnvironment({ LOG_LEVEL: 'bad' }, async () => {
+                const result = await diagnoseConfiguration(context, global);
+                expect(result.errors).toHaveLength(1);
+                expect(result.configuration.defaultHarness).toBeUndefined();
+                expect(result.configuration.verify.rules).toEqual([]);
+                expect(result.configuration.logLevel).toBe('verbose');
+            });
+            await Deno.writeTextFile(join(project, '.coderail', 'config'), 'unknown = true');
+            await withConfigurationEnvironment({ LOG_LEVEL: 'bad' }, async () => {
+                const result = await diagnoseConfiguration(context, global);
+                expect(result.errors).toHaveLength(2);
+                expect(result.configuration).toMatchObject({
+                    defaultHarness: undefined,
+                    logLevel: 'verbose',
+                    noColor: true,
+                    nonInteractive: true,
+                    verify: { rules: [] },
+                });
+            });
+            await Deno.writeTextFile(join(root, 'config'), 'unknown = true');
+            await withConfigurationEnvironment({ LOG_LEVEL: 'bad' }, async () => {
+                expect((await diagnoseConfiguration(context, global)).errors).toHaveLength(3);
+            });
+            await Deno.remove(join(root, 'config'));
+            await Deno.writeTextFile(join(project, '.coderail', 'config'), '');
+            await withConfigurationEnvironment({}, async () => {
+                expect((await diagnoseConfiguration(context, global)).errors).toEqual([]);
+            });
+        } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'Conf diagnostics handle unavailable paths, read errors, fresh defaults and cancellation',
+    async () => {
+        const { createConfiguration, diagnoseConfiguration } =
+            await import('../../src/conf/load-configuration.ts');
+        const root = await Deno.makeTempDir();
+        const open = Deno.open;
+        const env = Deno.env.get;
+        const controller = new AbortController();
+        try {
+            await withConfigurationEnvironment({}, async () => {
+                expect(
+                    (await diagnoseConfiguration({ repositoryRoots: [] }, globalArguments()))
+                        .errors,
+                ).toEqual([]);
+                expect(
+                    (
+                        await diagnoseConfiguration(
+                            { repositoryRoots: [root] },
+                            globalArguments(),
+                            controller.signal,
+                        )
+                    ).errors,
+                ).toEqual([]);
+                Deno.open = () => Promise.reject(new Deno.errors.PermissionDenied('unreadable'));
+                const result = await diagnoseConfiguration(
+                    { installRoot: root, repositoryRoots: [root] },
+                    globalArguments({ quiet: true }),
+                    controller.signal,
+                );
+                expect(result.errors).toHaveLength(2);
+                expect(result.configuration.logLevel).toBe('quiet');
+                Deno.env.get = () => {
+                    throw new Deno.errors.PermissionDenied('environment');
+                };
+                expect(
+                    (
+                        await diagnoseConfiguration(
+                            { repositoryRoots: [] },
+                            globalArguments(),
+                            controller.signal,
+                        )
+                    ).errors,
+                ).toHaveLength(1);
+                Deno.env.get = env;
+                Deno.open = () => {
+                    controller.abort(new Error('cancelled while reading'));
+                    return Promise.reject(new Deno.errors.PermissionDenied());
+                };
+                await expect(
+                    diagnoseConfiguration(
+                        { installRoot: root, repositoryRoots: [] },
+                        globalArguments(),
+                        controller.signal,
+                    ),
+                ).rejects.toThrow('cancelled while reading');
+            });
+            const first = createConfiguration();
+            first.verify.rules.push({ pattern: '*', commands: [] });
+            expect(createConfiguration().verify.rules).toEqual([]);
+        } finally {
+            Deno.open = open;
+            Deno.env.get = env;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'Conf diagnostics validate source repository settings without merging them into another project',
+    async () => {
+        const { diagnoseConfiguration } = await import('../../src/conf/load-configuration.ts');
+        const root = await Deno.makeTempDir();
+        try {
+            await Deno.mkdir(join(root, '.coderail'));
+            await Deno.writeTextFile(
+                join(root, '.coderail', 'config'),
+                'default_harness = "source-only"',
+            );
+            await withConfigurationEnvironment({}, async () => {
+                const context = { repositoryRoots: [], validationRoots: [root] };
+                expect(
+                    (await diagnoseConfiguration(context, globalArguments())).configuration
+                        .defaultHarness,
+                ).toBeUndefined();
+                expect(
+                    (
+                        await diagnoseConfiguration(
+                            { repositoryRoots: [root], validationRoots: [root] },
+                            globalArguments(),
+                        )
+                    ).configuration.defaultHarness,
+                ).toBe('source-only');
+                await Deno.remove(join(root, '.coderail', 'config'));
+                expect((await diagnoseConfiguration(context, globalArguments())).errors).toEqual(
+                    [],
+                );
+                await Deno.writeTextFile(join(root, '.coderail', 'config'), 'unknown = true');
+                expect(
+                    (await diagnoseConfiguration(context, globalArguments())).errors,
+                ).toHaveLength(1);
+            });
+        } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);

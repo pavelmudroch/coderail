@@ -4,7 +4,7 @@ slug: "diagnose-project-initialization-and-configuration"
 title: "Diagnose project initialization and configuration"
 status: "open"
 created_at: "2026-11-11T10:52:00.080Z"
-updated_at: "2026-11-11T10:52:00.080Z"
+updated_at: "2026-11-11T11:30:25.116Z"
 dependencies:
   - "0035"
 ---
@@ -15,10 +15,11 @@ Extend doctor to diagnose the nearest initialized project, incomplete initializa
 
 ## Tasks
 
-1. [ ] Add project discovery and configuration diagnostic tests
-2. [ ] Expose reusable Conf validation and fallback construction
-3. [ ] Implement project discovery and initialization diagnostics
-4. [ ] Integrate configuration diagnostics and verify the combined flow
+1. [x] Add project discovery and configuration diagnostic tests
+2. [x] Expose reusable Conf validation and fallback construction
+3. [x] Implement project discovery and initialization diagnostics
+4. [x] Integrate configuration diagnostics and verify the combined flow
+5. [ ] Reject unsupported diagnostic input file types before reading
 
 ## Task details
 
@@ -83,3 +84,39 @@ Validation: run task 1 coverage plus existing affected configuration/startup tes
 - `src/runtime/context.ts`, `src/commands/init.ts` — project discovery and required ignore rules
 - `src/commands/doctor.ts`, `src/commands/doctor/types.ts`, `tests/main.test.ts`, `tests/conf/load-configuration.test.ts`
 - Follow-up: 0037 adds harness instruction integrity and configured executable checks
+
+
+## Review findings — 2026-11-11
+
+Decision: needs fix. One blocking finding remains within this ticket's scope.
+
+### Reject unsupported diagnostic input file types before reading (blocking)
+
+Locations: `src/commands/doctor/project.ts:59-61` and
+`src/conf/load-configuration.ts:81-101`.
+
+Doctor reads initialization/configuration paths without first ensuring they resolve
+to regular files. With a FIFO at `.coderail/config`, project checking accepts the
+stat result and configuration diagnostics block opening the pipe. With a FIFO at
+`.coderail/.gitignore`, project checking blocks reading it before configuration
+checks run. Neither case renders collected installation findings or completes.
+
+Reproduction: create an otherwise initialized temporary project, replace either
+file with `mkfifo`, and run `deno run -A src/main.ts --cwd <project> doctor`.
+Both variants produced no output and exceeded a three-second subprocess timeout;
+ordinary fixtures completed immediately.
+
+Required correction: diagnose unsupported file types before opening/reading these
+paths, including global and source/project configuration inputs. Preserve valid
+symlinks to regular files, optional missing global configuration, independent
+failure collection, and cancellation. Keep configuration validation owned by Conf.
+Add regression tests that ensure FIFO inputs are rejected without opening them,
+remaining independent checks run, and the final report exits 1. Run the required
+per-file verification for implementation/test changes.
+
+Review validation: 52 focused tests passed across doctor, installation, project,
+configuration loading, runtime context, and main startup. Real command fixtures
+passed outside a project and within a descendant directory (exit 0); simultaneous
+missing ignore file, invalid local configuration, and invalid environment override
+were all reported (exit 1). `git diff --check` passed. No implementation files were
+modified during review.
