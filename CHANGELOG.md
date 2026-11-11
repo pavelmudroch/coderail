@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `cr verify -c` as a short alias for `--changed`.
 - Functional Codex and Claude instruction installation and removal in global and
   project-local scopes, including skills, subagents, and optional general
   instructions, with ownership tracking and existing-file protection.

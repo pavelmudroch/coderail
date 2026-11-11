@@ -381,9 +381,10 @@ cr verify ./src/main.ts
 cr verify ./src
 cr verify --changed
 cr verify --short --changed
+cr verify -s -c
 ```
 
-`--changed` selects files changed in Git. Files without applicable commands are
+`-c` or `--changed` selects files changed in Git. Files without applicable commands are
 reported as `skipped`. Matching commands run from the project root, and duplicate
 command results are reused. Rules can also declare `requires` paths; a rule is
 skipped when its required files are missing. Optional `[verify]` `pre` and `post`

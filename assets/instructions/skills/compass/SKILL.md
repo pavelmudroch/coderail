@@ -98,7 +98,7 @@ Use `code` for implementation and code-review conventions, `question` for focuse
   ```
 
 - Explain `*`, `**`, and `?` glob matching and `${name:glob}` captures; reference captures as `${name}`. Preserve optional directory separators as in the example; reject undefined capture references.
-- Run `cr verify <file...>` for changed implementation files, `cr verify <directory>` for a subtree, or `cr verify --changed` for Git-changed files. Add `-s` or `--short` for per-file summaries.
+- Run `cr verify <file...>` for changed implementation files, `cr verify <directory>` for a subtree, or `cr verify -c` / `cr verify --changed` for Git-changed files. Add `-s` or `--short` for per-file summaries.
 - Follow repository-specific verification requirements. During ticket implementation, exclude ticket files and unrelated unchanged files from the implementation verification scope.
 - Explain that checks run from the project root and duplicate commands reuse results. Account for commands that modify files, such as formatters.
 - Interpret `ok` as passing applicable checks, `fail` as failure, and `skipped` as no applicable commands, including missing required paths. Do not equate skipped files or `No tests found` with validated behavior.
