@@ -1,8 +1,10 @@
 import { Cli } from '@cli';
-import { type Command, Commands, type ParsedArguments } from '@commands';
+import { type Command, Commands, type GlobalArguments, type ParsedArguments } from '@commands';
 import { Conf } from '@conf';
 import { Log } from '@log';
 import { Runtime } from '@runtime';
+
+import { Doctor } from './commands/doctor.ts';
 
 async function main(): Promise<void> {
     using signalHandlers = Runtime.registerSignalHandlers();
@@ -41,6 +43,17 @@ async function main(): Promise<void> {
             parsedArguments = command.parseArguments(parsedArguments.rest);
         }
 
+        if (
+            await runBootstrapMode(
+                command,
+                parsedArguments,
+                globalArguments.args,
+                signalHandlers.signal,
+            )
+        ) {
+            return;
+        }
+
         const context = await Runtime.createContext(globalArguments.args, command);
         const configuration = await Conf.loadConfiguration(context, globalArguments.args);
 
@@ -59,6 +72,20 @@ async function main(): Promise<void> {
     } finally {
         await Runtime.cleanup();
     }
+}
+
+async function runBootstrapMode(
+    command: Command,
+    parsedArguments: ParsedArguments,
+    globalArguments: GlobalArguments,
+    signal: AbortSignal,
+): Promise<boolean> {
+    if (!(command instanceof Doctor)) {
+        return false;
+    }
+    signal.throwIfAborted();
+    await command.run({ parsedArguments, globalArguments, signal });
+    return true;
 }
 
 function reportFailure(error: unknown, signal: AbortSignal): void {

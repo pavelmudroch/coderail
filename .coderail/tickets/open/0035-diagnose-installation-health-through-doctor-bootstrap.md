@@ -4,7 +4,7 @@ slug: "diagnose-installation-health-through-doctor-bootstrap"
 title: "Diagnose installation health through doctor bootstrap"
 status: "open"
 created_at: "2026-11-11T10:51:57.703Z"
-updated_at: "2026-11-11T10:51:57.703Z"
+updated_at: "2026-11-11T11:18:55.366Z"
 dependencies: []
 ---
 
@@ -14,10 +14,11 @@ Make `cr doctor` usable when normal runtime/configuration startup would fail, an
 
 ## Tasks
 
-1. [ ] Add bootstrap, CLI, and installation diagnostic tests
-2. [ ] Implement bootstrap dispatch and doctor reporting
-3. [ ] Implement source and compiled installation diagnostics
-4. [ ] Verify the installation diagnostic delivery
+1. [x] Add bootstrap, CLI, and installation diagnostic tests
+2. [x] Implement bootstrap dispatch and doctor reporting
+3. [x] Implement source and compiled installation diagnostics
+4. [x] Verify the installation diagnostic delivery
+5. [ ] Reject non-regular distribution manifests without blocking diagnostics
 
 ## Task details
 
@@ -71,6 +72,31 @@ Expected outcome: resolve failures from the new regression coverage and required
 
 Validation: run `cr verify ./src/<path>.ts` for every modified source file and `cr verify ./tests/<path>.test.ts` for every modified test file, fixing failures and rerunning until passing, per AGENTS.md. Confirm help and the healthy/failing installation-only flows through the CLI; project/harness coverage remains assigned to 0036/0037.
 
+### 5. Reject non-regular distribution manifests without blocking diagnostics
+
+Review finding (blocking, P2): `src/commands/doctor/installation.ts:101` passes the manifest path directly to `InstallManifest.load`, whose `Fs.read` opens and reads it without an AbortSignal. A FIFO at `.coderail-distribution.json` blocks collection indefinitely, hides independent launcher/PATH failures, and does not settle after cancellation. This violates the operational-error collection and prompt cancellation requirements of this ticket.
+
+Reproduction observed during review:
+
+- Create an isolated compiled layout with a regular `libexec/cr-1` entry point and use `mkfifo <root>/.coderail-distribution.json` instead of a JSON manifest.
+- Call `Installation.check(signal, { standalone: true, entryPath, windows: false, path: '' })`.
+- Abort the controller after 50 ms. At 300 ms the signal is aborted but the check remains pending; the FIFO has no writer, so the manifest read cannot complete.
+
+Expected outcome:
+
+- Validate the manifest target type before opening it; report unsupported non-regular targets as installation failures rather than reading them as JSON streams.
+- Continue independent launcher and PATH checks and report owned-file checks as skipped when the manifest is unavailable.
+- Preserve cancellation propagation during manifest collection. Reuse the existing manifest schema and validation.
+
+Validation: add an isolated regression for a FIFO or equivalent deterministically blocked manifest read, covering independent findings and cancellation. Run the required per-file verification for any modified source/tests.
+
+## Review validation
+
+- Focused tests: 41 passed across `tests/main.test.ts`, `tests/commands/doctor.test.ts`, `tests/commands/doctor/`, and `tests/commands/upgrade/assets.test.ts`.
+- `deno check` passed for all five changed/new source files.
+- CLI source diagnostics with a nonexistent `--cwd`, doctor help, and the exact `not implemented` repair error behaved as specified.
+- Review decision: needs fix; reopened for task 5. Existing dependencies of 0036/0037 keep subsequent work blocked until 0035 is complete.
+
 ## References
 
 - [Approved doctor specification](../../plans/doctor-command/IDEA.md)
@@ -80,3 +106,10 @@ Validation: run `cr verify ./src/<path>.ts` for every modified source file and `
 - `src/install-manifest.ts`, `src/install-manifest/{load,inspect,validate,capture}.ts`
 - `src/commands/upgrade/{assets,activation,path}.ts` — installed manifest, launcher, and PATH contracts
 - Follow-ups: 0036 (project/configuration), 0037 (harness integrity/availability)
+
+## Delivery notes
+
+- Doctor dispatches before runtime/project discovery and configuration loading, with globals and the registered AbortSignal preserved.
+- Source resources and compiled manifest ownership, launcher and current PATH checks collect local, read-only findings with manual recovery options. Independent errors continue; unavailable prerequisites skip dependent checks.
+- Reused distribution ownership validation by exporting the existing validator. Canonicalized the upgrade asset test fixture so permission fault injection works on systems where temporary paths contain symlink ancestors.
+- Required per-file verification passed, including full line/branch coverage and configured mutation checks. CLI smoke checks passed for source help, source diagnostics with nonexistent cwd, compiled broken and healthy installations, and the specified repair error.

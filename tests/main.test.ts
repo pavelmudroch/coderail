@@ -291,3 +291,48 @@ Deno.test(
         }
     },
 );
+
+Deno.test(
+    'main dispatches doctor with bootstrap globals and signal without eager startup',
+    async () => {
+        using fixture = setupCommands(true);
+        const { Doctor } = await import('../src/commands/doctor.ts');
+        const original = Doctor.prototype.run;
+        try {
+            Doctor.prototype.run = (input) => {
+                expect(input).not.toHaveProperty('context');
+                expect(input).not.toHaveProperty('configuration');
+                expect(input).toHaveProperty('globalArguments.cwd', 'missing-project');
+                expect(input.signal).toBe(fixture.controller.signal);
+                expect(input.parsedArguments.args).toEqual({ help: false, repair: false });
+                return Promise.resolve();
+            };
+            await run(['--cwd', 'missing-project', 'doctor']);
+            expect(fixture.events).toEqual(['cleanup']);
+            expect(Deno.exitCode).toBe(0);
+            fixture.controller.abort();
+            await run(['doctor']);
+            expect(Deno.exitCode).toBe(3);
+            expect(fixture.warnings).toEqual([['Operation was aborted']]);
+        } finally {
+            Doctor.prototype.run = original;
+        }
+    },
+);
+
+Deno.test('main handles doctor help and usage errors before startup', async () => {
+    using fixture = setupCommands(true);
+    await run(['doctor', '--help']);
+    expect(fixture.output[0]?.[0]).toContain('cr doctor');
+    expect(fixture.events).toEqual(['cleanup']);
+    await run(['doctor', '--unknown']);
+    expect(Deno.exitCode).toBe(2);
+    expect(fixture.events).toEqual(['cleanup', 'cleanup']);
+});
+
+Deno.test('main applies quiet logging before ordinary startup', async () => {
+    using fixture = setupCommands();
+    await run(['--quiet', 'ticket', 'create']);
+    expect(fixture.globals[0]?.quiet).toBe(true);
+    expect(fixture.errors).toEqual([]);
+});

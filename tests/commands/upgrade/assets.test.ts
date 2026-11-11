@@ -18,7 +18,7 @@ async function put(root: string, path: string, value = 'release'): Promise<void>
 async function fixture(
     run: (root: string, stage: StagedDistribution) => Promise<void>,
 ): Promise<void> {
-    const temp = await Deno.makeTempDir();
+    const temp = await Deno.realPath(await Deno.makeTempDir());
     const root = join(temp, 'installation');
     const staging = join(temp, 'stage');
     try {

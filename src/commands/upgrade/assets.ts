@@ -37,7 +37,7 @@ export type AssetOptions = {
     runningExecutable?: string;
 };
 
-function ownedPath(path: string): void {
+export function ownedPath(path: string): void {
     validatePath(path);
     if (
         !/^(instructions|templates)\/.+/.test(path) &&
