@@ -143,7 +143,7 @@ export function executionTests(
                 expect(await runner.result()).toEqual({ finalMessage: 'Final 🐈' });
                 const launch = await fake.launch();
                 pids.push(launch.pid);
-                expect(launch.cwd).toBe(fake.cwd);
+                expect(launch.cwd).toBe(await Deno.realPath(fake.cwd));
                 expect(launch.prompt).toBe('--prompt\nž 🐈');
                 expect(launch.home).toBe(join(fake.root, 'inherited-home'));
                 const expected =
