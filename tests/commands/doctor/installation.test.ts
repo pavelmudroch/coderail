@@ -7,6 +7,66 @@ import { windowsLauncher } from '../../../src/commands/upgrade/activation.ts';
 import { DISTRIBUTION_MANIFEST } from '../../../src/commands/upgrade/assets.ts';
 
 Deno.test({
+    name: 'installation rejects FIFO resources without opening them and continues independent checks',
+    ignore: Deno.build.os === 'windows',
+    async fn() {
+        using _homes = isolateHarnessHomes();
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const original = { open: Deno.open, readFile: Deno.readFile };
+        const opened: string[] = [];
+        const reads: string[] = [];
+        try {
+            await Deno.mkdir(join(root, 'libexec'));
+            const entryPath = join(root, 'libexec', 'cr-1');
+            await Deno.writeTextFile(entryPath, 'binary');
+            await Deno.mkdir(join(root, 'instructions'));
+            await Deno.mkdir(join(root, 'templates'));
+            const fifo = join(root, 'instructions', 'fifo');
+            const readable = join(root, 'templates', 'readable');
+            await Deno.writeTextFile(readable, 'text');
+            expect((await new Deno.Command('mkfifo', { args: [fifo] }).output()).success).toBe(
+                true,
+            );
+            Deno.open = (path, options) => {
+                if (path === fifo) {
+                    opened.push(fifo);
+                    throw new Error('FIFO must never be opened');
+                }
+                return original.open(path, options);
+            };
+            Deno.readFile = (path, options) => {
+                if (path === fifo) {
+                    opened.push(fifo);
+                    throw new Error('FIFO must never be read');
+                }
+                reads.push(String(path));
+                return original.readFile(path, options);
+            };
+            const report = await Installation.check(new AbortController().signal, {
+                entryPath,
+                standalone: true,
+                windows: false,
+                path: '',
+            });
+            expect(opened).toEqual([]);
+            expect(reads).toContain(readable);
+            expect(report.failures).toHaveLength(4);
+            expect(report.failures[0]?.message).toBe(
+                `Resource ${fifo}: Error: Unsupported resource entry type`,
+            );
+            expect(report.failures[1]?.message).toContain('Distribution manifest:');
+            expect(report.failures[2]?.message).toContain('Launcher:');
+            expect(report.failures[3]?.message).toContain('PATH:');
+            expect(report.skipped).toEqual(['Owned files: distribution manifest unavailable.']);
+        } finally {
+            Deno.open = original.open;
+            Deno.readFile = original.readFile;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+});
+
+Deno.test({
     name: 'installation rejects a FIFO manifest and continues independent checks without opening it',
     ignore: Deno.build.os === 'windows',
     async fn() {
@@ -286,15 +346,24 @@ Deno.test(
                 entryPath,
                 standalone: true,
                 windows: false,
-                path: `/other: ${root}/bin/ :/last`,
+                path: `/other:${root}/bin:/last`,
             };
             expect(await Installation.check(signal, settings)).toEqual({
                 failures: [],
                 skipped: [],
             });
+            expect(
+                (await Installation.check(signal, { ...settings, path: `${root}/bin/` })).failures,
+            ).toEqual([]);
+            const padded = await Installation.check(signal, {
+                ...settings,
+                path: `/other: ${root}/bin/ :/last`,
+            });
+            expect(padded.failures).toHaveLength(1);
+            expect(padded.failures[0]?.message).toContain('absent from PATH');
             await Deno.chmod(entryPath, 0o644);
             expect((await Installation.check(signal, settings)).failures[0]?.message).toContain(
-                'not executable',
+                'Launcher:',
             );
             await Deno.remove(launcher);
             await Deno.symlink('../libexec', launcher);
@@ -310,6 +379,50 @@ Deno.test(
         }
     },
 );
+
+Deno.test({
+    name: 'installation launcher execute access respects owner permissions',
+    ignore: Deno.build.os === 'windows' || Deno.uid() === 0,
+    async fn() {
+        using _homes = isolateHarnessHomes();
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const entryPath = join(root, 'libexec', 'cr-1');
+        try {
+            await Deno.mkdir(join(root, 'libexec'));
+            await Deno.mkdir(join(root, 'bin'));
+            await Deno.writeTextFile(entryPath, 'must never execute');
+            await Deno.chmod(entryPath, 0o601);
+            await Deno.symlink('../libexec/cr-1', join(root, 'bin', 'cr'));
+            await InstallManifest.save(join(root, DISTRIBUTION_MANIFEST), {
+                version: 1,
+                files: [],
+            });
+            const settings = {
+                entryPath,
+                standalone: true,
+                windows: false,
+                path: join(root, 'bin'),
+            };
+            const signal = new AbortController().signal;
+            const report = await Installation.check(signal, settings);
+            expect(report.failures).toHaveLength(1);
+            expect(report.failures[0]?.message).toContain('Launcher:');
+            expect(report.failures[0]?.repairable).toBe(false);
+            expect(report.failures[0]?.manualRepair.length).toBeGreaterThan(0);
+            await Deno.chmod(entryPath, 0o700);
+            expect(await Installation.check(signal, settings)).toEqual({
+                failures: [],
+                skipped: [],
+            });
+        } finally {
+            try {
+                await Deno.chmod(entryPath, 0o700);
+            } finally {
+                await Deno.remove(root, { recursive: true });
+            }
+        }
+    },
+});
 
 Deno.test('installation default resolution checks the running source entry', async () => {
     using _homes = isolateHarnessHomes();

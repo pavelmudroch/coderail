@@ -2,11 +2,12 @@
 id: "0038"
 slug: "correct-doctor-installation-resource-and-launcher-checks"
 title: "Correct doctor installation resource and launcher checks"
-status: "open"
+status: "closed"
 created_at: "2026-11-11T12:17:15.517Z"
-updated_at: "2026-11-11T12:17:15.517Z"
+updated_at: "2026-11-11T12:21:41.991Z"
 dependencies:
   - "0035"
+reason: "done"
 ---
 
 # Correct doctor installation resource and launcher checks
@@ -15,11 +16,11 @@ Prevent resource inspection from blocking on special files and make launcher/PAT
 
 ## Tasks
 
-1. [ ] Add installation regression tests for special files, execute access, and literal PATH entries
-2. [ ] Reject unsupported resource entry types before reading
-3. [ ] Check launcher target execute access on POSIX
-4. [ ] Preserve whitespace when comparing PATH membership
-5. [ ] Verify the installation diagnostic changes
+1. [x] Add installation regression tests for special files, execute access, and literal PATH entries
+2. [x] Reject unsupported resource entry types before reading
+3. [x] Check launcher target execute access on POSIX
+4. [x] Preserve whitespace when comparing PATH membership
+5. [x] Verify the installation diagnostic changes
 
 ## Task details
 

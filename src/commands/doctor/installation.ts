@@ -1,3 +1,6 @@
+import { constants } from 'node:fs';
+import { access } from 'node:fs/promises';
+
 import { Harness, type InstallationTarget } from '@harness';
 import { InstallManifest, type Manifest } from '@install-manifest';
 import { Path } from '@path';
@@ -67,8 +70,10 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
             await attempt(`Resource ${target}`, async () => {
                 if (entry.isDirectory) {
                     await resources(target);
-                } else {
+                } else if (entry.isFile) {
                     await Deno.readFile(target, { signal });
+                } else {
+                    throw new Error('Unsupported resource entry type');
                 }
             });
         }
@@ -137,12 +142,11 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
             throw new Error('Missing or broken installation launcher');
         }
         const info = await Deno.lstat(target);
-        if (
-            !info.isFile ||
-            info.isSymlink ||
-            (!location.windows && info.mode !== null && (info.mode & 0o111) === 0)
-        ) {
+        if (!info.isFile || info.isSymlink) {
             throw new Error('Launcher target is not executable');
+        }
+        if (!location.windows) {
+            await access(target, constants.X_OK);
         }
     });
     const bin = join(installationRoot, 'bin');
@@ -150,8 +154,8 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
         'PATH',
         () => {
             const normalize = (value: string): string => {
-                const trimmed = value.trim().replace(/[\\/]+$/, '');
-                return location.windows ? trimmed.replaceAll('/', '\\').toLowerCase() : trimmed;
+                const path = value.replace(/[\\/]+$/, '');
+                return location.windows ? path.replaceAll('/', '\\').toLowerCase() : path;
             };
             if (
                 !(settings?.path ?? Deno.env.get('PATH') ?? '')
