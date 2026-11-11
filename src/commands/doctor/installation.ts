@@ -1,4 +1,6 @@
+import { Harness, type InstallationTarget } from '@harness';
 import { InstallManifest, type Manifest } from '@install-manifest';
+import { Path } from '@path';
 import { dirname, fromFileUrl, join } from '@std/path';
 
 import { validate } from '../../install-manifest/validate.ts';
@@ -15,7 +17,7 @@ type InstallationSettings = {
 
 /** Resolve installation paths independently of project discovery and configuration. */
 async function check(signal: AbortSignal, settings?: InstallationSettings): Promise<DoctorReport> {
-    const report = createDoctorReport();
+    const report = await checkInstructions({ scope: 'global' }, signal);
     const recovery =
         'Restore this installation from a trusted Coderail release or rerun install.sh.';
     async function attempt(
@@ -165,4 +167,79 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
     return report;
 }
 
-export const Installation = { check };
+/** Inspect each target and file independently; installation ownership is the source of truth. */
+async function checkInstructions(
+    target: InstallationTarget,
+    signal: AbortSignal,
+): Promise<DoctorReport> {
+    const report = createDoctorReport();
+    for (const name of Harness.names) {
+        signal.throwIfAborted();
+        const label = `${target.scope} ${name} instructions`;
+        let location = label;
+        const manualRepair = [
+            'Check the harness home override and file access permissions. Restore a valid instruction manifest; review installed files before removing invalid ownership metadata.',
+            `Check access permissions and rerun "cr install${target.scope === 'local' ? ' --local' : ''} --force ${name}"${target.scope === 'local' ? ` from "${target.projectRoot}"` : ''}; review owned file changes before overwriting.`,
+        ];
+        try {
+            using connector = Harness.get(name, target);
+            if (!connector) {
+                throw new Error(`Harness "${name}" is unavailable`);
+            }
+            const path = join(connector.home, Path.INSTALL_MANIFEST_NAME);
+            location = `${label} manifest "${path}"`;
+            let manifest: Manifest | null;
+            try {
+                const info = await Deno.lstat(path);
+                signal.throwIfAborted();
+                if (!info.isFile) {
+                    throw new Error('Instruction manifest must be a regular file');
+                }
+                manifest = await InstallManifest.load(path);
+                signal.throwIfAborted();
+            } catch (error) {
+                signal.throwIfAborted();
+                if (error instanceof Deno.errors.NotFound) {
+                    continue;
+                }
+                throw error;
+            }
+            if (!manifest) {
+                continue;
+            }
+            for (const file of manifest.files) {
+                signal.throwIfAborted();
+                try {
+                    const results = await InstallManifest.inspect(connector.home, {
+                        version: 1,
+                        files: [file],
+                    });
+                    signal.throwIfAborted();
+                    for (const result of results) {
+                        if (result.status !== 'unchanged') {
+                            throw new Error(result.status);
+                        }
+                    }
+                } catch (error) {
+                    signal.throwIfAborted();
+                    report.failures.push({
+                        message: `${label} owned file "${join(connector.home, file.path)}": ${String(error)}`,
+                        repairable: false,
+                        manualRepair,
+                    });
+                }
+            }
+        } catch (error) {
+            signal.throwIfAborted();
+            report.failures.push({
+                message: `${location}: ${String(error)}`,
+                repairable: false,
+                manualRepair,
+            });
+            report.skipped.push(`${label} owned files: instruction manifest unavailable.`);
+        }
+    }
+    return report;
+}
+
+export const Installation = { check, checkInstructions };

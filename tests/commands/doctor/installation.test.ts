@@ -10,6 +10,7 @@ Deno.test({
     name: 'installation rejects a FIFO manifest and continues independent checks without opening it',
     ignore: Deno.build.os === 'windows',
     async fn() {
+        using _homes = isolateHarnessHomes();
         const root = await Deno.realPath(await Deno.makeTempDir());
         const open = Deno.open;
         const readTextFile = Deno.readTextFile;
@@ -60,6 +61,7 @@ Deno.test({
 });
 
 Deno.test('installation propagates cancellation during the manifest read', async () => {
+    using _homes = isolateHarnessHomes();
     const root = await Deno.realPath(await Deno.makeTempDir());
     const readTextFile = Deno.readTextFile;
     const controller = new AbortController();
@@ -100,6 +102,7 @@ Deno.test('installation propagates cancellation during the manifest read', async
 Deno.test(
     'installation checks source and compiled layouts read only and accumulates failures',
     async () => {
+        using _homes = isolateHarnessHomes();
         const root = await Deno.realPath(await Deno.makeTempDir());
         const signal = new AbortController().signal;
         const entry = join(root, 'libexec', 'cr-1.exe');
@@ -173,6 +176,7 @@ Deno.test(
 Deno.test(
     'installation propagates cancellation and continues after individual inspection errors',
     async () => {
+        using _homes = isolateHarnessHomes();
         const root = await Deno.realPath(await Deno.makeTempDir());
         const original = InstallManifest.inspect;
         const controller = new AbortController();
@@ -215,6 +219,7 @@ Deno.test(
 Deno.test(
     'installation reads nested resources and reports permission errors with independent checks',
     async () => {
+        using _homes = isolateHarnessHomes();
         const root = await Deno.realPath(await Deno.makeTempDir());
         const original = { lstat: Deno.lstat, readFile: Deno.readFile };
         try {
@@ -263,6 +268,7 @@ Deno.test(
 Deno.test(
     'installation validates POSIX launcher target and normalized PATH membership',
     async () => {
+        using _homes = isolateHarnessHomes();
         const root = await Deno.realPath(await Deno.makeTempDir());
         const signal = new AbortController().signal;
         try {
@@ -306,6 +312,7 @@ Deno.test(
 );
 
 Deno.test('installation default resolution checks the running source entry', async () => {
+    using _homes = isolateHarnessHomes();
     const original = Deno.env.get;
     try {
         for (const path of [undefined, '']) {
@@ -320,6 +327,7 @@ Deno.test('installation default resolution checks the running source entry', asy
 });
 
 Deno.test('installation default compiled resolution uses the physical executable', async () => {
+    using _homes = isolateHarnessHomes();
     const build = Deno.build;
     const execPath = Deno.execPath;
     const get = Deno.env.get;
@@ -333,13 +341,16 @@ Deno.test('installation default compiled resolution uses the physical executable
         });
         Deno.execPath = () => join(root, 'libexec', 'cr-1.exe');
         for (const path of ['', undefined]) {
-            Deno.env.get = () => path;
+            Deno.env.get = (name) => (name === 'PATH' ? path : join(root, 'uninstalled'));
             const report = await Installation.check(new AbortController().signal);
             expect(report.failures).toHaveLength(3);
             expect(report.skipped).toEqual(['Owned files: distribution manifest unavailable.']);
         }
-        Deno.env.get = () => {
-            throw new Deno.errors.PermissionDenied('PATH denied');
+        Deno.env.get = (name) => {
+            if (name === 'PATH') {
+                throw new Deno.errors.PermissionDenied('PATH denied');
+            }
+            return join(root, 'uninstalled');
         };
         const report = await Installation.check(new AbortController().signal);
         expect(report.failures).toHaveLength(3);
@@ -355,6 +366,7 @@ Deno.test('installation default compiled resolution uses the physical executable
 Deno.test(
     'installation accumulates missing and modified owned files and rejects foreign ownership',
     async () => {
+        using _homes = isolateHarnessHomes();
         const root = await Deno.realPath(await Deno.makeTempDir());
         const readTextFile = Deno.readTextFile;
         const controller = new AbortController();
@@ -397,3 +409,166 @@ Deno.test(
         }
     },
 );
+
+Deno.test(
+    'global harness instructions inspect both homes and every owned file without mutation',
+    async () => {
+        using _homes = isolateHarnessHomes();
+        const root = await Deno.makeTempDir();
+        const env = ['CODEX_HOME', 'CLAUDE_CONFIG_DIR'] as const;
+        const previous = env.map((name) => Deno.env.get(name));
+        const signal = new AbortController().signal;
+        const inspect = InstallManifest.inspect;
+        try {
+            for (const name of env) {
+                Deno.env.set(name, join(root, name));
+            }
+            expect(await Installation.checkInstructions({ scope: 'global' }, signal)).toEqual({
+                failures: [],
+                skipped: [],
+            });
+            for (const name of env) {
+                const home = join(root, name);
+                await Deno.mkdir(home);
+                for (const file of ['missing', 'modified', 'unreadable']) {
+                    await Deno.writeTextFile(join(home, file), 'original');
+                }
+                await InstallManifest.save(
+                    join(home, '.coderail-install'),
+                    await InstallManifest.capture(home, ['missing', 'modified', 'unreadable']),
+                );
+            }
+            expect(
+                (await Installation.checkInstructions({ scope: 'global' }, signal)).failures,
+            ).toEqual([]);
+            for (const name of env) {
+                await Deno.remove(join(root, name, 'missing'));
+                await Deno.writeTextFile(join(root, name, 'modified'), 'changed');
+            }
+            InstallManifest.inspect = (home, manifest) => {
+                if (manifest.files[0]?.path === 'unreadable') {
+                    throw new Deno.errors.PermissionDenied('owned file denied');
+                }
+                return inspect(home, manifest);
+            };
+            const report = await Installation.checkInstructions({ scope: 'global' }, signal);
+            expect(report.failures).toHaveLength(6);
+            expect(
+                report.failures.every(
+                    (finding) => !finding.repairable && finding.manualRepair.length > 0,
+                ),
+            ).toBe(true);
+            expect(report.failures.map((finding) => finding.message).join('\n')).toContain(
+                'owned file denied',
+            );
+            InstallManifest.inspect = inspect;
+            await Deno.writeTextFile(join(root, env[0], '.coderail-install'), '{');
+            await Deno.remove(join(root, env[1], '.coderail-install'));
+            await Deno.mkdir(join(root, env[1], '.coderail-install'));
+            expect(
+                (await Installation.checkInstructions({ scope: 'global' }, signal)).failures,
+            ).toHaveLength(2);
+            Deno.env.set(env[0], 'relative');
+            expect(
+                (await Installation.checkInstructions({ scope: 'global' }, signal)).failures,
+            ).toHaveLength(2);
+            const controller = new AbortController();
+            controller.abort(new Error('cancelled'));
+            await expect(
+                Installation.checkInstructions({ scope: 'global' }, controller.signal),
+            ).rejects.toThrow('cancelled');
+        } finally {
+            InstallManifest.inspect = inspect;
+            env.forEach((name, index) => {
+                const value = previous[index];
+                if (value === undefined) {
+                    Deno.env.delete(name);
+                } else {
+                    Deno.env.set(name, value);
+                }
+            });
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'instruction diagnostics handle unreadable manifests, unavailable connectors, races and cancellation',
+    async () => {
+        using _homes = isolateHarnessHomes();
+        const { Harness } = await import('@harness');
+        const root = await Deno.makeTempDir();
+        const original = {
+            get: Harness.get,
+            load: InstallManifest.load,
+            inspect: InstallManifest.inspect,
+            lstat: Deno.lstat,
+        };
+        const signal = new AbortController().signal;
+        const target = { scope: 'local' as const, projectRoot: root };
+        try {
+            await Deno.writeTextFile(join(root, '.coderail-install'), '{}');
+            InstallManifest.load = () => {
+                throw new Deno.errors.PermissionDenied('manifest denied');
+            };
+            expect(
+                (await Installation.checkInstructions(target, signal)).failures[0]?.message,
+            ).toContain('manifest denied');
+            InstallManifest.load = () => Promise.resolve(null);
+            expect((await Installation.checkInstructions(target, signal)).failures).toEqual([]);
+            Harness.get = () => null;
+            expect((await Installation.checkInstructions(target, signal)).failures).toHaveLength(2);
+            Harness.get = original.get;
+            Deno.lstat = () => Promise.reject(new Deno.errors.PermissionDenied('target denied'));
+            expect((await Installation.checkInstructions(target, signal)).failures).toHaveLength(2);
+            Deno.lstat = original.lstat;
+            const controller = new AbortController();
+            InstallManifest.load = () => {
+                controller.abort(new Error('cancelled manifest'));
+                throw new Deno.errors.PermissionDenied();
+            };
+            await expect(Installation.checkInstructions(target, controller.signal)).rejects.toThrow(
+                'cancelled manifest',
+            );
+            const ownedController = new AbortController();
+            InstallManifest.load = () =>
+                Promise.resolve({
+                    version: 1,
+                    files: [{ path: 'owned', size: 0, checksum: '0'.repeat(64) }],
+                });
+            InstallManifest.inspect = () => {
+                ownedController.abort(new Error('cancelled owned file'));
+                throw new Deno.errors.PermissionDenied();
+            };
+            await expect(
+                Installation.checkInstructions(target, ownedController.signal),
+            ).rejects.toThrow('cancelled owned file');
+        } finally {
+            Harness.get = original.get;
+            InstallManifest.load = original.load;
+            InstallManifest.inspect = original.inspect;
+            Deno.lstat = original.lstat;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+function isolateHarnessHomes(): Disposable {
+    const root = Deno.makeTempDirSync();
+    const names = ['CODEX_HOME', 'CLAUDE_CONFIG_DIR'];
+    const previous = names.map((name) => Deno.env.get(name));
+    names.forEach((name) => Deno.env.set(name, join(root, name)));
+    return {
+        [Symbol.dispose](): void {
+            names.forEach((name, index) => {
+                const value = previous[index];
+                if (value === undefined) {
+                    Deno.env.delete(name);
+                } else {
+                    Deno.env.set(name, value);
+                }
+            });
+            Deno.removeSync(root, { recursive: true });
+        },
+    };
+}

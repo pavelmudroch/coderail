@@ -1,6 +1,8 @@
+import { Harness } from '@harness';
 import { dirname, join } from '@std/path';
 
 import { projectIgnoreLines } from '../../runtime/context.ts';
+import { Installation } from './installation.ts';
 import { createDoctorReport, type DoctorReport } from './types.ts';
 
 /** Discovery deliberately accepts incomplete initialization as a project marker. */
@@ -31,7 +33,9 @@ async function discover(
             }
             const parent = dirname(directory);
             if (parent === directory) {
-                report.skipped.push('Project checks: no initialized project found.');
+                report.skipped.push(
+                    'Project checks and local harness instructions: no initialized project found.',
+                );
                 return report;
             }
             directory = parent;
@@ -43,7 +47,9 @@ async function discover(
             repairable: false,
             manualRepair: [`Check directory access permissions for "${cwd}" and its ancestors.`],
         });
-        report.skipped.push('Project checks and configuration: project discovery failed.');
+        report.skipped.push(
+            'Project checks, configuration and local harness instructions: project discovery failed.',
+        );
         return report;
     }
 }
@@ -82,7 +88,70 @@ async function check(root: string, signal: AbortSignal): Promise<DoctorReport> {
             });
         }
     }
+    const instructions = await Installation.checkInstructions(
+        { scope: 'local', projectRoot: root },
+        signal,
+    );
+    report.failures.push(...instructions.failures);
+    report.skipped.push(...instructions.skipped);
     return report;
 }
 
-export const Project = { discover, check };
+/** Resolve the configured command locally without spawning a harness process. */
+async function checkExecutable(
+    name: string | undefined,
+    signal: AbortSignal,
+): Promise<DoctorReport> {
+    const report = createDoctorReport();
+    signal.throwIfAborted();
+    if (!name) {
+        report.skipped.push('Harness executable: no harness configured.');
+        return report;
+    }
+    try {
+        if (!Harness.names.includes(name)) {
+            throw new Error(`Unknown harness "${name}"`);
+        }
+        const windows = Deno.build.os === 'windows';
+        const extensions = windows
+            ? (Deno.env.get('PATHEXT') ?? '.COM;.EXE;.BAT;.CMD').split(';')
+            : [''];
+        const errors: string[] = [];
+        for (const directory of (Deno.env.get('PATH') ?? '').split(windows ? ';' : ':')) {
+            for (const extension of extensions) {
+                signal.throwIfAborted();
+                try {
+                    const path = join(directory || '.', `${name}${extension}`);
+                    const info = await Deno.stat(path);
+                    signal.throwIfAborted();
+                    if (
+                        info.isFile &&
+                        (windows || (info.mode !== null && (info.mode & 0o111) !== 0))
+                    ) {
+                        return report;
+                    }
+                } catch (error) {
+                    signal.throwIfAborted();
+                    if (!(error instanceof Deno.errors.NotFound)) {
+                        errors.push(String(error));
+                    }
+                }
+            }
+        }
+        throw new Error(
+            `Executable "${name}" unavailable on PATH${errors.length ? `: ${errors.join('; ')}` : ''}`,
+        );
+    } catch (error) {
+        signal.throwIfAborted();
+        report.failures.push({
+            message: `Harness executable: ${String(error)}`,
+            repairable: false,
+            manualRepair: [
+                `Configure a supported defaultHarness (${Harness.names.join(', ')}) and install its executable on PATH with execute permissions.`,
+            ],
+        });
+    }
+    return report;
+}
+
+export const Project = { discover, check, checkExecutable };

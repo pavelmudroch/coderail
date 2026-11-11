@@ -115,6 +115,12 @@ export class Doctor implements Command {
                 ],
             });
         }
+        const executable = await Project.checkExecutable(
+            configuration.defaultHarness,
+            input.signal,
+        );
+        report.failures.push(...executable.failures);
+        report.skipped.push(...executable.skipped);
         Log.level = configuration.logLevel;
         Log.noColor = configuration.noColor;
         Log.nonInteractive = configuration.nonInteractive;

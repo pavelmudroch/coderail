@@ -4,7 +4,7 @@ slug: "diagnose-harness-instruction-integrity-and-executable-availability"
 title: "Diagnose harness instruction integrity and executable availability"
 status: "open"
 created_at: "2026-11-11T10:52:02.335Z"
-updated_at: "2026-11-11T10:52:02.335Z"
+updated_at: "2026-11-11T11:42:39.933Z"
 dependencies:
   - "0036"
 ---
@@ -15,9 +15,10 @@ Complete doctor by checking installed global/local harness instruction ownership
 
 ## Tasks
 
-1. [ ] Add harness integrity and executable diagnostic tests
-2. [ ] Implement global and local harness instruction diagnostics
+1. [x] Add harness integrity and executable diagnostic tests
+2. [x] Implement global and local harness instruction diagnostics
 3. [ ] Diagnose the configured harness executable and complete verification
+4. [ ] Correct POSIX executable permission diagnostics and add a regression test
 
 ## Task details
 
@@ -60,6 +61,18 @@ Expected outcome:
 - Finish the complete agreed doctor scope without implementing automatic repair; `--repair` still throws `not implemented`.
 
 Validation: task 1 tests and affected doctor/configuration/startup coverage pass. Run `cr verify ./src/<path>.ts` for every modified source file and `cr verify ./tests/<path>.test.ts` for every modified test file, fixing and repeating until passing per AGENTS.md. Exercise complete healthy and failing command flows in source/compiled fixtures and confirm no network, mutation, or harness sessions.
+
+### 4. Correct POSIX executable permission diagnostics and add a regression test
+
+Blocking review finding (P2): `src/commands/doctor/project.ts:127-131` treats any execute mode bit as proof that the current user can execute a candidate. POSIX selects owner/group/other permissions according to the caller; it does not fall back to other execute bits when the owner bit is absent. Doctor can therefore pass an unavailable configured harness.
+
+Observed reproduction on macOS as the owning non-root user: create a regular `codex` fixture on an isolated PATH and chmod it to `0601`. `Project.checkExecutable('codex', signal)` returns `{ failures: [], skipped: [] }`, while `node:fs/promises.access(path, constants.X_OK)` rejects with `EACCES`. No harness was started.
+
+Scope: add the regression in `tests/commands/doctor/project.test.ts`, then fix `src/commands/doctor/project.ts` to check actual executable access using platform-appropriate local filesystem checks. Preserve PATH search continuation so an inaccessible candidate does not hide a later accessible executable, and preserve cancellation and Windows behavior.
+
+Validation: the inaccessible owner-mode fixture produces a failure with manual guidance; an accessible candidate still passes; a later accessible PATH candidate passes after an inaccessible candidate. Run the required `cr verify` commands for modified source/test files and affected doctor coverage.
+
+Review validation: all 24 doctor tests and all 48 configuration/startup/loop tests (17 steps) passed; `git diff --check` passed. Existing coverage does not catch the permission defect above. No implementation files were changed during review.
 
 ## References
 

@@ -124,3 +124,123 @@ Deno.test(
         }
     },
 );
+
+Deno.test(
+    'project checks local instructions for both harnesses independently of initialization',
+    async () => {
+        const { InstallManifest } = await import('@install-manifest');
+        const root = await Deno.makeTempDir();
+        const signal = new AbortController().signal;
+        try {
+            for (const name of ['', '.claude']) {
+                const home = join(root, name);
+                await Deno.mkdir(home, { recursive: true });
+                await Deno.writeTextFile(join(home, 'owned'), 'original');
+                await InstallManifest.save(
+                    join(home, '.coderail-install'),
+                    await InstallManifest.capture(home, ['owned']),
+                );
+            }
+            expect((await Project.check(root, signal)).failures).toHaveLength(2);
+            await Deno.remove(join(root, 'owned'));
+            await Deno.writeTextFile(join(root, '.claude', 'owned'), 'changed');
+            const report = await Project.check(root, signal);
+            expect(report.failures).toHaveLength(4);
+            expect(report.failures.every((finding) => !finding.repairable)).toBe(true);
+            expect(report.failures.map((finding) => finding.message).join('\n')).toContain(
+                'missing',
+            );
+        } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'configured executable checks use only PATH and never start harness sessions',
+    async () => {
+        const root = await Deno.makeTempDir();
+        const previous = Deno.env.get('PATH');
+        const signal = new AbortController().signal;
+        try {
+            Deno.env.set('PATH', root);
+            expect((await Project.checkExecutable(undefined, signal)).skipped).toHaveLength(1);
+            expect((await Project.checkExecutable('unknown', signal)).failures).toHaveLength(1);
+            for (const name of ['codex', 'claude']) {
+                expect((await Project.checkExecutable(name, signal)).failures).toHaveLength(1);
+                const file = join(root, Deno.build.os === 'windows' ? `${name}.EXE` : name);
+                await Deno.writeTextFile(file, 'must never execute this fixture', { mode: 0o755 });
+                expect((await Project.checkExecutable(name, signal)).failures).toEqual([]);
+                if (Deno.build.os !== 'windows') {
+                    await Deno.chmod(file, 0o644);
+                    expect((await Project.checkExecutable(name, signal)).failures).toHaveLength(1);
+                }
+                await Deno.remove(file);
+            }
+        } finally {
+            if (previous === undefined) {
+                Deno.env.delete('PATH');
+            } else {
+                Deno.env.set('PATH', previous);
+            }
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'executable diagnostics cover platform PATH rules, unreadable candidates and cancellation',
+    async () => {
+        const original = { build: Deno.build, get: Deno.env.get, stat: Deno.stat };
+        const info = await Deno.stat(Deno.execPath());
+        const signal = new AbortController().signal;
+        try {
+            Object.defineProperty(Deno, 'build', {
+                configurable: true,
+                value: { ...original.build, os: 'windows' },
+            });
+            for (const pathext of [undefined, '.TEST']) {
+                Deno.env.get = (name) => (name === 'PATHEXT' ? pathext : '/first;/second');
+                const candidates: string[] = [];
+                Deno.stat = (path) => {
+                    candidates.push(String(path));
+                    return Promise.resolve({ ...info, isFile: String(path).includes('/second/') });
+                };
+                expect((await Project.checkExecutable('claude', signal)).failures).toEqual([]);
+                expect(candidates.every((path) => path.includes('claude'))).toBe(true);
+                expect(candidates.at(-1)).toContain(pathext ?? '.COM');
+            }
+            Object.defineProperty(Deno, 'build', {
+                configurable: true,
+                value: { ...original.build, os: 'linux' },
+            });
+            Deno.env.get = () => undefined;
+            for (const mode of [null, 0o644]) {
+                Deno.stat = () => Promise.resolve({ ...info, isFile: true, mode });
+                expect((await Project.checkExecutable('codex', signal)).failures).toHaveLength(1);
+            }
+            Deno.stat = () => Promise.reject(new Deno.errors.PermissionDenied('candidate denied'));
+            expect((await Project.checkExecutable('codex', signal)).failures[0]?.message).toContain(
+                'candidate denied',
+            );
+            const controller = new AbortController();
+            Deno.stat = () => {
+                controller.abort(new Error('cancelled executable'));
+                return Promise.reject(new Deno.errors.PermissionDenied());
+            };
+            await expect(Project.checkExecutable('codex', controller.signal)).rejects.toThrow(
+                'cancelled executable',
+            );
+            Deno.env.get = () => {
+                throw new Deno.errors.PermissionDenied('PATH denied');
+            };
+            expect((await Project.checkExecutable('codex', signal)).failures[0]?.message).toContain(
+                'PATH denied',
+            );
+        } finally {
+            Object.defineProperty(Deno, 'build', { configurable: true, value: original.build });
+            Deno.env.get = original.get;
+            Deno.stat = original.stat;
+        }
+    },
+);
