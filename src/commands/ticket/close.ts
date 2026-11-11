@@ -71,12 +71,6 @@ export class Close implements Command<CloseArguments> {
                 if (!value || value.startsWith('-')) {
                     Cli.raiseUsageError('Option "--duplicate-of" requires a value.', this);
                 }
-                if (!/^\d{4,}$/.test(value)) {
-                    Cli.raiseUsageError(
-                        'Duplicate ticket ID must contain at least four digits.',
-                        this,
-                    );
-                }
                 args.duplicateOf = value;
                 continue;
             }
@@ -102,15 +96,9 @@ export class Close implements Command<CloseArguments> {
         if (!args.ticketId) {
             Cli.raiseUsageError('Missing required ticket ID.', this);
         }
-        if (!/^\d{4,}$/.test(args.ticketId)) {
-            Cli.raiseUsageError('Ticket ID must contain at least four digits.', this);
-        }
         if (args.reason === 'duplicate') {
             if (args.duplicateOf === undefined) {
                 Cli.raiseUsageError('Reason "duplicate" requires option "--duplicate-of".', this);
-            }
-            if (args.duplicateOf === args.ticketId) {
-                Cli.raiseUsageError('A ticket cannot be a duplicate of itself.', this);
             }
         } else if (args.duplicateOf !== undefined) {
             Cli.raiseUsageError('Option "--duplicate-of" requires reason "duplicate".', this);
@@ -125,24 +113,24 @@ export class Close implements Command<CloseArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr ticket close [--help] [--json] [--reason <done | dismissed>] <ticket-id>',
+            '  cr ticket close [--help] [--json] [--reason <done | dismissed>] <ticket>',
             '  cr ticket close [--help] [--json] --reason duplicate',
-            '                  --duplicate-of <ticket-id> <ticket-id>',
+            '                  --duplicate-of <ticket> <ticket>',
             '',
-            '  Close the currently open or active ticket with the given ticket ID.',
+            '  Close the currently open or active ticket with the given identifier.',
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
             '      --json           Output the result in JSON format.',
             '  -r, --reason <done | duplicate | dismissed>',
             '                       Reason for closing the ticket. Defaults to "done".',
-            '  -d, --duplicate-of <ticket-id>',
-            '                       Specify the ticket ID that this ticket is a duplicate of.',
+            '  -d, --duplicate-of <ticket>',
+            '                       Specify the ID, filename, or path of the duplicate target.',
             '                       This option is only allowed and required when the reason',
             '                       is set to "duplicate".',
             '',
             'Arguments:',
-            '  <ticket-id>          ID of the ticket to close.',
+            '  <ticket>             ID, filename, or path of the ticket to close.',
         ];
         return usageLines.join('\n');
     }
@@ -160,11 +148,13 @@ export class Close implements Command<CloseArguments> {
                 throw new Error(`Ticket "${id}" is not open or active.`);
             }
             const { reason, duplicateOf } = context.parsedArguments.args;
-            if (duplicateOf !== undefined) {
-                await resolveTicket(cwd, duplicateOf);
+            const duplicate =
+                duplicateOf === undefined ? undefined : await resolveTicket(cwd, duplicateOf);
+            if (duplicate?.id === ticket.id) {
+                throw new Error('A ticket cannot be a duplicate of itself.');
             }
             const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'closed');
-            const path = join(directory, `${id}-${ticket.slug}.md`);
+            const path = join(directory, `${ticket.id}-${ticket.slug}.md`);
             if (await Fs.exists(path)) {
                 throw new Error(`Ticket with "${path}" already exists.`);
             }
@@ -172,8 +162,8 @@ export class Close implements Command<CloseArguments> {
             const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
             markdown.frontmatter.status = TICKET_STATUS.CLOSED;
             markdown.frontmatter.reason = reason;
-            if (duplicateOf !== undefined) {
-                markdown.frontmatter['duplicate-of'] = duplicateOf;
+            if (duplicate !== undefined) {
+                markdown.frontmatter['duplicate-of'] = duplicate.id;
             } else {
                 delete markdown.frontmatter['duplicate-of'];
             }

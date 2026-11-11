@@ -264,8 +264,6 @@ Deno.test('Ticket create rejects invalid arguments with usage', () => {
         ['--depends-on='],
         ['--depends-on', '--help'],
         ['--depends-on', '0001'],
-        ['-d', '../0001', 'New ticket'],
-        ['-d', 'invalid', 'New ticket'],
         ['--json'],
         ['--json=true', 'New ticket'],
         ['-x'],
@@ -286,4 +284,26 @@ Deno.test('Ticket create rejects invalid arguments with usage', () => {
             expect((error as UsageError).usage()).toBe(command.getUsage());
         }
     }
+});
+
+Deno.test('Ticket create normalizes dependency filenames and paths', async () => {
+    await withWorkspace(async (cwd, tickets) => {
+        await writeTicket(tickets, 'closed', '0001-existing-ticket.md');
+        await create(cwd, [
+            'New ticket',
+            '-d',
+            '0001-existing-ticket.md',
+            '-d',
+            join(tickets, 'closed', '0001-existing-ticket.md'),
+        ]);
+        const markdown = await Md.parse(
+            await Fs.read(join(tickets, 'open', '0002-new-ticket.md'), { text: true }),
+        );
+        await markdown.content.cancel();
+        expect(markdown.frontmatter.dependencies).toEqual(['0001']);
+        await expectFailure(
+            create(cwd, ['New ticket', '-d', 'invalid']),
+            'Invalid ticket identifier',
+        );
+    });
 });

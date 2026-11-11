@@ -95,12 +95,24 @@ Use `cr idea ready <idea>` when an idea is ready for further processing,
 `cr idea reopen <idea>` to reopen it. Use the idea identifier returned by the CLI.
 
 Tickets track implementation work. After creating a ticket, use its returned ID
-in subsequent commands; for example, if the ID is `0001`:
+in subsequent commands. Existing tickets can be identified by a numeric ID with
+at least four digits, an ID-prefixed filename or slug such as
+`0001-improve-search.md` or `0001-improve-search`, or a ticket path.
+Paths and filenames resolve by their leading ID within the current project, even
+if the ticket has moved to another status directory. Dependency and duplicate
+references accept the same forms and store numeric IDs. For example, if the ID is `0001`:
 
 ```sh
 cr ticket next --limit 1
 cr ticket activate 0001
 cr ticket close 0001
+```
+
+For the same ticket, a path can be reused after activation moves the file:
+
+```sh
+cr ticket activate .coderail/tickets/open/0001-improve-search.md
+cr ticket close .coderail/tickets/open/0001-improve-search.md
 ```
 
 `cr ticket next` lists open tickets whose dependencies are satisfied, ordered by ID.

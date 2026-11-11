@@ -10,7 +10,7 @@ Implement the specified or next ready ticket, resolve encountered issues autonom
 
 ## Boundary
 
-- Accept `<ticket>` as a numeric ID, title slug, ID + title slug, or ticket path.
+- Accept `<ticket>` as a numeric ID, filename, or ticket path.
 - Follow ticket tasks in numbered order.
 - Preserve unrelated changes.
 - When invoked by `cr loop`, preserve the existing index: do not stage, unstage, reset, or commit. The loop owns staging after successful completion.

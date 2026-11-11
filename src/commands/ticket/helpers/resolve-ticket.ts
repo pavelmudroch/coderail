@@ -1,7 +1,7 @@
 import { Fs } from '@fs';
 import { Md } from '@md';
 import { Path } from '@path';
-import { join, resolve } from '@std/path';
+import { basename, join, resolve } from '@std/path';
 
 export const TICKET_STATUS = {
     OPEN: 'open',
@@ -21,7 +21,8 @@ export type Ticket = {
     | { status: typeof TICKET_STATUS.CLOSED; reason: 'duplicate'; 'duplicate-of': string }
 );
 
-export async function resolveTicket(cwd: string, id: string): Promise<Ticket> {
+export async function resolveTicket(cwd: string, identifier: string): Promise<Ticket> {
+    const id = extractId(identifier);
     const ticketsDirectory = resolve(cwd, Path.CODERAIL_DIR, 'tickets');
     const matches: { path: string; slug: string }[] = [];
     for (const status of ['open', 'active', 'closed']) {
@@ -94,4 +95,13 @@ export async function resolveTicket(cwd: string, id: string): Promise<Ticket> {
         throw new Error(`Invalid duplicate-of ticket ID: ${match.path}`);
     }
     return { ...ticket, status, reason, 'duplicate-of': duplicateOf };
+}
+
+function extractId(ticket: string): string {
+    const filename = basename(ticket);
+    const id = /^(\d{4,})(-|$)/.exec(filename)?.[1];
+    if (id === undefined) {
+        throw new Error(`Invalid ticket identifier: ${ticket}`);
+    }
+    return id;
 }

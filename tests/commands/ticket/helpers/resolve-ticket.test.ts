@@ -185,3 +185,39 @@ Deno.test('resolveTicket propagates directory and markdown errors', async () => 
         await expect(resolveTicket(cwd, '0001')).rejects.toBeInstanceOf(SyntaxError);
     });
 });
+
+Deno.test('resolveTicket extracts IDs from filenames and paths across ticket moves', async () => {
+    await withWorkspace(async (cwd, tickets) => {
+        const path = await writeTicket(tickets, 'open', { title: 'New ticket' });
+        for (const identifier of [
+            '0001-new-ticket.md',
+            relative(cwd, path),
+            path,
+            '0001-new-ticket',
+        ]) {
+            expect((await resolveTicket(cwd, identifier)).id).toBe('0001');
+        }
+        await Deno.mkdir(join(tickets, 'active'));
+        await Deno.rename(path, join(tickets, 'active', '0001-new-ticket.md'));
+        expect((await resolveTicket(cwd, path)).path).toBe(
+            join(tickets, 'active', '0001-new-ticket.md'),
+        );
+    });
+});
+
+Deno.test('resolveTicket rejects malformed identifiers before accessing tickets', async () => {
+    await withWorkspace(async (cwd) => {
+        for (const identifier of [
+            '',
+            ' ',
+            '1',
+            'abc',
+            '000-new-ticket.md',
+            '0001x-new-ticket.md',
+        ]) {
+            await expect(resolveTicket(cwd, identifier)).rejects.toThrow(
+                `Invalid ticket identifier: ${identifier}`,
+            );
+        }
+    });
+});

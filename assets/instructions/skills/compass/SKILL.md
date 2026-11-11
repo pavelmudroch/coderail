@@ -72,7 +72,7 @@ Use `code` for implementation and code-review conventions, `question` for focuse
 
 - Use `ticket` to turn agreed implementation context into vertical slices of value, with focused numbered checkbox tasks, task details, verifiable outcomes, and references.
 - Place test tasks before implementation tasks where applicable. Minimize dependencies and file overlap; retain meaningful acceptance criteria for each task.
-- Create tickets with `cr ticket create "Title"`; add dependencies with repeated `-d <ticket-id>` or `--depends-on <ticket-id>`. Use actual IDs returned by the CLI, with at least four digits for dependency arguments.
+- Create tickets with `cr ticket create "Title"`; add dependencies with repeated `-d <ticket>` or `--depends-on <ticket>`. Ticket arguments, dependencies, and duplicate targets accept numeric ID, filename, or ticket path.
 - Preserve generated frontmatter. Track tickets under `.coderail/tickets/open/`, `active/`, and `closed/`; use CLI transitions instead of manually moving files or changing lifecycle fields.
 - Maintain `TICKETS.md` beside the corresponding `IDEA.md` when applicable; link tickets to their design and relevant artifacts.
 - Select work with `cr ticket next -l 1`; explain that selection lists dependency-ready open tickets in ascending ID order without activating them.

@@ -41,12 +41,8 @@ Deno.test('Ticket activate rejects missing, invalid, and extra arguments', () =>
     for (const args of [
         [],
         [''],
-        [' '],
         ['--'],
         ['--json'],
-        ['1'],
-        ['abcd'],
-        ['../0001'],
         ['0001', '0002'],
         ['0001', '--', '0002'],
         ['--', '0001', '0002'],
@@ -224,3 +220,32 @@ Deno.test(
         });
     },
 );
+
+Deno.test('Ticket activate resolves filenames and paths to canonical ticket IDs', async () => {
+    for (const form of ['filename', 'relative', 'absolute']) {
+        await withWorkspace(async (cwd, tickets) => {
+            const source = await writeTicket(tickets, 'open');
+            const identifier =
+                form === 'filename'
+                    ? '0001-new-ticket.md'
+                    : form === 'relative'
+                      ? '.coderail/tickets/open/0001-new-ticket.md'
+                      : source;
+            const output = await activate(cwd, ['--json', identifier]);
+            const path = join(tickets, 'active', '0001-new-ticket.md');
+            expect(await Fs.exists(source)).toBe(false);
+            expect(await Fs.exists(path)).toBe(true);
+            expect(JSON.parse(output[0]?.[0] as string)[0].id).toBe('0001');
+        });
+    }
+});
+
+Deno.test('Ticket activate rejects malformed identifiers during resolution', async () => {
+    await withWorkspace(async (cwd) => {
+        for (const identifier of [' ', '1', 'abcd', '0001x-new-ticket.md']) {
+            await expect(activate(cwd, [identifier])).rejects.toMatchObject({
+                cause: { message: `Invalid ticket identifier: ${identifier}` },
+            });
+        }
+    });
+});

@@ -10,7 +10,7 @@ Guide the user through implementing the specified or next ready ticket, explain 
 
 ## Boundary
 
-- Accept `<ticket>` as a numeric ID, title slug, ID + title slug, or ticket path.
+- Accept `<ticket>` as a numeric ID, filename, or ticket path.
 - Follow ticket tasks in numbered order.
 - Let the user own implementation, technical decisions, and when work is ready for review.
 - Never create or modify implementation code. Modify only ticket content as needed.

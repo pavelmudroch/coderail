@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Ticket commands accept IDs, filenames, and paths, including dependency and
+  duplicate references, with validation during ticket resolution.
 - Preserve completed asset progress and manifest status in upgrade failure reports
   when switching the launcher fails.
 

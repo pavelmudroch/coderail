@@ -63,9 +63,6 @@ export class Activate implements Command<ActivateArguments> {
         if (!args.ticketId) {
             Cli.raiseUsageError('Missing required ticket ID.', this);
         }
-        if (!/^\d{4,}$/.test(args.ticketId)) {
-            Cli.raiseUsageError('Ticket ID must contain at least four digits.', this);
-        }
         return { args, rest };
     }
 
@@ -76,16 +73,16 @@ export class Activate implements Command<ActivateArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr ticket activate [--help] [--json] <ticket-id>',
+            '  cr ticket activate [--help] [--json] <ticket>',
             '',
-            '  Activate the currently open ticket with the given ticket ID.',
+            '  Activate the currently open ticket with the given identifier.',
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
             '      --json           Output the result in JSON format.',
             '',
             'Arguments:',
-            '  <ticket-id>          ID of the ticket to activate.',
+            '  <ticket>             ID, filename, or path of the ticket to activate.',
         ];
         return usageLines.join('\n');
     }
@@ -103,7 +100,7 @@ export class Activate implements Command<ActivateArguments> {
                 throw new Error(`Ticket "${id}" is not open.`);
             }
             const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'active');
-            const path = join(directory, `${id}-${ticket.slug}.md`);
+            const path = join(directory, `${ticket.id}-${ticket.slug}.md`);
             if (await Fs.exists(path)) {
                 throw new Error(`Ticket with "${path}" already exists.`);
             }

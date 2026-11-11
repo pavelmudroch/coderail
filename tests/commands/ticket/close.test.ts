@@ -41,12 +41,8 @@ Deno.test('Ticket close rejects missing, invalid, and extra arguments', () => {
     for (const args of [
         [],
         [''],
-        [' '],
         ['--'],
         ['--json'],
-        ['1'],
-        ['abcd'],
-        ['../0001'],
         ['0001', '0002'],
         ['0001', '--', '0002'],
         ['--', '0001', '0002'],
@@ -257,12 +253,8 @@ Deno.test('Ticket close parses closure reasons and duplicate references', () => 
         ['0001', '-d'],
         ['0001', '--duplicate-of='],
         ['0001', '-d', '--json'],
-        ['0001', '-d', 'invalid'],
-        ['0001', '-d', '1'],
-        ['0001', '-d', '../0002'],
         ['0001', '-d', '0002'],
         ['0001', '-r', 'dismissed', '-d', '0002'],
-        ['0001', '-r', 'duplicate', '-d', '0001'],
     ]) {
         expect(() => command.parseArguments(args)).toThrow(UsageError);
     }
@@ -303,5 +295,54 @@ Deno.test('Ticket close rejects missing duplicate targets before changing the so
         );
         expect(await Deno.readTextFile(source)).toBe(original);
         expect(await Fs.exists(join(tickets, 'closed'))).toBe(false);
+    });
+});
+
+Deno.test('Ticket close resolves filenames and paths to canonical ticket IDs', async () => {
+    for (const form of ['filename', 'relative', 'absolute']) {
+        await withWorkspace(async (cwd, tickets) => {
+            const source = await writeTicket(tickets, 'open');
+            const identifier =
+                form === 'filename'
+                    ? '0001-new-ticket.md'
+                    : form === 'relative'
+                      ? '.coderail/tickets/open/0001-new-ticket.md'
+                      : source;
+            const output = await close(cwd, ['--json', identifier]);
+            const path = join(tickets, 'closed', '0001-new-ticket.md');
+            expect(await Fs.exists(source)).toBe(false);
+            expect(await Fs.exists(path)).toBe(true);
+            expect(JSON.parse(output[0]?.[0] as string)[0].id).toBe('0001');
+        });
+    }
+});
+
+Deno.test('Ticket close rejects malformed identifiers during resolution', async () => {
+    await withWorkspace(async (cwd) => {
+        for (const identifier of [' ', '1', 'abcd', '0001x-new-ticket.md']) {
+            await expect(close(cwd, [identifier])).rejects.toMatchObject({
+                cause: { message: `Invalid ticket identifier: ${identifier}` },
+            });
+        }
+    });
+});
+
+Deno.test('Ticket close normalizes duplicate targets and rejects self references', async () => {
+    await withWorkspace(async (cwd, tickets) => {
+        const source = await writeTicket(tickets, 'open');
+        for (const target of ['0001', '0001-new-ticket.md', source]) {
+            await expectFailure(
+                close(cwd, ['0001', '-r', 'duplicate', '-d', target]),
+                'cannot be a duplicate of itself',
+            );
+            expect(await Fs.exists(source)).toBe(true);
+        }
+        const target = await writeTicket(tickets, 'closed', '0002');
+        await close(cwd, [source, '-r', 'duplicate', '-d', target]);
+        const markdown = await Md.parse(
+            await Fs.read(join(tickets, 'closed', '0001-new-ticket.md'), { text: true }),
+        );
+        await markdown.content.cancel();
+        expect(markdown.frontmatter['duplicate-of']).toBe('0002');
     });
 });

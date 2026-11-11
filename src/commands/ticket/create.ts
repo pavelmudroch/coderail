@@ -57,12 +57,6 @@ export class Create implements Command<CreateArguments> {
                 if (!value || value.startsWith('-')) {
                     Cli.raiseUsageError('Option "--depends-on" requires a value.', this);
                 }
-                if (!/^\d{4,}$/.test(value)) {
-                    Cli.raiseUsageError(
-                        'Dependency must be a ticket ID with at least four digits.',
-                        this,
-                    );
-                }
                 if (!args.dependsOn.includes(value)) {
                     args.dependsOn.push(value);
                 }
@@ -107,14 +101,14 @@ export class Create implements Command<CreateArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr ticket create [--help] [--json] [--depends-on <ticket-id>] <title>',
+            '  cr ticket create [--help] [--json] [--depends-on <ticket>] <title>',
             '',
             '  Create a new ticket with the given title.',
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
             '      --json           Output the result in JSON format.',
-            '  -d, --depends-on <ticket-id>',
+            '  -d, --depends-on <ticket>',
             '                       Specify a ticket that this new ticket depends on.',
             '                       This option can be used multiple times to specify',
             '                       multiple dependencies.',
@@ -132,7 +126,8 @@ export class Create implements Command<CreateArguments> {
     async run(context: RunContext<CreateArguments>): Promise<void> {
         const title = context.parsedArguments.args.ticketTitle;
         const slug = Text.slugify(title);
-        const dependencies = context.parsedArguments.args.dependsOn;
+        const identifiers = context.parsedArguments.args.dependsOn;
+        const dependencies: string[] = [];
         const cwd = context.context.currentWorkingDirectory;
         const ticketsDirectory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR);
 
@@ -141,13 +136,18 @@ export class Create implements Command<CreateArguments> {
             if (!Number.isSafeInteger(nextId)) {
                 throw new Error('Cannot allocate a safe ticket ID.');
             }
-            if (dependencies.length > 0) {
+            if (identifiers.length > 0) {
                 const dependencyPromises: Promise<Ticket>[] = [];
-                for (const dependency of dependencies) {
+                for (const dependency of identifiers) {
                     const ticketPromise = resolveTicket(cwd, dependency);
                     dependencyPromises.push(ticketPromise);
                 }
-                await Promise.all(dependencyPromises);
+                const tickets = await Promise.all(dependencyPromises);
+                for (const ticket of tickets) {
+                    if (!dependencies.includes(ticket.id)) {
+                        dependencies.push(ticket.id);
+                    }
+                }
             }
 
             const id = formatTicketId(nextId);

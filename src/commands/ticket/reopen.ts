@@ -49,12 +49,6 @@ export class Reopen implements Command<ReopenArguments> {
                 if (!value || value.startsWith('-')) {
                     Cli.raiseUsageError('Option "--depends-on" requires a value.', this);
                 }
-                if (!/^\d{4,}$/.test(value)) {
-                    Cli.raiseUsageError(
-                        'Dependency must be a ticket ID with at least four digits.',
-                        this,
-                    );
-                }
                 if (!args.dependsOn.includes(value)) {
                     args.dependsOn.push(value);
                 }
@@ -82,12 +76,6 @@ export class Reopen implements Command<ReopenArguments> {
         if (!args.ticketId) {
             Cli.raiseUsageError('Missing required ticket ID.', this);
         }
-        if (!/^\d{4,}$/.test(args.ticketId)) {
-            Cli.raiseUsageError('Ticket ID must contain at least four digits.', this);
-        }
-        if (args.dependsOn.includes(args.ticketId)) {
-            Cli.raiseUsageError('A ticket cannot depend on itself.', this);
-        }
         return { args, rest };
     }
 
@@ -98,18 +86,18 @@ export class Reopen implements Command<ReopenArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr ticket reopen [--help] [--json] [--depends-on <ticket-id>] <ticket-id>',
+            '  cr ticket reopen [--help] [--json] [--depends-on <ticket>] <ticket>',
             '',
             '  Reopen a ticket in any state, optionally adding dependencies.',
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',
             '      --json           Output the result in JSON format.',
-            '  -d, --depends-on <ticket-id>',
+            '  -d, --depends-on <ticket>',
             '                       Add a dependency. Can be specified multiple times.',
             '',
             'Arguments:',
-            '  <ticket-id>          ID of the ticket to reopen.',
+            '  <ticket>             ID, filename, or path of the ticket to reopen.',
         ];
         return usageLines.join('\n');
     }
@@ -123,12 +111,16 @@ export class Reopen implements Command<ReopenArguments> {
         const cwd = context.context.currentWorkingDirectory;
         try {
             const ticket = await resolveTicket(cwd, id);
-            const dependencies = context.parsedArguments.args.dependsOn;
-            for (const dependency of dependencies) {
-                await resolveTicket(cwd, dependency);
+            const dependencies: string[] = [];
+            for (const identifier of context.parsedArguments.args.dependsOn) {
+                const dependency = await resolveTicket(cwd, identifier);
+                if (dependency.id === ticket.id) {
+                    throw new Error('A ticket cannot depend on itself.');
+                }
+                dependencies.push(dependency.id);
             }
             const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'open');
-            const path = join(directory, `${id}-${ticket.slug}.md`);
+            const path = join(directory, `${ticket.id}-${ticket.slug}.md`);
             const moving = ticket.status !== TICKET_STATUS.OPEN;
             if (moving && (await Fs.exists(path))) {
                 throw new Error(`Ticket with "${path}" already exists.`);

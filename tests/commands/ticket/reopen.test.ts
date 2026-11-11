@@ -41,12 +41,8 @@ Deno.test('Ticket reopen rejects missing, invalid, and extra arguments', () => {
     for (const args of [
         [],
         [''],
-        [' '],
         ['--'],
         ['--json'],
-        ['1'],
-        ['abcd'],
-        ['../0001'],
         ['0001', '0002'],
         ['0001', '--', '0002'],
         ['--', '0001', '0002'],
@@ -223,9 +219,6 @@ Deno.test('Ticket reopen parses repeated dependencies and rejects invalid ones',
         ['0001', '-d'],
         ['0001', '--depends-on='],
         ['0001', '-d', '--json'],
-        ['0001', '-d', '1'],
-        ['0001', '-d', '../0002'],
-        ['0001', '-d', '0001'],
     ]) {
         expect(() => command.parseArguments(args)).toThrow(UsageError);
     }
@@ -305,5 +298,51 @@ Deno.test('Ticket reopen merges dependencies and validates them before writing',
                 expect(reopened.frontmatter.dependencies).toEqual(['0002']);
             }
         }
+    });
+});
+
+Deno.test('Ticket reopen resolves filenames and paths to canonical ticket IDs', async () => {
+    for (const form of ['filename', 'relative', 'absolute']) {
+        await withWorkspace(async (cwd, tickets) => {
+            const source = await writeTicket(tickets, 'closed');
+            const identifier =
+                form === 'filename'
+                    ? '0001-new-ticket.md'
+                    : form === 'relative'
+                      ? '.coderail/tickets/closed/0001-new-ticket.md'
+                      : source;
+            const output = await reopen(cwd, ['--json', identifier]);
+            const path = join(tickets, 'open', '0001-new-ticket.md');
+            expect(await Fs.exists(source)).toBe(false);
+            expect(await Fs.exists(path)).toBe(true);
+            expect(JSON.parse(output[0]?.[0] as string)[0].id).toBe('0001');
+        });
+    }
+});
+
+Deno.test('Ticket reopen rejects malformed identifiers during resolution', async () => {
+    await withWorkspace(async (cwd) => {
+        for (const identifier of [' ', '1', 'abcd', '0001x-new-ticket.md']) {
+            await expect(reopen(cwd, [identifier])).rejects.toMatchObject({
+                cause: { message: `Invalid ticket identifier: ${identifier}` },
+            });
+        }
+    });
+});
+
+Deno.test('Ticket reopen normalizes dependencies and rejects self references', async () => {
+    await withWorkspace(async (cwd, tickets) => {
+        const source = await writeTicket(tickets, 'closed');
+        for (const dependency of ['0001', '0001-new-ticket.md', source]) {
+            await expectFailure(reopen(cwd, ['0001', '-d', dependency]), 'cannot depend on itself');
+            expect(await Fs.exists(source)).toBe(true);
+        }
+        const dependency = await writeTicket(tickets, 'closed', '0003');
+        await reopen(cwd, [source, '-d', dependency, '-d', '0003-new-ticket.md']);
+        const markdown = await Md.parse(
+            await Fs.read(join(tickets, 'open', '0001-new-ticket.md'), { text: true }),
+        );
+        await markdown.content.cancel();
+        expect(markdown.frontmatter.dependencies).toEqual(['0002', '0003']);
     });
 });
