@@ -74,12 +74,21 @@ export class Doctor implements Command {
                       noColor: input.configuration.noColor,
                       nonInteractive: input.configuration.nonInteractive,
                   };
+        const bootstrap = Conf.createConfiguration(global);
+        Log.level = bootstrap.logLevel;
+        Log.noColor = bootstrap.noColor;
+        Log.nonInteractive = bootstrap.nonInteractive;
+        const cwd = resolve(Deno.cwd(), global.cwd ?? '.');
+        Log.notice(`Checking installation before project diagnostics (cwd "${cwd}").`);
         const report = await Installation.check(input.signal);
         input.signal.throwIfAborted();
+        Log.notice('Resolving installation and configuration paths.');
         let installRoot: string | undefined;
         try {
             const entry = Deno.build.standalone ? Deno.execPath() : fromFileUrl(Deno.mainModule);
+            Log.notice(`Resolving configuration installation root from "${entry}".`);
             installRoot = dirname(dirname(await Deno.realPath(entry)));
+            Log.notice(`Using installation root "${installRoot}" for configuration diagnostics.`);
         } catch {
             input.signal.throwIfAborted();
             report.skipped.push(
@@ -91,16 +100,18 @@ export class Doctor implements Command {
         if (!Deno.build.standalone && installRoot !== undefined) {
             validationRoots.push(installRoot);
         }
-        const cwd = resolve(Deno.cwd(), global.cwd ?? '.');
+        Log.notice(`Discovering project from cwd "${cwd}".`);
         const discovery = await Project.discover(cwd, input.signal);
         report.failures.push(...discovery.failures);
         report.skipped.push(...discovery.skipped);
         if (discovery.repositoryRoot !== undefined) {
             repositoryRoots.push(discovery.repositoryRoot);
+            Log.notice(`Checking project "${discovery.repositoryRoot}".`);
             const project = await Project.check(discovery.repositoryRoot, input.signal);
             report.failures.push(...project.failures);
             report.skipped.push(...project.skipped);
         }
+        Log.notice(`Diagnosing configuration for cwd "${cwd}".`);
         const { configuration, errors } = await Conf.diagnoseConfiguration(
             { installRoot, repositoryRoots, validationRoots },
             global,
@@ -115,15 +126,18 @@ export class Doctor implements Command {
                 ],
             });
         }
+        Log.level = configuration.logLevel;
+        Log.noColor = configuration.noColor;
+        Log.nonInteractive = configuration.nonInteractive;
+        Log.notice(
+            `Checking configured harness executable (${configuration.defaultHarness ?? 'no harness configured'}).`,
+        );
         const executable = await Project.checkExecutable(
             configuration.defaultHarness,
             input.signal,
         );
         report.failures.push(...executable.failures);
         report.skipped.push(...executable.skipped);
-        Log.level = configuration.logLevel;
-        Log.noColor = configuration.noColor;
-        Log.nonInteractive = configuration.nonInteractive;
         input.signal.throwIfAborted();
         for (const failure of report.failures) {
             Log.output(`Failure: ${failure.message}${failure.repairable ? ' [repairable]' : ''}`);

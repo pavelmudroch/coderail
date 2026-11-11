@@ -1,4 +1,5 @@
 import type { GlobalArguments } from '@commands';
+import { Log } from '@log';
 import type { RuntimeContext } from '@runtime';
 import { join } from '@std/path';
 
@@ -65,6 +66,7 @@ export async function diagnoseConfiguration(
     const configuration = createConfiguration();
     const errors: Error[] = [];
     async function readConfiguration(path: string): Promise<Partial<Configuration>> {
+        Log.notice(`Reading configuration source "${path}".`);
         let info: Deno.FileInfo;
         try {
             info = await Deno.stat(path);
@@ -88,6 +90,7 @@ export async function diagnoseConfiguration(
         read: () => Promise<Partial<Configuration>>,
     ): Promise<void> {
         signal?.throwIfAborted();
+        Log.notice(`Validating ${label}.`);
         try {
             mergeConfiguration(configuration, await read());
             signal?.throwIfAborted();

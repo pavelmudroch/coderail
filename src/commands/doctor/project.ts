@@ -2,6 +2,7 @@ import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
 
 import { Harness } from '@harness';
+import { Log } from '@log';
 import { dirname, join } from '@std/path';
 
 import { projectIgnoreLines } from '../../runtime/context.ts';
@@ -15,6 +16,7 @@ async function discover(
 ): Promise<DoctorReport & { repositoryRoot?: string }> {
     const report = createDoctorReport();
     signal.throwIfAborted();
+    Log.notice(`Inspecting project discovery cwd "${cwd}".`);
     try {
         if (!(await Deno.stat(cwd)).isDirectory) {
             throw new Error(`Working directory "${cwd}" is not a directory`);
@@ -23,6 +25,7 @@ async function discover(
         while (true) {
             signal.throwIfAborted();
             try {
+                Log.notice(`Inspecting project marker "${join(directory, '.coderail')}".`);
                 const info = await Deno.stat(join(directory, '.coderail'));
                 signal.throwIfAborted();
                 if (info.isDirectory) {
@@ -63,6 +66,7 @@ async function check(root: string, signal: AbortSignal): Promise<DoctorReport> {
     for (const name of ['config', '.gitignore']) {
         signal.throwIfAborted();
         const path = join(root, '.coderail', name);
+        Log.notice(`Checking project initialization "${path}".`);
         try {
             if (name === 'config') {
                 await Deno.stat(path);
@@ -111,6 +115,7 @@ async function checkExecutable(
         report.skipped.push('Harness executable: no harness configured.');
         return report;
     }
+    Log.notice(`Resolving configured harness "${name}" executable candidates.`);
     try {
         if (!Harness.names.includes(name)) {
             throw new Error(`Unknown harness "${name}"`);
@@ -125,6 +130,7 @@ async function checkExecutable(
                 signal.throwIfAborted();
                 try {
                     const path = join(directory || '.', `${name}${extension}`);
+                    Log.notice(`Checking harness "${name}" executable candidate "${path}".`);
                     const info = await Deno.stat(path);
                     signal.throwIfAborted();
                     if (info.isFile) {

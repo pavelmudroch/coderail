@@ -5,6 +5,7 @@ import { expect } from '@std/expect';
 
 import { Doctor } from '../../src/commands/doctor.ts';
 import { Installation } from '../../src/commands/doctor/installation.ts';
+import { captureOutput } from '../log/helpers.ts';
 
 Deno.test('doctor parses help and repair and rejects unexpected arguments', async () => {
     const doctor = new Doctor();
@@ -134,6 +135,7 @@ Deno.test(
         };
         const output: string[] = [];
         const phases: string[] = [];
+        using captured = captureOutput();
         const doctor = new Doctor();
         const signal = new AbortController().signal;
         const globals = Commands.cr().parseArguments([
@@ -148,6 +150,7 @@ Deno.test(
                 output.push(messages.join(' '));
             };
             Installation.check = () => {
+                expect(captured.stderr.join('')).toContain('installation');
                 phases.push('installation');
                 return Promise.resolve({
                     failures: [
@@ -161,10 +164,13 @@ Deno.test(
                 expect(cwd).toBe('/chosen');
                 expect(received).toBe(signal);
                 expect(output).toEqual([]);
+                expect(captured.stderr.join('')).toContain('/chosen');
+                expect(captured.stderr.join('')).toContain('Discovering project');
                 phases.push('discovery');
                 return Promise.resolve({ repositoryRoot: '/chosen', failures: [], skipped: [] });
             };
             Project.check = () => {
+                expect(captured.stderr.join('')).toContain('Checking project');
                 phases.push('project');
                 return Promise.resolve({
                     failures: [
@@ -174,6 +180,7 @@ Deno.test(
                 });
             };
             Conf.diagnoseConfiguration = (context, global, received) => {
+                expect(captured.stderr.join('')).toContain('Diagnosing configuration');
                 expect(context.repositoryRoots).toEqual(['/chosen']);
                 expect(global).toBe(globals);
                 expect(received).toBe(signal);
@@ -185,6 +192,7 @@ Deno.test(
                 });
             };
             Project.checkExecutable = (name, received) => {
+                expect(captured.stderr.join('')).toContain('harness executable');
                 expect(name).toBeUndefined();
                 expect(received).toBe(signal);
                 expect(output).toEqual([]);
@@ -596,6 +604,275 @@ Deno.test(
             Deno.exitCode = original.exit;
             Deno.writeTextFile = original.write;
             Deno.remove = original.remove;
+            envNames.forEach((name, index) => {
+                const value = env[index];
+                if (value === undefined) {
+                    Deno.env.delete(name);
+                } else {
+                    Deno.env.set(name, value);
+                }
+            });
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'doctor progress precedes I/O, respects effective levels and defers final output',
+    async () => {
+        const { join, toFileUrl } = await import('@std/path');
+        const { InstallManifest } = await import('@install-manifest');
+        const { Harness } = await import('@harness');
+        const { Path } = await import('@path');
+        const { projectIgnoreLines } = await import('../../src/runtime/context.ts');
+        using captured = captureOutput();
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const project = join(root, 'project');
+        const entry = join(root, 'libexec', 'cr-fixture');
+        const envNames = [
+            'CODEX_HOME',
+            'CLAUDE_CONFIG_DIR',
+            'PATH',
+            'LOG_LEVEL',
+            'DEFAULT_HARNESS',
+        ];
+        const env = envNames.map((name) => Deno.env.get(name));
+        const original = {
+            main: Object.getOwnPropertyDescriptor(Deno, 'mainModule'),
+            build: Deno.build,
+            exec: Deno.execPath,
+            stat: Deno.stat,
+            lstat: Deno.lstat,
+            realPath: Deno.realPath,
+            readDir: Deno.readDir,
+            readFile: Deno.readFile,
+            inspect: InstallManifest.inspect,
+            exit: Deno.exitCode,
+        };
+        try {
+            envNames.forEach((name) => Deno.env.delete(name));
+            Deno.env.set('CODEX_HOME', join(root, 'codex'));
+            Deno.env.set('CLAUDE_CONFIG_DIR', join(root, 'claude'));
+            Deno.env.set('PATH', join(root, 'bin'));
+            for (const directory of [
+                'libexec',
+                'bin',
+                'instructions',
+                'assets/templates',
+                'project/.coderail',
+                '.coderail',
+            ]) {
+                await Deno.mkdir(join(root, directory), { recursive: true });
+            }
+            await Deno.writeTextFile(entry, 'fixture', { mode: 0o755 });
+            await Deno.symlink(entry, join(root, 'bin', 'cr'));
+            await Deno.writeTextFile(join(root, 'instructions', 'owned'), 'instruction');
+            await Deno.writeTextFile(join(root, 'assets', 'templates', 'sample'), 'template');
+            const { DISTRIBUTION_MANIFEST } = await import('../../src/commands/upgrade/assets.ts');
+            await InstallManifest.save(
+                join(root, DISTRIBUTION_MANIFEST),
+                await InstallManifest.capture(root, ['instructions/owned']),
+            );
+            await Deno.writeTextFile(join(root, 'config'), '');
+            await Deno.writeTextFile(join(root, '.coderail', 'config'), '');
+            const config = join(project, '.coderail', 'config');
+            await Deno.writeTextFile(
+                join(project, '.coderail', '.gitignore'),
+                projectIgnoreLines.join('\n'),
+            );
+            for (const target of [
+                { scope: 'global' as const },
+                { scope: 'local' as const, projectRoot: project },
+            ]) {
+                for (const name of Harness.names) {
+                    using connector = Harness.get(name, target);
+                    if (!connector) {
+                        throw new Error('missing fixture connector');
+                    }
+                    await Deno.mkdir(connector.home, { recursive: true });
+                    await Deno.writeTextFile(join(connector.home, 'owned'), 'instruction');
+                    await InstallManifest.save(
+                        join(connector.home, Path.INSTALL_MANIFEST_NAME),
+                        await InstallManifest.capture(connector.home, ['owned']),
+                    );
+                }
+            }
+            Object.defineProperty(Deno, 'mainModule', {
+                configurable: true,
+                value: toFileUrl(entry).href,
+            });
+            Deno.execPath = () => entry;
+            const doctor = new Doctor();
+            for (const standalone of [false, true]) {
+                Object.defineProperty(Deno, 'build', {
+                    configurable: true,
+                    value: { ...original.build, standalone },
+                });
+                for (const scenario of [
+                    {
+                        flags: ['--verbose'],
+                        level: 'quiet',
+                        invalid: false,
+                        early: true,
+                        late: true,
+                    },
+                    {
+                        flags: ['--verbose'],
+                        level: 'quiet',
+                        invalid: true,
+                        early: true,
+                        late: true,
+                    },
+                    { flags: [], level: 'verbose', invalid: false, early: false, late: true },
+                    { flags: [], level: 'normal', invalid: false, early: false, late: false },
+                    { flags: [], level: 'quiet', invalid: false, early: false, late: false },
+                    { flags: [], level: 'verbose', invalid: true, early: false, late: false },
+                    {
+                        flags: ['--quiet'],
+                        level: 'verbose',
+                        invalid: false,
+                        early: false,
+                        late: false,
+                    },
+                ]) {
+                    await Deno.writeTextFile(
+                        config,
+                        scenario.invalid
+                            ? 'unknown = true'
+                            : `log_level = "${scenario.level}"\ndefault_harness = "codex"`,
+                    );
+                    captured.stderr.length = 0;
+                    captured.stdout.length = 0;
+                    // Start with a conflicting level to exercise direct bootstrap callers.
+                    Log.level = scenario.early ? 'quiet' : 'verbose';
+                    const operations: { path: string; notices: string; output: string }[] = [];
+                    const observe = (path: string | URL): void => {
+                        operations.push({
+                            path: String(path),
+                            notices: captured.stderr.join(''),
+                            output: captured.stdout.join(''),
+                        });
+                    };
+                    Deno.stat = (path) => {
+                        observe(path);
+                        return original.stat(path);
+                    };
+                    Deno.lstat = (path) => {
+                        observe(path);
+                        return original.lstat(path);
+                    };
+                    Deno.realPath = (path) => {
+                        observe(path);
+                        return original.realPath(path);
+                    };
+                    Deno.readDir = (path) => {
+                        observe(path);
+                        return original.readDir(path);
+                    };
+                    Deno.readFile = (path, options) => {
+                        observe(path);
+                        return original.readFile(path, options);
+                    };
+                    InstallManifest.inspect = (home, manifest) => {
+                        for (const file of manifest.files) {
+                            observe(join(home, file.path));
+                        }
+                        return original.inspect(home, manifest);
+                    };
+                    try {
+                        await doctor.run({
+                            parsedArguments: doctor.parseArguments([]),
+                            globalArguments: Commands.cr().parseArguments([
+                                '--cwd',
+                                project,
+                                '--no-color',
+                                ...scenario.flags,
+                            ]).args,
+                            signal: new AbortController().signal,
+                        });
+                    } finally {
+                        Deno.stat = original.stat;
+                        Deno.lstat = original.lstat;
+                        Deno.realPath = original.realPath;
+                        Deno.readDir = original.readDir;
+                        Deno.readFile = original.readFile;
+                        InstallManifest.inspect = original.inspect;
+                    }
+                    expect(operations.every((operation) => operation.output === '')).toBe(true);
+                    const earlyPaths = [
+                        entry,
+                        project,
+                        config,
+                        join(root, 'config'),
+                        join(project, '.coderail', '.gitignore'),
+                        join(root, 'codex', Path.INSTALL_MANIFEST_NAME),
+                        join(project, 'owned'),
+                    ];
+                    earlyPaths.push(
+                        standalone
+                            ? join(root, DISTRIBUTION_MANIFEST)
+                            : join(root, '.coderail', 'config'),
+                    );
+                    earlyPaths.push(
+                        standalone
+                            ? join(root, 'instructions', 'owned')
+                            : join(root, 'assets', 'templates', 'sample'),
+                    );
+                    for (const path of earlyPaths) {
+                        const operation = operations.find((operation) => operation.path === path);
+                        expect(operation, path).toBeDefined();
+                        expect(operation?.notices.includes(path), path).toBe(scenario.early);
+                    }
+                    const notices = captured.stderr.join('');
+                    if (scenario.early) {
+                        for (const context of [
+                            'installation',
+                            'configuration',
+                            'project',
+                            'global codex',
+                            'local claude',
+                            'Environment',
+                        ]) {
+                            expect(notices.toLowerCase()).toContain(context.toLowerCase());
+                        }
+                        if (standalone) {
+                            expect(notices).toContain(join(root, 'bin'));
+                        }
+                    }
+                    const candidate = join(
+                        root,
+                        'bin',
+                        Deno.build.os === 'windows' ? 'codex.COM' : 'codex',
+                    );
+                    if (!scenario.invalid) {
+                        expect(
+                            operations
+                                .find((operation) => operation.path === candidate)
+                                ?.notices.includes(candidate),
+                        ).toBe(scenario.late);
+                        expect(Deno.exitCode).toBe(1);
+                        expect(captured.stdout.join('')).toContain('Harness executable:');
+                    } else {
+                        expect(Deno.exitCode).toBe(1);
+                        expect(captured.stdout.join('')).toContain('Invalid configuration');
+                        expect(notices.includes('executable')).toBe(scenario.late);
+                    }
+                    expect(captured.stdout.join('')).toContain('Manual repair:');
+                    expect(captured.stdout.join('')).not.toContain('notice:');
+                    expect(notices).not.toContain('Failure:');
+                    expect(notices).not.toContain('Manual repair:');
+                    if (!scenario.early && !scenario.late) {
+                        expect(notices).toBe('');
+                    }
+                }
+            }
+        } finally {
+            Object.defineProperty(Deno, 'build', { configurable: true, value: original.build });
+            if (original.main) {
+                Object.defineProperty(Deno, 'mainModule', original.main);
+            }
+            Deno.execPath = original.exec;
+            Deno.exitCode = original.exit;
             envNames.forEach((name, index) => {
                 const value = env[index];
                 if (value === undefined) {

@@ -2,12 +2,13 @@
 id: "0039"
 slug: "report-verbose-doctor-progress-and-diagnostic-context"
 title: "Report verbose doctor progress and diagnostic context"
-status: "open"
+status: "closed"
 created_at: "2026-11-11T12:17:21.353Z"
-updated_at: "2026-11-11T12:17:21.353Z"
+updated_at: "2026-11-11T12:25:45.483Z"
 dependencies:
   - "0038"
   - "0037"
+reason: "done"
 ---
 
 # Report verbose doctor progress and diagnostic context
@@ -16,10 +17,10 @@ Make a slow doctor run explain its current work through verbose stderr notices w
 
 ## Tasks
 
-1. [ ] Add regression coverage for verbose progress and final output timing
-2. [ ] Announce doctor orchestration phases with bootstrap verbosity
-3. [ ] Add diagnostic context before individual checks
-4. [ ] Verify logging levels and complete doctor output behavior
+1. [x] Add regression coverage for verbose progress and final output timing
+2. [x] Announce doctor orchestration phases with bootstrap verbosity
+3. [x] Add diagnostic context before individual checks
+4. [x] Verify logging levels and complete doctor output behavior
 
 ## Task details
 

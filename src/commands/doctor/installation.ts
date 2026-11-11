@@ -3,6 +3,7 @@ import { access } from 'node:fs/promises';
 
 import { Harness, type InstallationTarget } from '@harness';
 import { InstallManifest, type Manifest } from '@install-manifest';
+import { Log } from '@log';
 import { Path } from '@path';
 import { dirname, fromFileUrl, join } from '@std/path';
 
@@ -29,6 +30,7 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
         manual = recovery,
     ): Promise<boolean> {
         signal.throwIfAborted();
+        Log.notice(`Checking ${label}.`);
         try {
             await run();
             signal.throwIfAborted();
@@ -53,6 +55,7 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
             windows: Deno.build.os === 'windows',
             path: '',
         };
+        Log.notice(`Resolving installation entry "${resolved.entryPath}".`);
         root = dirname(dirname(await Deno.realPath(resolved.entryPath)));
     });
     if (!root || !resolved) {
@@ -65,6 +68,7 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
     const location = resolved;
     const resourceRoot = resolved.standalone ? root : join(root, 'assets');
     async function resources(path: string): Promise<void> {
+        Log.notice(`Reading installation resource directory "${path}".`);
         for await (const entry of Deno.readDir(path)) {
             const target = join(path, entry.name);
             await attempt(`Resource ${target}`, async () => {
@@ -107,6 +111,7 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
     let manifest: Manifest | undefined;
     await attempt('Distribution manifest', async () => {
         const path = join(installationRoot, DISTRIBUTION_MANIFEST);
+        Log.notice(`Inspecting distribution manifest "${path}".`);
         const info = await Deno.stat(path);
         signal.throwIfAborted();
         if (!info.isFile) {
@@ -122,6 +127,9 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
     if (manifest) {
         for (const file of manifest.files) {
             await attempt(`Owned file ${file.path}`, async () => {
+                Log.notice(
+                    `Inspecting installation owned file "${join(installationRoot, file.path)}".`,
+                );
                 const results = await InstallManifest.inspect(installationRoot, {
                     version: 1,
                     files: [file],
@@ -137,7 +145,9 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
         report.skipped.push('Owned files: distribution manifest unavailable.');
     }
     await attempt('Launcher', async () => {
+        Log.notice(`Resolving installation launcher in "${join(installationRoot, 'bin')}".`);
         const target = await launcherTarget(installationRoot, location.windows);
+        Log.notice(`Inspecting launcher target "${target ?? 'unavailable'}".`);
         if (!target || dirname(target) !== join(installationRoot, 'libexec')) {
             throw new Error('Missing or broken installation launcher');
         }
@@ -153,6 +163,7 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
     await attempt(
         'PATH',
         () => {
+            Log.notice(`Checking installation bin "${bin}" in PATH.`);
             const normalize = (value: string): string => {
                 const path = value.replace(/[\\/]+$/, '');
                 return location.windows ? path.replaceAll('/', '\\').toLowerCase() : path;
@@ -185,6 +196,9 @@ async function checkInstructions(
             'Check the harness home override and file access permissions. Restore a valid instruction manifest; review installed files before removing invalid ownership metadata.',
             `Check access permissions and rerun "cr install${target.scope === 'local' ? ' --local' : ''} --force ${name}"${target.scope === 'local' ? ` from "${target.projectRoot}"` : ''}; review owned file changes before overwriting.`,
         ];
+        Log.notice(
+            `Resolving ${label}${target.scope === 'local' ? ` in "${target.projectRoot}"` : ''}.`,
+        );
         try {
             using connector = Harness.get(name, target);
             if (!connector) {
@@ -192,6 +206,7 @@ async function checkInstructions(
             }
             const path = join(connector.home, Path.INSTALL_MANIFEST_NAME);
             location = `${label} manifest "${path}"`;
+            Log.notice(`Inspecting ${location} (home "${connector.home}").`);
             let manifest: Manifest | null;
             try {
                 const info = await Deno.lstat(path);
@@ -213,6 +228,7 @@ async function checkInstructions(
             }
             for (const file of manifest.files) {
                 signal.throwIfAborted();
+                Log.notice(`Inspecting ${label} owned file "${join(connector.home, file.path)}".`);
                 try {
                     const results = await InstallManifest.inspect(connector.home, {
                         version: 1,
