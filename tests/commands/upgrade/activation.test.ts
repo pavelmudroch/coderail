@@ -3,6 +3,7 @@ import { join } from '@std/path';
 
 import {
     activateDistribution,
+    ActivationError,
     windowsLauncher,
     withInstallationLock,
 } from '../../../src/commands/upgrade/activation.ts';
@@ -153,14 +154,20 @@ Deno.test(
                 ),
             ).rejects.toThrow('application failed');
             const rename = Deno.rename;
+            const cause = new Error('activation failed');
             Deno.rename = (from, to) =>
-                String(to).includes('bin')
-                    ? Promise.reject(new Error('activation failed'))
-                    : rename(from, to);
+                String(to).includes('bin') ? Promise.reject(cause) : rename(from, to);
             try {
-                await expect(
-                    activateDistribution(root, stage, { force: true, yes: true }),
-                ).rejects.toThrow('activation failed');
+                const activation = activateDistribution(root, stage, { force: true, yes: true });
+                await expect(activation).rejects.toBeInstanceOf(ActivationError);
+                await expect(activation).rejects.toMatchObject({
+                    cause,
+                    progress: {
+                        written: ['instructions/a', 'templates/a'],
+                        removed: [],
+                        manifestSaved: true,
+                    },
+                });
             } finally {
                 Deno.rename = rename;
             }

@@ -204,12 +204,39 @@ Deno.test('upgrade help follows command formatting and retains release and confl
 
 async function installation(run: (root: string) => Promise<void>): Promise<void> {
     const temp = await Deno.makeTempDir();
+    const original = {
+        info: Log.info,
+        notice: Log.notice,
+        progress: Log.progress,
+        output: Log.output,
+        warn: Log.warn,
+        error: Log.error,
+        confirm: Log.confirm,
+    };
     try {
+        captureLog([]);
+        Log.progress = () => ({
+            setMessage() {},
+            setProgress() {},
+            [Symbol.dispose]() {},
+        });
+        Log.confirm = () => {
+            throw new Error('Unexpected confirmation');
+        };
         const root = join(await Deno.realPath(temp), 'custom installation');
         await Deno.mkdir(root);
         await run(root);
     } finally {
+        Object.assign(Log, original);
         await Deno.remove(temp, { recursive: true });
+    }
+}
+
+function captureLog(messages: string[]): void {
+    for (const level of ['info', 'notice', 'output', 'warn', 'error'] as const) {
+        Log[level] = (...values) => {
+            messages.push(values.map(String).join(' '));
+        };
     }
 }
 
@@ -238,18 +265,19 @@ async function commandFor(
     const messages: string[] = [];
     const command = new Upgrade({
         fetcher: mock.fetcher,
-        report: (message) => messages.push(message),
     });
     return {
         command,
         messages,
-        run: (flags = [], signal = new AbortController().signal) =>
-            command.run({
+        run: (flags = [], signal = new AbortController().signal) => {
+            captureLog(messages);
+            return command.run({
                 context: { installRoot: root, currentWorkingDirectory: root },
                 configuration: { nonInteractive: true } as Configuration,
                 parsedArguments: command.parseArguments(flags),
                 signal,
-            }),
+            });
+        },
     };
 }
 
@@ -264,7 +292,6 @@ Deno.test('latest request failures leave the installation unchanged', async () =
                     calls.push(String(input));
                     return Promise.resolve(new Response(null, { status: 404 }));
                 },
-                report: () => {},
             });
             await expect(
                 command.run({
@@ -300,9 +327,10 @@ Deno.test(
             expect(await Deno.readTextFile(join(root, 'templates/personal'))).toBe('personal');
             const output = first.messages.join('\n');
             expect(output).toContain('Activated');
-            expect(output).toContain(`Completed writes: "${join(root, 'instructions/a.md')}"`);
-            expect(output).toContain('manifest saved: true');
-            expect(output).toContain('Skipped (kept): none.');
+            expect(output).toContain('Completed writes (');
+            expect(output).toContain(`"${join(root, 'instructions/a.md')}"`);
+            expect(output).toContain('Manifest saved: yes');
+            expect(output).toContain('Skipped (0)');
         });
     },
 );
@@ -328,7 +356,7 @@ Deno.test(
             );
             expect(messages.join('\n')).toContain('Declined');
             expect(messages.join('\n')).toContain(
-                `Skipped (kept): "${join(root, 'templates/default.md')}".`,
+                `Skipped (1)\n"${join(root, 'templates/default.md')}"`,
             );
             await run(['--force', '--yes']);
             expect(await Deno.readTextFile(join(root, 'templates/default.md'))).toBe('template');
@@ -365,16 +393,16 @@ Deno.test(
                 const controller = new AbortController();
                 const messages: string[] = [];
                 let confirmations = 0;
+                captureLog(messages);
+                Log.confirm = (message) => {
+                    expect(message).toContain(`"${template}"`);
+                    confirmations++;
+                    controller.abort();
+                    return true;
+                };
                 const command = new Upgrade({
                     fetcher: mock.fetcher,
                     interactive: true,
-                    report: (message) => messages.push(message),
-                    confirm: (message) => {
-                        expect(message).toContain(`"${template}"`);
-                        confirmations++;
-                        controller.abort();
-                        return true;
-                    },
                 });
                 await expect(
                     command.run({
@@ -425,18 +453,18 @@ Deno.test(
                 entries: entries('2.10.0', platform),
             });
             const events: string[] = [];
+            captureLog([]);
+            Log.confirm = () => {
+                expect(mock.calls.filter((call) => call.includes('/releases/assets/')).length).toBe(
+                    2,
+                );
+                expect(Deno.readTextFileSync(stale)).toBe('stale');
+                events.push('confirm');
+                return true;
+            };
             const command = new Upgrade({
                 fetcher: mock.fetcher,
                 interactive: true,
-                report: () => {},
-                confirm: async () => {
-                    expect(
-                        mock.calls.filter((call) => call.includes('/releases/assets/')).length,
-                    ).toBe(2);
-                    expect(await Deno.readTextFile(stale)).toBe('stale');
-                    events.push('confirm');
-                    return true;
-                },
             });
             const remove = Deno.remove;
             const copy = Deno.copyFile;
@@ -497,7 +525,7 @@ Deno.test(
 Deno.test(
     'asset, manifest and activation failures report partial progress and custom-root recovery',
     async () => {
-        for (const failure of ['asset', 'manifest', 'activation']) {
+        for (const failure of ['binary', 'asset', 'manifest', 'activation']) {
             await installation(async (root) => {
                 const initial = await commandFor(root);
                 await initial.run();
@@ -505,6 +533,11 @@ Deno.test(
                 const next = await commandFor(root, '1.0.0');
                 const copy = Deno.copyFile;
                 const rename = Deno.rename;
+                const open = Deno.open;
+                Deno.open = (path, options) =>
+                    failure === 'binary' && String(path).startsWith(join(root, 'libexec'))
+                        ? Promise.reject(new Error('injected binary staging failure'))
+                        : open(path, options);
                 Deno.copyFile = (source, destination) => {
                     if (failure === 'asset' && String(destination).startsWith(root)) {
                         return Promise.reject(new Error('injected asset failure'));
@@ -527,6 +560,7 @@ Deno.test(
                 } finally {
                     Deno.copyFile = copy;
                     Deno.rename = rename;
+                    Deno.open = open;
                 }
                 expect(await launcherTarget(root, Deno.build.os === 'windows')).toBe(original);
                 const output = next.messages.join('\n');
@@ -536,19 +570,24 @@ Deno.test(
                 expect(output).toContain('Preserve user templates');
                 expect(output).toContain('curl -fsSL');
                 expect(output).toContain('install.sh');
-                if (failure === 'asset') {
+                if (failure === 'binary') {
+                    expect(output).toContain('Completed writes: unknown');
+                    expect(output).toContain('Completed removals: unknown');
                     expect(output).toContain(
-                        'Completed writes: none; removals: none; manifest saved: true.',
+                        'Manifest saved: unknown; inspect the distribution manifest',
                     );
-                } else if (failure === 'manifest') {
-                    expect(output).toContain(
-                        `Completed writes: "${join(root, 'instructions/a.md')}"`,
-                    );
-                    expect(output).toContain('manifest saved: false.');
+                } else if (failure === 'asset') {
+                    expect(output).toContain('Completed writes (0)');
+                    expect(output).toContain('Completed removals (0)');
+                    expect(output).toContain('Manifest saved: yes');
                 } else {
+                    expect(output).toContain('Completed writes (2)');
+                    expect(output).toContain(`"${join(root, 'instructions/a.md')}"`);
+                    expect(output).toContain('Completed removals (0)');
                     expect(output).toContain(
-                        'manifest saved: unknown; inspect the distribution manifest',
+                        failure === 'manifest' ? 'Manifest saved: no' : 'Manifest saved: yes',
                     );
+                    expect(output).not.toContain('unknown');
                 }
             });
         }
@@ -600,21 +639,20 @@ Deno.test(
                     Deno.lstat = lstat;
                 }
                 const output = next.messages.join('\n');
-                expect(output).toContain('manifest saved: true.');
+                expect(output).toContain('Manifest saved: yes');
                 expect(output).toContain('Activation did not complete');
                 expect(output).not.toContain('Activated');
                 expect(await launcherTarget(root, Deno.build.os === 'windows')).toBe(original);
-                const progress = next.messages.find((message) =>
-                    message.startsWith('Completed writes:'),
-                );
-                expect(progress).toContain(`"${join(root, 'instructions/a.md')}"`);
+                expect(output).toContain(`"${join(root, 'instructions/a.md')}"`);
                 const saved = await InstallManifest.load(join(root, DISTRIBUTION_MANIFEST));
                 if (failure === 'write') {
-                    expect(progress).not.toContain(join(root, 'templates/default.md'));
-                    expect(progress).toContain('removals: none;');
+                    expect(output).toContain('Completed writes (1)');
+                    expect(output).not.toContain(join(root, 'templates/default.md'));
+                    expect(output).toContain('Completed removals (0)');
                 } else {
-                    expect(progress).toContain(
-                        `removals: "${join(root, 'templates/obsolete-one')}";`,
+                    expect(output).toContain('Completed writes (2)');
+                    expect(output).toContain(
+                        `Completed removals (1)\n"${join(root, 'templates/obsolete-one')}"`,
                     );
                     expect(
                         saved?.files.some((file) => file.path === 'templates/obsolete-one'),
@@ -653,7 +691,6 @@ Deno.test(
             const command = new Upgrade({
                 fetcher: mock.fetcher,
                 runningExecutable: running,
-                report: () => {},
             });
             await command.run({
                 context: { installRoot: root, currentWorkingDirectory: root },
@@ -708,6 +745,7 @@ Deno.test(
                 const warnings: string[] = [];
                 const errors: string[] = [];
                 Log.info = (message) => messages.push(String(message));
+                Log.notice = (message) => messages.push(String(message));
                 Log.output = (message) => messages.push(String(message));
                 Log.warn = (message) => warnings.push(String(message));
                 Log.error = (message) => errors.push(String(message));
@@ -747,7 +785,7 @@ Deno.test(
                 try {
                     await expect(run(['--force'])).rejects.toThrow();
                     expect(messages.join('\n')).toContain(
-                        `removals: "${obsolete}"; manifest saved: false.`,
+                        `Completed removals (1)\n"${obsolete}"\nManifest saved: no`,
                     );
                     expect(errors.join('\n')).toContain('Activation did not complete');
                 } finally {
@@ -789,7 +827,7 @@ Deno.test(
                         `Residual executable ${stale}: Error: in use`,
                     );
                     expect(errors.join('\n')).toContain('Activation completed');
-                    expect(messages.join('\n')).toContain('manifest saved: true.');
+                    expect(messages.join('\n')).toContain('Manifest saved: yes');
                 } finally {
                     Deno.remove = remove;
                     if (staging) {
@@ -840,14 +878,14 @@ Deno.test('optional resources do not bypass release asset preflight before mutat
                 return response;
             };
             let prompts = 0;
+            captureLog([]);
+            Log.confirm = () => {
+                prompts++;
+                return true;
+            };
             const command = new Upgrade({
                 fetcher,
                 interactive: true,
-                report: () => {},
-                confirm: () => {
-                    prompts++;
-                    return true;
-                },
             });
             await expect(
                 command.run({
@@ -875,9 +913,9 @@ Deno.test('PATH setup follows activation and respects explicit noninteractive mo
         });
         let calls = 0;
         const messages: string[] = [];
+        Log.warn = (message) => messages.push(String(message));
         const command = new Upgrade({
             fetcher: mock.fetcher,
-            report: (message) => messages.push(message),
             pathSetup: async (options) => {
                 calls++;
                 expect(options.bin).toBe(join(root, 'bin'));
@@ -912,9 +950,9 @@ Deno.test(
                 entries: entries('2.10.0', platform),
             });
             let calls = 0;
+            captureLog([]);
             const command = new Upgrade({
                 fetcher: mock.fetcher,
-                report: () => {},
                 pathSetup: async (options) => {
                     calls++;
                     expect(options.confirm).toBeDefined();
@@ -942,9 +980,9 @@ Deno.test(
                 signal: new AbortController().signal,
             });
             expect(calls).toBe(1);
+            captureLog([]);
             const failed = new Upgrade({
                 fetcher: () => Promise.resolve(new Response(null, { status: 404 })),
-                report: () => {},
                 pathSetup: () => {
                     calls++;
                     return Promise.resolve();
@@ -1028,6 +1066,11 @@ Deno.test('listing prints markers and never changes the installation, even on er
         ]) {
             const messages: string[] = [];
             const calls: string[] = [];
+            captureLog([]);
+            Log.output = (message) => messages.push(String(message));
+            Log.confirm = () => {
+                throw new Error('unexpected prompt');
+            };
             const command = new Upgrade({
                 currentVersion: scenario.current,
                 fetcher: (input) => {
@@ -1039,12 +1082,8 @@ Deno.test('listing prints markers and never changes the installation, even on er
                         ),
                     );
                 },
-                report: (message) => messages.push(message),
                 pathSetup: () => {
                     throw new Error('unexpected PATH setup');
-                },
-                confirm: () => {
-                    throw new Error('unexpected prompt');
                 },
             });
             await command.run({
@@ -1070,6 +1109,10 @@ Deno.test('listing prints markers and never changes the installation, even on er
         }
         for (const failure of ['empty', 'list', 'latest']) {
             const calls: string[] = [];
+            captureLog([]);
+            Log.confirm = () => {
+                throw new Error('unexpected prompt');
+            };
             const command = new Upgrade({
                 fetcher: (input) => {
                     const url = String(input);
@@ -1080,12 +1123,8 @@ Deno.test('listing prints markers and never changes the installation, even on er
                             : Response.json(failure === 'empty' ? [] : releases),
                     );
                 },
-                report: () => {},
                 pathSetup: () => {
                     throw new Error('unexpected PATH setup');
-                },
-                confirm: () => {
-                    throw new Error('unexpected prompt');
                 },
             });
             await expect(

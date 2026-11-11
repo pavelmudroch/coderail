@@ -7,6 +7,7 @@ import {
     type AssetIO,
     type AssetOptions,
     type AssetPlan,
+    type AssetProgress,
     planAssets,
 } from './assets.ts';
 import { type StagedDistribution, targetTriple } from './distribution.ts';
@@ -105,6 +106,15 @@ export type ActivationResult = {
     protectedExecutables: string[];
     retiredExecutables: string[];
 };
+
+export class ActivationError extends Error {
+    constructor(
+        public progress: AssetProgress,
+        cause: unknown,
+    ) {
+        super(`Distribution activation failed: ${String(cause)}`, { cause });
+    }
+}
 
 /** Coordinates reconciliation and activation. Cleanup is a separate later step;
  * errors can leave reconciled assets or a staged binary, never imply rollback.
@@ -230,41 +240,49 @@ export async function activateDistribution(
         // Persist executable ownership in the same manifest as asset changes.
         plan.manifest.files = plan.manifest.files.filter((file) => file.path !== selected.path);
         plan.manifest.files.push(selected);
-        await applyAssets(plan, assetIO);
-        const temporary = join(root, 'bin', `.cr-${crypto.randomUUID()}`);
+        const progress = await applyAssets(plan, assetIO);
         try {
-            if (windows) {
-                await Deno.writeTextFile(temporary, windowsLauncher(basename(selectedExecutable)), {
-                    createNew: true,
-                });
-            } else {
-                await Deno.symlink(selectedExecutable, temporary);
+            const temporary = join(root, 'bin', `.cr-${crypto.randomUUID()}`);
+            try {
+                if (windows) {
+                    await Deno.writeTextFile(
+                        temporary,
+                        windowsLauncher(basename(selectedExecutable)),
+                        {
+                            createNew: true,
+                        },
+                    );
+                } else {
+                    await Deno.symlink(selectedExecutable, temporary);
+                }
+                await Deno.rename(temporary, join(root, 'bin', windows ? 'cr.cmd' : 'cr'));
+            } finally {
+                await removeIfExists(temporary);
             }
-            await Deno.rename(temporary, join(root, 'bin', windows ? 'cr.cmd' : 'cr'));
-        } finally {
-            await removeIfExists(temporary);
-        }
-        const protectedExecutables = [
-            ...new Set(
-                [runningExecutable, currentLauncherTarget, selectedExecutable].filter(
-                    (path): path is string => path !== undefined,
+            const protectedExecutables = [
+                ...new Set(
+                    [runningExecutable, currentLauncherTarget, selectedExecutable].filter(
+                        (path): path is string => path !== undefined,
+                    ),
                 ),
-            ),
-        ];
-        const ownedExecutables = plan.manifest.files.filter((file) =>
-            file.path.startsWith('libexec/'),
-        );
-        return {
-            activated: true,
-            runningExecutable,
-            currentLauncherTarget,
-            selectedExecutable,
-            ownedExecutables,
-            protectedExecutables,
-            retiredExecutables: ownedExecutables
-                .map((file) => join(root, file.path))
-                .filter((path) => !protectedExecutables.includes(path)),
-        };
+            ];
+            const ownedExecutables = plan.manifest.files.filter((file) =>
+                file.path.startsWith('libexec/'),
+            );
+            return {
+                activated: true,
+                runningExecutable,
+                currentLauncherTarget,
+                selectedExecutable,
+                ownedExecutables,
+                protectedExecutables,
+                retiredExecutables: ownedExecutables
+                    .map((file) => join(root, file.path))
+                    .filter((path) => !protectedExecutables.includes(path)),
+            };
+        } catch (cause) {
+            throw new ActivationError(progress, cause);
+        }
     });
 }
 

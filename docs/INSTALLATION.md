@@ -91,6 +91,16 @@ Conflicting files require `--force` and confirmation. For non-interactive confli
 handling, combine `--force` with `--yes` to approve or `--no` to decline.
 
 Interactive upgrades show download progress for the release archive and checksum.
+Upgrade summaries on stderr report completed write, removal, and skipped-file
+counts, plus whether the distribution manifest was saved. Use `cr --verbose upgrade`
+to include the corresponding file paths; `--quiet` suppresses these summaries.
+The activation result remains on stdout.
+
+If an upgrade fails after changes begin, it reports partial progress and whether
+activation completed. Failures while switching the launcher retain the completed
+asset counts and manifest status. There is no automatic rollback; follow the
+reported recovery instructions and preserve user templates before removing an
+installation root.
 
 After activation, CodeRail offers to add the installation's `bin` directory to PATH.
 This requires separate consent, including when overwrite flags are supplied.

@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Download progress indicators for upgrade release archives and checksums.
 
+### Changed
+
+- Upgrade summaries report completed write, removal, and skipped-file counts and
+  manifest status on stderr, with file paths shown under `--verbose`.
+
+### Fixed
+
+- Preserve completed asset progress and manifest status in upgrade failure reports
+  when switching the launcher fails.
+
 ## [0.3.0] - 2026-11-11
 
 ### Added
