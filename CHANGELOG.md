@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Read-only `cr doctor` diagnostics for installation resources, distribution-owned
+  files, launcher and PATH, project initialization, configuration sources,
+  global and local harness instructions, and the configured harness executable.
+  Checks run even outside a project or with invalid configuration, collect
+  independent failures with manual repair guidance, and return a failing exit
+  status when issues are found. Automatic repair remains unimplemented.
+- Verbose Doctor progress on stderr, including diagnostic paths and executable
+  candidates, while retaining the final report on stdout in quiet mode.
+
+### Changed
+
+- Automated loop reviewers are directed to use the `ticket` skill when updating
+  or creating tickets.
+
 ## [0.2.0] - 2026-11-11
 
 ### Added

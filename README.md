@@ -17,6 +17,7 @@ run verification commands for the files you change.
 - [Configuration](#configuration)
 - [Verify your changes](#verify-your-changes)
 - [Upgrading](#upgrading)
+- [Diagnosing setup problems](#diagnosing-setup-problems)
 - [Help & Current Limitations](#command-help-and-current-limitations)
 - [Contributing](#contributing)
 - [License](#license)
@@ -247,7 +248,8 @@ Prior staged work is context; implementation and review must preserve the index.
 Review checks the selected ticket's requirements and acceptance criteria, runs
 relevant checks, and records concrete findings. It reopens the original ticket for
 required corrections within its scope and creates separate tickets for necessary
-independent work. It defers non-blocking findings and does not implement fixes.
+independent work, using the installed `ticket` skill for ticket changes. It defers
+non-blocking findings and does not implement fixes.
 The reviewer finishes with `pass` or `needs fix`; the loop checks ticket state
 rather than parsing that decision. A successful review session with valid ticket
 state proceeds normally, including when the original ticket was reopened. The
@@ -419,6 +421,50 @@ Piped stdin can use a controlling terminal for consent. Without a terminal, or w
 Unsupported shells also receive manual instructions. If PATH setup fails, use the
 executable's full path and follow the printed instructions to finish setup.
 
+## Diagnosing setup problems
+
+Run read-only diagnostics from any directory, including outside a project or when
+configuration is invalid:
+
+```sh
+cr doctor
+cr --cwd /path/to/project doctor
+cr --verbose doctor
+```
+
+Doctor checks:
+
+- Installation resource readability and, for packaged installations, the
+  distribution manifest, owned file integrity, launcher target, and installation
+  `bin` directory on PATH. Missing optional resource directories are allowed.
+- The nearest ancestor project with a `.coderail` directory, including incomplete
+  initialization: required configuration and ignore rules are checked without
+  falling back to an outer project.
+- Global and project configuration files and environment overrides. In source
+  development mode, the source repository's `.coderail/config` is also validated;
+  its settings apply only when it is the selected project.
+- Installed Codex and Claude instruction manifests and owned files, both globally
+  and in the selected project. A missing instruction manifest is allowed.
+- The configured default harness executable on PATH, including execute access on
+  Unix and extension lookup through PATHEXT on Windows. Doctor does not launch the
+  harness or check authentication, model access, or network connectivity.
+
+Installation checks run before project discovery and configuration validation.
+Independent checks continue after failures; unavailable dependent checks are
+reported as skipped. Outside a project, project and local instruction checks are
+skipped. With no default harness configured, the executable check is skipped.
+If any configuration source is invalid, Doctor reports its errors and continues
+with built-in defaults plus explicit global CLI flags.
+
+The final report on stdout lists failures, manual repair guidance, and skipped
+checks, even with `--quiet`. Exit status is `1` if any check fails and `0`
+otherwise; skipped checks alone do not fail the command.
+Use `--verbose` to show progress and diagnostic paths on stderr from the start.
+Verbosity from valid configuration takes effect after configuration validation.
+
+Doctor does not modify files. Follow the reported manual repair steps and rerun
+the checks. `cr doctor --repair` is accepted but remains unimplemented.
+
 ## Command help and current limitations
 
 Use `cr --help`, `cr <command> --help`, or a subcommand's help, such as
@@ -426,9 +472,9 @@ Use `cr --help`, `cr <command> --help`, or a subcommand's help, such as
 `--cwd <path>`, `--non-interactive`, `--no-color`, `--verbose`, and `--quiet`.
 For example, `cr --cwd /path/to/project ticket next` selects another project.
 
-Some commands listed in help are still under development: `doctor` and
-`template` are placeholders, and template installation through `cr init <template>`
-is simulated.
+Some commands listed in help are still under development: `template` is a
+placeholder, and template installation through `cr init <template>` is simulated.
+Automatic repair through `cr doctor --repair` is not yet implemented.
 
 ## Contributing
 
