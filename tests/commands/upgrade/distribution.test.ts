@@ -1,5 +1,6 @@
 import { crc32, deflateRawSync } from 'node:zlib';
 
+import { Log } from '@log';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
@@ -875,17 +876,47 @@ Deno.test('streamed assets and larger compressed resources retain every byte', a
             }),
         );
     };
-    await withStagedDistribution(
-        resolved,
-        async (stage) => {
-            const actual = await Deno.readFile(join(stage.instructions, 'a.md'));
-            expect(actual.length).toBe(large.length);
-            expect(new Uint8Array(await crypto.subtle.digest('SHA-256', actual))).toEqual(
-                new Uint8Array(await crypto.subtle.digest('SHA-256', large)),
-            );
-        },
-        streaming,
-    );
+    const progress = Log.progress;
+    const bars: { message: string; values: number[]; disposals: number }[] = [];
+    Log.progress = (message) => {
+        const bar = { message, values: [] as number[], disposals: 0 };
+        bars.push(bar);
+        return {
+            setMessage() {},
+            setProgress(value) {
+                bar.values.push(value);
+            },
+            [Symbol.dispose]() {
+                bar.disposals++;
+            },
+        };
+    };
+    try {
+        await withStagedDistribution(
+            resolved,
+            async (stage) => {
+                const actual = await Deno.readFile(join(stage.instructions, 'a.md'));
+                expect(actual.length).toBe(large.length);
+                expect(new Uint8Array(await crypto.subtle.digest('SHA-256', actual))).toEqual(
+                    new Uint8Array(await crypto.subtle.digest('SHA-256', large)),
+                );
+            },
+            streaming,
+        );
+        expect(bars.map((bar) => bar.message)).toEqual([
+            `Downloading ${name}`,
+            `Downloading ${name}.sha256`,
+        ]);
+        for (const [index, bar] of bars.entries()) {
+            const size = index === 0 ? resolved.archive.size : resolved.checksum.size;
+            expect(bar.values[0]).toBe((7 / size) * 100);
+            expect(bar.values.at(-1)).toBe(100);
+            expect(bar.values.length).toBe(Math.ceil(size / 7));
+            expect(bar.disposals).toBe(1);
+        }
+    } finally {
+        Log.progress = progress;
+    }
     // Resolving a large asset only reads metadata, never allocates its payload.
     const asset = f.assets[0] as Record<string, unknown>;
     asset.size = 2 * 1024 * 1024;
@@ -998,3 +1029,68 @@ Deno.test('stable listing handles pages and metadata errors', async () => {
         ),
     ).rejects.toThrow('Invalid latest');
 });
+
+Deno.test(
+    'download progress is disposed on truncated, oversized and interrupted streams',
+    async () => {
+        const progress = Log.progress;
+        try {
+            for (const failure of ['truncated', 'oversized', 'interrupted']) {
+                const f = await fixture();
+                const resolved = await resolveRelease({}, target, f.fetcher);
+                let disposals = 0;
+                const values: number[] = [];
+                Log.progress = () => ({
+                    setMessage() {},
+                    setProgress(value) {
+                        values.push(value);
+                    },
+                    [Symbol.dispose]() {
+                        disposals++;
+                    },
+                });
+                const fetcher: typeof fetch = () => {
+                    let reads = 0;
+                    return Promise.resolve(
+                        new Response(
+                            new ReadableStream<Uint8Array>({
+                                pull(controller) {
+                                    if (reads++ === 0) {
+                                        controller.enqueue(
+                                            new Uint8Array(
+                                                failure === 'oversized'
+                                                    ? resolved.archive.size + 1
+                                                    : 1,
+                                            ),
+                                        );
+                                    } else if (failure === 'interrupted') {
+                                        controller.error(new Error('download interrupted'));
+                                    } else {
+                                        controller.close();
+                                    }
+                                },
+                            }),
+                        ),
+                    );
+                };
+                await expect(
+                    withStagedDistribution(
+                        resolved,
+                        () => Promise.reject(new Error('Unexpected staging consumer')),
+                        fetcher,
+                    ),
+                ).rejects.toThrow(
+                    failure === 'truncated'
+                        ? 'Incomplete release asset'
+                        : failure === 'oversized'
+                          ? 'Release asset size changed'
+                          : 'download interrupted',
+                );
+                expect(disposals).toBe(1);
+                expect(values.every((value) => value < 100)).toBe(true);
+            }
+        } finally {
+            Log.progress = progress;
+        }
+    },
+);

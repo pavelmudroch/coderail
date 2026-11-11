@@ -1,5 +1,6 @@
 import { crc32, inflateRawSync } from 'node:zlib';
 
+import { Log } from '@log';
 /**
  * Release consumption contract (publisher workflows are deliberately separate).
  *
@@ -285,6 +286,7 @@ export async function resolveRelease(
 async function download(asset: Asset, fetcher: typeof fetch): Promise<Uint8Array> {
     const response = await request(`/releases/assets/${asset.id}`, fetcher, true);
     requireValid(response.body, 'Empty asset response');
+    using progress = Log.progress(`Downloading ${asset.name}`);
     const chunks: Uint8Array[] = [];
     let size = 0;
     const reader = response.body.getReader();
@@ -296,6 +298,7 @@ async function download(asset: Asset, fetcher: typeof fetch): Promise<Uint8Array
             }
             size += value.length;
             requireValid(size <= asset.size, 'Release asset size changed');
+            progress.setProgress((size / asset.size) * 100);
             chunks.push(value);
         }
     } finally {

@@ -90,6 +90,8 @@ Unchanged managed files update without prompts, and user templates are preserved
 Conflicting files require `--force` and confirmation. For non-interactive conflict
 handling, combine `--force` with `--yes` to approve or `--no` to decline.
 
+Interactive upgrades show download progress for the release archive and checksum.
+
 After activation, CodeRail offers to add the installation's `bin` directory to PATH.
 This requires separate consent, including when overwrite flags are supplied.
 Bash uses `~/.bashrc`, Zsh uses `~/.zshrc`, and Fish uses
