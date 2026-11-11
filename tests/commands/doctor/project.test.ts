@@ -95,3 +95,32 @@ Deno.test('project reports invalid cwd and unreadable ancestor markers', async (
         Deno.stat = stat;
     }
 });
+
+Deno.test(
+    'project rejects unsupported ignore files before reading and accepts regular symlinks',
+    async () => {
+        const root = await Deno.makeTempDir();
+        const read = Deno.readTextFile;
+        try {
+            const marker = join(root, '.coderail');
+            await Deno.mkdir(marker);
+            const ignore = join(marker, '.gitignore');
+            await Deno.mkdir(ignore);
+            Deno.readTextFile = () => {
+                throw new Error('must not read unsupported input');
+            };
+            const report = await Project.check(root, new AbortController().signal);
+            expect(report.failures).toHaveLength(2);
+            expect(report.failures[1]?.message).toContain('expected a regular file');
+            Deno.readTextFile = read;
+            await Deno.remove(ignore);
+            await Deno.writeTextFile(`${ignore}.real`, projectIgnoreLines.join('\n'));
+            await Deno.symlink(`${ignore}.real`, ignore);
+            await Deno.writeTextFile(join(marker, 'config'), '');
+            expect((await Project.check(root, new AbortController().signal)).failures).toEqual([]);
+        } finally {
+            Deno.readTextFile = read;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);

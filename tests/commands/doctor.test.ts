@@ -288,6 +288,52 @@ Deno.test(
                 expect(output).toContain('Doctor checks passed.');
             }
             expect(Log.level).toBe('quiet');
+            // Real FIFO fixtures must never be opened; independent findings still render.
+            Installation.check = () =>
+                Promise.resolve({
+                    failures: [
+                        { message: 'broken installation', repairable: false, manualRepair: [] },
+                    ],
+                    skipped: [],
+                });
+            for (const name of ['config', '.gitignore']) {
+                const path = join(project, '.coderail', name);
+                const contents = await Deno.readTextFile(path);
+                await Deno.remove(path);
+                const fifo = await new Deno.Command('mkfifo', { args: [path] }).output();
+                expect(fifo.success).toBe(true);
+                const open = Deno.open;
+                const read = Deno.readTextFile;
+                try {
+                    Deno.open = (input, options) => {
+                        if (input === path) {
+                            throw new Error('must not open FIFO');
+                        }
+                        return open(input, options);
+                    };
+                    Deno.readTextFile = (input, options) => {
+                        if (input === path) {
+                            throw new Error('must not read FIFO');
+                        }
+                        return read(input, options);
+                    };
+                    output.length = 0;
+                    await doctor.run({
+                        parsedArguments: doctor.parseArguments([]),
+                        globalArguments: Commands.cr().parseArguments(['--cwd', child]).args,
+                        signal: new AbortController().signal,
+                    });
+                    expect(Deno.exitCode).toBe(1);
+                    expect(output.join('\n')).toContain('broken installation');
+                    expect(output.join('\n')).toContain('expected a regular file');
+                    expect(output.join('\n')).not.toContain('must not');
+                } finally {
+                    Deno.open = open;
+                    Deno.readTextFile = read;
+                    await Deno.remove(path);
+                    await Deno.writeTextFile(path, contents);
+                }
+            }
             await Deno.writeTextFile(join(root, 'config'), 'unknown = true');
             await Deno.writeTextFile(join(project, '.coderail', 'config'), 'unknown = true');
             Deno.env.set('LOG_LEVEL', 'bad');

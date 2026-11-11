@@ -58,6 +58,11 @@ async function check(root: string, signal: AbortSignal): Promise<DoctorReport> {
             if (name === 'config') {
                 await Deno.stat(path);
             } else {
+                const info = await Deno.stat(path);
+                signal.throwIfAborted();
+                if (!info.isFile) {
+                    throw new Error('Unsupported ignore file type: expected a regular file');
+                }
                 const lines = (await Deno.readTextFile(path, { signal })).split(/\r?\n/);
                 if (lines[0] !== '*' || !projectIgnoreLines.every((line) => lines.includes(line))) {
                     throw new Error('Incomplete ignore rules');

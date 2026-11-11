@@ -2,11 +2,12 @@
 id: "0036"
 slug: "diagnose-project-initialization-and-configuration"
 title: "Diagnose project initialization and configuration"
-status: "open"
+status: "closed"
 created_at: "2026-11-11T10:52:00.080Z"
-updated_at: "2026-11-11T11:30:25.116Z"
+updated_at: "2026-11-11T11:33:46.698Z"
 dependencies:
   - "0035"
+reason: "done"
 ---
 
 # Diagnose project initialization and configuration
@@ -19,7 +20,7 @@ Extend doctor to diagnose the nearest initialized project, incomplete initializa
 2. [x] Expose reusable Conf validation and fallback construction
 3. [x] Implement project discovery and initialization diagnostics
 4. [x] Integrate configuration diagnostics and verify the combined flow
-5. [ ] Reject unsupported diagnostic input file types before reading
+5. [x] Reject unsupported diagnostic input file types before reading
 
 ## Task details
 
@@ -120,3 +121,20 @@ passed outside a project and within a descendant directory (exit 0); simultaneou
 missing ignore file, invalid local configuration, and invalid environment override
 were all reported (exit 1). `git diff --check` passed. No implementation files were
 modified during review.
+
+## Correction review — 2026-11-11
+
+Decision: pass. The blocking unsupported-input finding above is resolved.
+Configuration diagnostics reject non-regular files before opening them, and
+project checks reject non-regular ignore files before reading them. Regular-file
+symlinks remain supported; independent failures and fallback behavior are preserved.
+
+Reviewed all unstaged and untracked changes against this ticket and the approved
+idea. All 54 focused tests passed across doctor, installation, project,
+configuration loading, runtime context, and main startup, including type checking.
+Unmocked subprocess fixtures completed for FIFO global/source/project configuration
+and project ignore inputs, each rendering a failure report and exiting 1. Healthy
+outside-project and descendant-project fixtures exited 0; simultaneous installation,
+initialization, local configuration, and environment failures were all reported.
+`git diff --check` passed. No implementation files were modified during review.
+No new findings or follow-up tickets are required; ticket 0036 remains closed.

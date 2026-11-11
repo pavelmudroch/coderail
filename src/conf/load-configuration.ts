@@ -1,8 +1,9 @@
 import type { GlobalArguments } from '@commands';
 import type { RuntimeContext } from '@runtime';
+import { join } from '@std/path';
 
 import type { Configuration } from './configuration.ts';
-import type { ConfFileStream } from './get-file-stream.ts';
+import { type ConfFileStream, getFileStream } from './get-file-stream.ts';
 import { getGlobalConfigurationFile } from './get-global-configuration-file.ts';
 import { getLocalConfigurationFile } from './get-local-configuration-file.ts';
 import { parse, type ParsedConf } from './parse.ts';
@@ -63,6 +64,25 @@ export async function diagnoseConfiguration(
 ): Promise<{ configuration: Configuration; errors: Error[] }> {
     const configuration = createConfiguration();
     const errors: Error[] = [];
+    async function readConfiguration(path: string): Promise<Partial<Configuration>> {
+        let info: Deno.FileInfo;
+        try {
+            info = await Deno.stat(path);
+        } catch (error) {
+            if (error instanceof Deno.errors.NotFound) {
+                return {};
+            }
+            throw error;
+        }
+        signal?.throwIfAborted();
+        if (!info.isFile) {
+            throw new Error(
+                `Unsupported configuration file type at "${path}": expected a regular file`,
+            );
+        }
+        using file = await getFileStream(path);
+        return file === null ? {} : await parseConfigurationFile(file);
+    }
     async function attempt(
         label: string,
         read: () => Promise<Partial<Configuration>>,
@@ -78,28 +98,21 @@ export async function diagnoseConfiguration(
     }
     const installRoot = context.installRoot;
     if (installRoot !== undefined) {
-        await attempt('Global configuration', async () => {
-            using file = await getGlobalConfigurationFile(installRoot);
-            return file === null ? {} : await parseConfigurationFile(file);
-        });
+        await attempt('Global configuration', () => readConfiguration(join(installRoot, 'config')));
     }
     for (const root of new Set(context.validationRoots)) {
         if (context.repositoryRoots.includes(root)) {
             continue;
         }
         await attempt(`Source repository configuration at "${root}"`, async () => {
-            using file = await getLocalConfigurationFile(root);
-            if (file !== null) {
-                await parseConfigurationFile(file);
-            }
+            await readConfiguration(join(root, '.coderail', 'config'));
             return {};
         });
     }
     for (const root of new Set(context.repositoryRoots)) {
-        await attempt(`Project configuration at "${root}"`, async () => {
-            using file = await getLocalConfigurationFile(root);
-            return file === null ? {} : await parseConfigurationFile(file);
-        });
+        await attempt(`Project configuration at "${root}"`, () =>
+            readConfiguration(join(root, '.coderail', 'config')),
+        );
     }
     await attempt('Environment configuration', () =>
         Promise.resolve(parseEnvironmentVariables(Deno.env)),

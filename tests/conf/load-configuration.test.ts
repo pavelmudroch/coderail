@@ -518,6 +518,9 @@ Deno.test(
                         )
                     ).errors,
                 ).toEqual([]);
+                await Deno.writeTextFile(join(root, 'config'), '');
+                await Deno.mkdir(join(root, '.coderail'));
+                await Deno.writeTextFile(join(root, '.coderail', 'config'), '');
                 Deno.open = () => Promise.reject(new Deno.errors.PermissionDenied('unreadable'));
                 const result = await diagnoseConfiguration(
                     { installRoot: root, repositoryRoots: [root] },
@@ -597,6 +600,85 @@ Deno.test(
                 ).toHaveLength(1);
             });
         } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'Conf diagnostics reject unsupported sources before opening and preserve regular symlinks',
+    async () => {
+        const { diagnoseConfiguration } = await import('../../src/conf/load-configuration.ts');
+        const root = await Deno.makeTempDir();
+        const open = Deno.open;
+        const stat = Deno.stat;
+        try {
+            const source = join(root, 'source');
+            const project = join(root, 'project');
+            await Deno.mkdir(join(source, '.coderail'), { recursive: true });
+            await Deno.mkdir(join(project, '.coderail'), { recursive: true });
+            const paths = [
+                join(root, 'config'),
+                join(source, '.coderail', 'config'),
+                join(project, '.coderail', 'config'),
+            ];
+            for (const path of paths) {
+                await Deno.writeTextFile(path, 'log_level = "quiet"');
+            }
+            const info = await stat(join(root, 'config'));
+            await withConfigurationEnvironment({ LOG_LEVEL: 'bad' }, async () => {
+                Deno.stat = () => Promise.resolve({ ...info, isFile: false, isFifo: true });
+                Deno.open = () => {
+                    throw new Error('must not open unsupported input');
+                };
+                const result = await diagnoseConfiguration(
+                    { installRoot: root, validationRoots: [source], repositoryRoots: [project] },
+                    globalArguments({ verbose: true }),
+                );
+                expect(result.errors).toHaveLength(4);
+                for (const [index, path] of paths.entries()) {
+                    expect(result.errors[index]?.message).toContain(path);
+                    expect(result.errors[index]?.message).toContain('expected a regular file');
+                }
+                expect(result.configuration.logLevel).toBe('verbose');
+            });
+            Deno.stat = () => Promise.reject(new Deno.errors.PermissionDenied('stat denied'));
+            expect(
+                (
+                    await diagnoseConfiguration(
+                        { installRoot: root, repositoryRoots: [] },
+                        globalArguments(),
+                    )
+                ).errors[0]?.message,
+            ).toContain('stat denied');
+            Deno.stat = stat;
+            Deno.open = () => Promise.reject(new Deno.errors.NotFound());
+            await withConfigurationEnvironment({}, async () => {
+                expect(
+                    (
+                        await diagnoseConfiguration(
+                            { installRoot: root, repositoryRoots: [] },
+                            globalArguments(),
+                        )
+                    ).errors,
+                ).toEqual([]);
+            });
+            Deno.open = open;
+            for (const path of paths) {
+                await Deno.rename(path, `${path}.real`);
+                await Deno.symlink(`${path}.real`, path);
+            }
+            await withConfigurationEnvironment({}, async () => {
+                const result = await diagnoseConfiguration(
+                    { installRoot: root, validationRoots: [source], repositoryRoots: [project] },
+                    globalArguments(),
+                );
+                expect(result.errors).toEqual([]);
+                expect(result.configuration.logLevel).toBe('quiet');
+            });
+        } finally {
+            Deno.stat = stat;
+            Deno.open = open;
             await Deno.remove(root, { recursive: true });
         }
     },
