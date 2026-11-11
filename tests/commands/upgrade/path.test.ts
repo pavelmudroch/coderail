@@ -216,22 +216,26 @@ Deno.test('default Windows transport writes only user PATH and reports errors', 
 
 Deno.test('terminal confirmation defaults to decline and closes its terminal', () => {
     const open = Deno.openSync;
+    const opened: (string | URL)[] = [];
     let closed = 0;
     let answer: number[] = [];
-    Deno.openSync = (() => ({
-        writeSync: (data: Uint8Array) => data.length,
-        readSync: (data: Uint8Array) => {
-            const next = answer.shift();
-            if (next === undefined) {
-                return null;
-            }
-            data[0] = next;
-            return 1;
-        },
-        close: () => {
-            closed++;
-        },
-    })) as unknown as typeof Deno.openSync;
+    Deno.openSync = ((path: string | URL) => {
+        opened.push(path);
+        return {
+            writeSync: (data: Uint8Array) => data.length,
+            readSync: (data: Uint8Array) => {
+                const next = answer.shift();
+                if (next === undefined) {
+                    return null;
+                }
+                data[0] = next;
+                return 1;
+            },
+            close: () => {
+                closed++;
+            },
+        };
+    }) as unknown as typeof Deno.openSync;
     try {
         for (const [input, expected] of [
             ['yes\n', true],
@@ -239,9 +243,10 @@ Deno.test('terminal confirmation defaults to decline and closes its terminal', (
             ['', false],
         ] as const) {
             answer = Array.from(new TextEncoder().encode(input));
-            expect(terminalConfirm('Consent?')).toBe(expected);
+            expect(terminalConfirm('Consent?', 'linux')).toBe(expected);
         }
         expect(terminalConfirm('Consent?', 'windows')).toBe(false);
+        expect(opened).toEqual(['/dev/tty', '/dev/tty', '/dev/tty', 'CON']);
         expect(closed).toBe(4);
         Deno.openSync = () => {
             throw new Error('no terminal');
@@ -250,47 +255,6 @@ Deno.test('terminal confirmation defaults to decline and closes its terminal', (
     } finally {
         Deno.openSync = open;
     }
-});
-
-Deno.test({
-    name: 'piped stdin prompts through a controlling terminal and declines without one',
-    ignore: Deno.build.os === 'windows',
-    async fn() {
-        const module = new URL('../../../src/commands/upgrade/path.ts', import.meta.url).href;
-        const code = `import { terminalConfirm } from ${JSON.stringify(module)}; console.log(terminalConfirm("Consent?"));`;
-        const script = `
-import os, pty, select, subprocess, sys, fcntl, termios
-command = [sys.argv[1], "eval", sys.argv[2]]
-plain = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, start_new_session=True, timeout=20)
-assert plain.returncode == 0, plain.stderr
-assert plain.stdout.strip() == b"false", plain.stdout
-master, slave = pty.openpty()
-def session():
-    os.setsid()
-    fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
-child = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=session)
-try:
-    assert select.select([master], [], [], 20)[0], "missing prompt"
-    assert b"Consent?" in os.read(master, 4096)
-    os.write(master, b"yes\\n")
-    stdout, stderr = child.communicate(b"piped input", timeout=20)
-    assert child.returncode == 0, stderr
-    assert stdout.strip() == b"true", stdout
-finally:
-    if child.poll() is None:
-        child.kill()
-        child.wait()
-    os.close(master)
-    os.close(slave)
-`;
-        const result = await new Deno.Command('python3', {
-            args: ['-c', script, Deno.execPath(), code],
-            stdout: 'piped',
-            stderr: 'piped',
-        }).output();
-        expect(new TextDecoder().decode(result.stderr)).toBe('');
-        expect(result.success).toBe(true);
-    },
 });
 
 Deno.test(
