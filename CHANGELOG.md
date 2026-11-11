@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `cr verify --dry` previews verification, preparation, and cleanup commands
+  without executing them, using a `planned` status and supporting `--short`.
 - Read-only `cr doctor` diagnostics for installation resources, distribution-owned
   files, launcher and PATH, project initialization, configuration sources,
   global and local harness instructions, and the configured harness executable.

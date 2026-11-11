@@ -11,6 +11,7 @@ type VerifyArguments = {
     help: boolean;
     short: boolean;
     changed: boolean;
+    dry: boolean;
     paths: string[];
 };
 
@@ -18,7 +19,13 @@ export class Verify implements Command<VerifyArguments> {
     readonly requiresInit = true;
 
     parseArguments(originalArgs: readonly string[]): ParsedArguments<VerifyArguments> {
-        const args: VerifyArguments = { help: false, short: false, changed: false, paths: [] };
+        const args: VerifyArguments = {
+            help: false,
+            short: false,
+            changed: false,
+            dry: false,
+            paths: [],
+        };
         for (const [index, arg] of originalArgs.entries()) {
             if (arg === undefined) {
                 continue;
@@ -39,7 +46,11 @@ export class Verify implements Command<VerifyArguments> {
                 args.changed = true;
                 continue;
             }
-            for (const option of ['--help', '--short', '--changed']) {
+            if (arg === '--dry') {
+                args.dry = true;
+                continue;
+            }
+            for (const option of ['--help', '--short', '--changed', '--dry']) {
                 if (arg.startsWith(`${option}=`)) {
                     Cli.raiseUsageError(`Option "${option}" does not take a value.`, this);
                 }
@@ -62,8 +73,8 @@ export class Verify implements Command<VerifyArguments> {
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr verify [--help] [--short] --changed [<path> ...]',
-            '  cr verify [--help] [--short] <path> [<path> ...]',
+            '  cr verify [--help] [--short] [--dry] --changed [<path> ...]',
+            '  cr verify [--help] [--short] [--dry] <path> [<path> ...]',
             '',
             '  Run verifications for the specified files or directories. All paths are',
             '  deduplicated and so the commands to run, so each file is verified only once',
@@ -78,9 +89,10 @@ export class Verify implements Command<VerifyArguments> {
             'Options:',
             '  -h, --help           Show this help message and exit.',
             '  -s, --short          Show a short output, verified file per line with status',
-            '                       "ok", "fail", or "skipped" (no applicable commands).',
+            '                       "ok", "fail", "planned", or "skipped" (no applicable commands).',
             '  -c, --changed        Include all changed files retrieved with git for',
             '                       verification.',
+            '      --dry            Show planned commands without executing them.',
             '',
             'Arguments:',
             '  <path>               Path to the file or directory to verify. If directory is',
@@ -118,7 +130,7 @@ export class Verify implements Command<VerifyArguments> {
                 if (command.length === 0) {
                     continue;
                 }
-                const outcome = await executeCommand(root, command, signal);
+                const outcome = await executeCommand(root, command, signal, args.dry);
                 if (!args.short || outcome.status === 'fail') {
                     Log.output(
                         `${phase === 'pre' ? 'Preparation' : 'Cleanup'} ${formatStatus(
@@ -146,23 +158,30 @@ export class Verify implements Command<VerifyArguments> {
             if (hasWork && !(await runActions('pre', context.signal))) {
                 return;
             }
-            const result = await runChecks(root, files, rules, context.signal, (file) => {
-                const status = formatStatus(file.status);
-                Log.output(`${file.path} ${status}`);
-                if (args.short) {
-                    return;
-                }
-
-                for (const command of file.commands) {
-                    const commandStatus = formatStatus(command.status);
-                    Log.output(`  ${JSON.stringify(command.command)} ${commandStatus}`);
-                    if (command.output) {
-                        Log.info(command.output);
+            const result = await runChecks(
+                root,
+                files,
+                rules,
+                context.signal,
+                (file) => {
+                    const status = formatStatus(file.status);
+                    Log.output(`${file.path} ${status}`);
+                    if (args.short) {
+                        return;
                     }
-                }
-            });
 
-            if (result.executedCommands === 0) {
+                    for (const command of file.commands) {
+                        const commandStatus = formatStatus(command.status);
+                        Log.output(`  ${JSON.stringify(command.command)} ${commandStatus}`);
+                        if (command.output) {
+                            Log.info(command.output);
+                        }
+                    }
+                },
+                args.dry,
+            );
+
+            if (result.uniqueCommands === 0) {
                 Log.output('No tests found');
             }
 
@@ -184,6 +203,8 @@ function formatStatus(status: FileResult['status']): string {
             return Log.color.green(status);
         case 'fail':
             return Log.color.red(status);
+        case 'planned':
+            return Log.color.cyan(status);
         case 'skipped':
             return Log.color.yellow(status);
         // deno-coverage-ignore-start

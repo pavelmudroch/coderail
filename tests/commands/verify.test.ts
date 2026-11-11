@@ -12,7 +12,7 @@ Deno.test('Verify parses selection, flags, literal paths, and early help', () =>
     expect(command.parseArguments([...new Array<string>(1), 'file']).args.paths).toEqual(['file']);
     for (const flag of ['-s', '--short']) {
         expect(command.parseArguments([flag, '--changed', 'src', '--', '--help'])).toEqual({
-            args: { help: false, short: true, changed: true, paths: ['src', '--help'] },
+            args: { help: false, short: true, changed: true, dry: false, paths: ['src', '--help'] },
             rest: [],
         });
     }
@@ -28,6 +28,7 @@ Deno.test('Verify parses selection, flags, literal paths, and early help', () =>
         ['--help=true'],
         ['--short=false'],
         ['--changed=true'],
+        ['--dry=true'],
     ]) {
         try {
             command.parseArguments(args);
@@ -36,6 +37,8 @@ Deno.test('Verify parses selection, flags, literal paths, and early help', () =>
             expect(Cli.isUsageError(error)).toBe(true);
         }
     }
+    expect(command.parseArguments(['--dry', 'a']).args.dry).toBe(true);
+    expect(command.getUsage()).toContain('planned');
     expect(command.getUsage()).toContain('skipped');
 });
 
@@ -170,7 +173,7 @@ Deno.test('Verify reports no tests after skipped files or empty selections', asy
             ],
             [{ pattern: '*', commands: [[], []] }],
         ]) {
-            for (const flags of [[], ['-s']]) {
+            for (const flags of [[], ['-s'], ['--dry'], ['--dry', '-s']]) {
                 output.length = 0;
                 await run([...flags, 'a'], rules);
                 expect(output).toEqual([`a ${Log.color.yellow('skipped')}`, 'No tests found']);
@@ -461,5 +464,48 @@ Deno.test('Verify successful cleanup preserves failures and runs after cancellat
             clearInterval(timer);
         }
         expect(await Deno.readTextFile(`${root}/clean`)).toBe('xx');
+    });
+});
+
+Deno.test('Verify dry run plans checks and actions without executing commands', async () => {
+    await fixture(async (root, run, output, info) => {
+        const write = [Deno.execPath(), 'eval', "Deno.writeTextFileSync('marker', '')"];
+        const fail = [Deno.execPath(), 'eval', 'Deno.exit(1)'];
+        const missing = [`${root}/missing-executable`];
+        const rules = [
+            { pattern: 'a', commands: [write, fail, missing] },
+            { pattern: 'b', requires: ['marker'], commands: [write] },
+        ];
+        for (const short of [false, true]) {
+            output.length = 0;
+            await run(['--dry', ...(short ? ['--short'] : []), 'a', 'b'], rules, undefined, root, {
+                pre: [[], write],
+                post: [fail, [], missing],
+            });
+            const planned = Log.color.cyan('planned');
+            expect(output).toEqual(
+                short
+                    ? [`a ${planned}`, `b ${Log.color.yellow('skipped')}`]
+                    : [
+                          `Preparation ${planned}`,
+                          `  ${JSON.stringify(write)} ${planned}`,
+                          `a ${planned}`,
+                          ...[write, fail, missing].map(
+                              (command) => `  ${JSON.stringify(command)} ${planned}`,
+                          ),
+                          `b ${Log.color.yellow('skipped')}`,
+                          `Cleanup ${planned}`,
+                          `  ${JSON.stringify(fail)} ${planned}`,
+                          `Cleanup ${planned}`,
+                          `  ${JSON.stringify(missing)} ${planned}`,
+                      ],
+            );
+            expect(Deno.exitCode).toBe(0);
+            expect(info).toEqual([]);
+            await expect(Deno.stat(`${root}/marker`)).rejects.toThrow();
+        }
+        output.length = 0;
+        await run(['--dry', 'a'], [], undefined, root, { pre: [write], post: [write] });
+        expect(output).toEqual([`a ${Log.color.yellow('skipped')}`, 'No tests found']);
     });
 });

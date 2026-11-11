@@ -5,13 +5,13 @@ import type { CompiledRule } from './compile-rules.ts';
 
 export type CommandResult = {
     command: string[];
-    status: 'ok' | 'fail';
+    status: 'ok' | 'fail' | 'planned';
     output: string;
 };
 
 export type FileResult = {
     path: string;
-    status: 'ok' | 'fail' | 'skipped';
+    status: CommandResult['status'] | 'skipped';
     commands: CommandResult[];
 };
 
@@ -48,9 +48,10 @@ export async function runChecks(
     rules: CompiledRule[],
     signal: AbortSignal,
     report: (result: FileResult) => void,
-): Promise<{ executedCommands: number; failedFiles: number }> {
+    dry = false,
+): Promise<{ uniqueCommands: number; failedFiles: number }> {
     const cache = new Map<string, CommandResult>();
-    let executedCommands = 0;
+    let uniqueCommands = 0;
     let failedFiles = 0;
     signal.throwIfAborted();
     for (const path of files) {
@@ -81,9 +82,9 @@ export async function runChecks(
                 const key = JSON.stringify(command);
                 let outcome = cache.get(key);
                 if (!outcome) {
-                    outcome = await executeCommand(root, command, signal);
+                    outcome = await executeCommand(root, command, signal, dry);
                     cache.set(key, outcome);
-                    executedCommands++;
+                    uniqueCommands++;
                 }
                 result.commands.push(outcome);
                 result.status = outcome.status;
@@ -101,18 +102,22 @@ export async function runChecks(
         }
         report(result);
     }
-    return { executedCommands, failedFiles };
+    return { uniqueCommands, failedFiles };
 }
 
 export async function executeCommand(
     root: string,
     command: string[],
     signal: AbortSignal,
+    dry = false,
 ): Promise<CommandResult> {
     signal.throwIfAborted();
     const [executable, ...args] = command;
     if (executable === undefined) {
         throw new Error('Cannot execute an empty command');
+    }
+    if (dry) {
+        return { command, status: 'planned', output: '' };
     }
     try {
         const output = await new Deno.Command(executable, {

@@ -32,7 +32,7 @@ Deno.test(
                 new AbortController().signal,
                 (result) => reports.push(result),
             );
-            expect(counts).toEqual({ executedCommands: 3, failedFiles: 2 });
+            expect(counts).toEqual({ uniqueCommands: 3, failedFiles: 2 });
             expect(await Deno.readTextFile(`${root}/order`)).toBe('first\nfail\nlater\n');
             expect(reports.map((result) => [result.path, result.status])).toEqual([
                 ['a', 'fail'],
@@ -73,7 +73,7 @@ Deno.test('runChecks checks literal dependencies when reached and skips unsafe p
             await runChecks(root, ['a', 'b'], rules, new AbortController().signal, (result) =>
                 reports.push(result),
             ),
-        ).toEqual({ executedCommands: 2, failedFiles: 0 });
+        ).toEqual({ uniqueCommands: 2, failedFiles: 0 });
         expect(reports.map((result) => result.status)).toEqual(['ok', 'skipped']);
     } finally {
         await Deno.remove(root, { recursive: true });
@@ -98,7 +98,7 @@ Deno.test(
                     new AbortController().signal,
                     (result) => reports.push(result),
                 ),
-            ).toEqual({ executedCommands: 3, failedFiles: 2 });
+            ).toEqual({ uniqueCommands: 3, failedFiles: 2 });
             expect(reports[0]?.commands).toEqual(reports[1]?.commands);
             expect(reports[0]?.commands[0]?.output).toBe(
                 '["a b","c"]\n' + '😀'.repeat(20000) + '\nend\n',
@@ -183,7 +183,7 @@ Deno.test(
                 new AbortController().signal,
                 (result) => reports.push(result),
             ),
-        ).toEqual({ executedCommands: 0, failedFiles: 0 });
+        ).toEqual({ uniqueCommands: 0, failedFiles: 0 });
         expect(reports).toEqual([{ path: 'a', status: 'skipped', commands: [] }]);
         const original = Deno.lstat;
         Deno.lstat = () => Promise.reject(new Deno.errors.NotADirectory());
@@ -198,7 +198,7 @@ Deno.test(
                     new AbortController().signal,
                     () => {},
                 ),
-            ).toEqual({ executedCommands: 0, failedFiles: 0 });
+            ).toEqual({ uniqueCommands: 0, failedFiles: 0 });
         } finally {
             Deno.lstat = original;
         }
@@ -211,3 +211,53 @@ Deno.test('executeCommand rejects an empty command', async () => {
         'Cannot execute an empty command',
     );
 });
+
+Deno.test(
+    'runChecks dry run expands rules, checks required files, and reuses planned commands',
+    async () => {
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        try {
+            await Deno.writeTextFile(`${root}/a.required`, '');
+            const reports: FileResult[] = [];
+            const shared = command("Deno.writeTextFileSync('marker', '')");
+            expect(
+                await runChecks(
+                    root,
+                    ['a.ts', 'b.ts', 'other'],
+                    compileRules([
+                        {
+                            pattern: '${file:*}.ts',
+                            requires: ['${file}.required'],
+                            commands: [['test', '${file}']],
+                        },
+                        { pattern: '*.ts', commands: [shared] },
+                        { pattern: '*', requires: ['missing'], commands: [['unreachable']] },
+                    ]),
+                    new AbortController().signal,
+                    (result) => reports.push(result),
+                    true,
+                ),
+            ).toEqual({ uniqueCommands: 2, failedFiles: 0 });
+            expect(reports).toEqual([
+                {
+                    path: 'a.ts',
+                    status: 'planned',
+                    commands: [
+                        { command: ['test', 'a'], status: 'planned', output: '' },
+                        { command: shared, status: 'planned', output: '' },
+                    ],
+                },
+                {
+                    path: 'b.ts',
+                    status: 'planned',
+                    commands: [{ command: shared, status: 'planned', output: '' }],
+                },
+                { path: 'other', status: 'skipped', commands: [] },
+            ]);
+            expect(reports[0]?.commands[1]).toBe(reports[1]?.commands[0]);
+            await expect(Deno.stat(`${root}/marker`)).rejects.toThrow();
+        } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);

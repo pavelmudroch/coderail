@@ -180,6 +180,7 @@ cr verify ./src
 cr verify --changed
 cr verify --short --changed
 cr verify -s -c
+cr verify --dry --changed
 ```
 
 `-c` or `--changed` selects files changed in Git. Files without applicable commands are
@@ -187,6 +188,12 @@ reported as `skipped`. Matching commands run from the project root, and duplicat
 command results are reused. Rules can also declare `requires` paths; a rule is
 skipped when its required files are missing. Optional `[verify]` `pre` and `post`
 command arrays run once around matching work; place that section before rule entries.
+
+Add `--dry` to preview expanded commands, including preparation and cleanup,
+without executing them. Applicable files and commands are reported as `planned`;
+`--short` shows only file statuses. Required files are checked against the current
+filesystem, so rules that depend on files normally created by preparation may be
+skipped in a dry run.
 
 ## Command help and current limitations
 
