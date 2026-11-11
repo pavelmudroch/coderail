@@ -188,6 +188,46 @@ Deno.test(
     },
 );
 
+Deno.test({
+    name: 'executable diagnostics respect owner permissions and continue searching PATH',
+    ignore: Deno.build.os === 'windows',
+    async fn() {
+        const root = await Deno.makeTempDir();
+        const previous = Deno.env.get('PATH');
+        const signal = new AbortController().signal;
+        try {
+            const first = join(root, 'first');
+            const second = join(root, 'second');
+            await Deno.mkdir(first);
+            await Deno.mkdir(second);
+            // The owner cannot execute this file, despite the other execute bit.
+            const inaccessible = join(first, 'codex');
+            await Deno.writeTextFile(inaccessible, 'must never execute');
+            await Deno.chmod(inaccessible, 0o601);
+            Deno.env.set('PATH', first);
+            const report = await Project.checkExecutable('codex', signal);
+            expect(report.failures).toHaveLength(1);
+            expect(report.failures[0]?.repairable).toBe(false);
+            expect(report.failures[0]?.manualRepair.join(' ')).toContain('execute permissions');
+
+            const accessible = join(second, 'codex');
+            await Deno.writeTextFile(accessible, 'must never execute');
+            await Deno.chmod(accessible, 0o700);
+            Deno.env.set('PATH', `${first}:${second}`);
+            expect((await Project.checkExecutable('codex', signal)).failures).toEqual([]);
+            Deno.env.set('PATH', second);
+            expect((await Project.checkExecutable('codex', signal)).failures).toEqual([]);
+        } finally {
+            if (previous === undefined) {
+                Deno.env.delete('PATH');
+            } else {
+                Deno.env.set('PATH', previous);
+            }
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+});
+
 Deno.test(
     'executable diagnostics cover platform PATH rules, unreadable candidates and cancellation',
     async () => {
@@ -215,10 +255,8 @@ Deno.test(
                 value: { ...original.build, os: 'linux' },
             });
             Deno.env.get = () => undefined;
-            for (const mode of [null, 0o644]) {
-                Deno.stat = () => Promise.resolve({ ...info, isFile: true, mode });
-                expect((await Project.checkExecutable('codex', signal)).failures).toHaveLength(1);
-            }
+            Deno.stat = () => Promise.resolve({ ...info, isFile: false });
+            expect((await Project.checkExecutable('codex', signal)).failures).toHaveLength(1);
             Deno.stat = () => Promise.reject(new Deno.errors.PermissionDenied('candidate denied'));
             expect((await Project.checkExecutable('codex', signal)).failures[0]?.message).toContain(
                 'candidate denied',

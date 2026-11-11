@@ -1,3 +1,6 @@
+import { constants } from 'node:fs';
+import { access } from 'node:fs/promises';
+
 import { Harness } from '@harness';
 import { dirname, join } from '@std/path';
 
@@ -124,10 +127,11 @@ async function checkExecutable(
                     const path = join(directory || '.', `${name}${extension}`);
                     const info = await Deno.stat(path);
                     signal.throwIfAborted();
-                    if (
-                        info.isFile &&
-                        (windows || (info.mode !== null && (info.mode & 0o111) !== 0))
-                    ) {
+                    if (info.isFile) {
+                        if (!windows) {
+                            await access(path, constants.X_OK);
+                            signal.throwIfAborted();
+                        }
                         return report;
                     }
                 } catch (error) {

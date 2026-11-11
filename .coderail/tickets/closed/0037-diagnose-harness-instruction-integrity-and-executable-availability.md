@@ -2,11 +2,12 @@
 id: "0037"
 slug: "diagnose-harness-instruction-integrity-and-executable-availability"
 title: "Diagnose harness instruction integrity and executable availability"
-status: "open"
+status: "closed"
 created_at: "2026-11-11T10:52:02.335Z"
-updated_at: "2026-11-11T11:42:39.933Z"
+updated_at: "2026-11-11T11:45:50.483Z"
 dependencies:
   - "0036"
+reason: "done"
 ---
 
 # Diagnose harness instruction integrity and executable availability
@@ -17,8 +18,8 @@ Complete doctor by checking installed global/local harness instruction ownership
 
 1. [x] Add harness integrity and executable diagnostic tests
 2. [x] Implement global and local harness instruction diagnostics
-3. [ ] Diagnose the configured harness executable and complete verification
-4. [ ] Correct POSIX executable permission diagnostics and add a regression test
+3. [x] Diagnose the configured harness executable and complete verification
+4. [x] Correct POSIX executable permission diagnostics and add a regression test
 
 ## Task details
 
@@ -73,6 +74,14 @@ Scope: add the regression in `tests/commands/doctor/project.test.ts`, then fix `
 Validation: the inaccessible owner-mode fixture produces a failure with manual guidance; an accessible candidate still passes; a later accessible PATH candidate passes after an inaccessible candidate. Run the required `cr verify` commands for modified source/test files and affected doctor coverage.
 
 Review validation: all 24 doctor tests and all 48 configuration/startup/loop tests (17 steps) passed; `git diff --check` passed. Existing coverage does not catch the permission defect above. No implementation files were changed during review.
+
+## Implementation validation
+
+- Reproduced the owner-mode `0601` false positive with a real isolated PATH fixture before the fix.
+- POSIX executable diagnostics now use filesystem `X_OK` access checks; Windows candidate handling is preserved. Inaccessible candidates do not hide later accessible PATH entries.
+- Required individual source and test verification passed, including 100% source coverage and the configured mutation check.
+- Doctor, configuration, startup, runtime and loop coverage passed: 97 tests (17 steps), including healthy/failing source and compiled doctor fixtures without mutation or harness sessions.
+- `git diff --check` passed.
 
 ## References
 
