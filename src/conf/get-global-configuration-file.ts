@@ -6,6 +6,6 @@ export async function getGlobalConfigurationFile(
     installRoot: string,
 ): Promise<ConfFileStream | null> {
     // NOTE: Does not resolve hard link - that is correct behavior!
-    const filePath = join(installRoot, 'coderail.conf');
+    const filePath = join(installRoot, 'config');
     return await getFileStream(filePath);
 }

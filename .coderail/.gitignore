@@ -1,6 +1,6 @@
 *
 !.gitignore
-!coderail.conf
+!config
 !plans/
 !plans/**
 !tickets/

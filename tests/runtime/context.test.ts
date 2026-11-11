@@ -250,8 +250,7 @@ Deno.test(
     },
 );
 
-const ignoreContent =
-    '*\n!.gitignore\n!coderail.conf\n!plans/\n!plans/**\n!tickets/\n!tickets/**\n';
+const ignoreContent = '*\n!.gitignore\n!config\n!plans/\n!plans/**\n!tickets/\n!tickets/**\n';
 
 async function initialize(root: string): Promise<void> {
     await Deno.mkdir(join(root, '.coderail'), { recursive: true });

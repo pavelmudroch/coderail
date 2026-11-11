@@ -43,7 +43,7 @@ Use `code` for implementation and code-review conventions, `question` for focuse
 - For a new packaged installation on supported Linux or macOS systems, point to `https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh`; explain the default `~/.coderail` root and `CODERAIL_INSTALL_ROOT` override. Follow the installer's dependency and PATH guidance; packaged execution requires neither Deno nor Bun.
 - Run `cr init` from the intended project root. Preserve existing configuration; use it again to repair `.coderail/.gitignore`. Keep configuration, plans, and tickets eligible for version control; keep runtime output ignored.
 - Resolve commands against the nearest ancestor `.coderail` directory. Repair incomplete nested initialization instead of silently targeting a parent project. Use `cr --cwd <project> ...` to choose another working directory.
-- Configure project checks in `.coderail/coderail.conf` before implementation. Install the tools invoked by those checks separately.
+- Configure project checks in `.coderail/config` before implementation. Install the tools invoked by those checks separately.
 - Install bundled skills and subagents with `cr install codex`, `cr install claude`, or both harness names. Add `--local` for the initialized project; otherwise use global installation.
 - Set `default_harness = codex` or `claude` in configuration when omitting the harness argument; check `DEFAULT_HARNESS` for an environment override.
 - Explain global harness homes as `~/.codex` or absolute `CODEX_HOME`, and `~/.claude` or absolute `CLAUDE_CONFIG_DIR`. Explain local targets as `.codex/skills/` and `.codex/agents/`, or `.claude/skills/` and `.claude/agents/`.
@@ -87,7 +87,7 @@ Use `code` for implementation and code-review conventions, `question` for focuse
 
 ## Configure and diagnose verification
 
-- Load defaults from `coderail.conf` under the installation root and project settings from `.coderail/coderail.conf`. Account for environment overrides and global CLI options when diagnosing effective settings. Treat verification rules and pre/post command arrays as accumulated global and project settings rather than replacements.
+- Load defaults from `config` under the installation root and project settings from `.coderail/config`. Account for environment overrides and global CLI options when diagnosing effective settings. Treat verification rules and pre/post command arrays as accumulated global and project settings rather than replacements.
 - Use `[[verify.rules]]` entries with a `pattern` and `commands` arrays of executable arguments. Match project-relative paths and substitute named captures into arguments and optional `requires` paths.
 - Adapt this rule to the project's tools:
 

@@ -55,7 +55,7 @@ missing required exception. The required content is:
 ```gitignore
 *
 !.gitignore
-!coderail.conf
+!config
 !plans/
 !plans/**
 !tickets/

@@ -5,7 +5,7 @@ import { dirname, fromFileUrl, join, resolve } from '@std/path';
 export const projectIgnoreLines = [
     '*',
     '!.gitignore',
-    '!coderail.conf',
+    '!config',
     '!plans/',
     '!plans/**',
     '!tickets/',

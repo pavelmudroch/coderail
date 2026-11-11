@@ -155,4 +155,4 @@ Reference behavior: `src/commands/install.ts` (`planInstallation`, argument vali
 
 ## Exploration tooling
 
-The installed `cr` rejects this checkout's `.coderail/coderail.conf` at `[verify]`, so command discovery used `cr --help` from `/tmp`. This idea was created directly in the established format. Readiness is set through the checkout CLI when possible; no configuration or source files were changed by this exploration.
+The installed `cr` rejects this checkout's `.coderail/config` at `[verify]`, so command discovery used `cr --help` from `/tmp`. This idea was created directly in the established format. Readiness is set through the checkout CLI when possible; no configuration or source files were changed by this exploration.

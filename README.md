@@ -96,7 +96,7 @@ cr ticket create "Add a search page"
 cr ticket next
 ```
 
-`cr init` creates `.coderail/coderail.conf` without replacing an existing
+`cr init` creates `.coderail/config` without replacing an existing
 configuration. It also creates or repairs `.coderail/.gitignore`, preserving
 custom content. Runtime output is ignored; the configuration, ignore file, plans,
 and tickets remain eligible for version control, including nested content.
@@ -162,7 +162,7 @@ committed changes. Invoke skills through your agent's skill interface; names suc
 as `explore` and `implement` refer to agent skills, not `cr` subcommands.
 
 1. **Initialize the project.** Run `cr init` from the project root.
-2. **Configure verification.** Edit `.coderail/coderail.conf` to define the checks
+2. **Configure verification.** Edit `.coderail/config` to define the checks
    your project needs, such as formatting, linting, type checking, and tests. See
    [Verify your changes](#verify-your-changes) for rule syntax and examples. Set
    these up before implementation so the agent can validate its work.
@@ -312,10 +312,15 @@ support `--json` for scripts.
 
 ## Configuration
 
-Save project settings in `.coderail/coderail.conf`, or global defaults in
-`coderail.conf` under the CodeRail installation directory. Project loop settings
+Save project settings in `.coderail/config`, or global defaults in
+`config` under the CodeRail installation directory. Project loop settings
 override global values by harness and individual key; omitted keys retain global
 defaults.
+
+When upgrading from a version that uses `coderail.conf`, rename that file to
+`config` in `.coderail/` and in the installation directory, if present. The old
+filename is no longer read. In existing projects, run `cr init` after renaming
+to update `.coderail/.gitignore` so the new file stays tracked.
 
 Loop model and effort preferences use harness-specific sections:
 
@@ -356,7 +361,7 @@ preflight does not guarantee detection of silent provider fallback.
 
 ## Verify your changes
 
-Configure verification rules in `.coderail/coderail.conf`. For example, a project
+Configure verification rules in `.coderail/config`. For example, a project
 using Deno can check each TypeScript source file with:
 
 ```toml

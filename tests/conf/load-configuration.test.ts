@@ -71,9 +71,9 @@ async function read(
         await Deno.mkdir(join(repositoryRoot, '.coderail'), { recursive: true });
         if (global !== undefined) {
             await Deno.mkdir(installRoot, { recursive: true });
-            await Deno.writeTextFile(join(installRoot, 'coderail.conf'), global);
+            await Deno.writeTextFile(join(installRoot, 'config'), global);
         }
-        await Deno.writeTextFile(join(repositoryRoot, '.coderail', 'coderail.conf'), local);
+        await Deno.writeTextFile(join(repositoryRoot, '.coderail', 'config'), local);
 
         return await withConfigurationEnvironment(environment, () =>
             loadConfiguration(
@@ -109,7 +109,7 @@ async function errors(text: string): Promise<Error[]> {
         await read(text);
     } catch (error) {
         expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toContain('coderail.conf');
+        expect((error as Error).message).toContain(join('.coderail', 'config'));
         let cause: unknown = error;
         while (cause instanceof Error) {
             cause = cause.cause;

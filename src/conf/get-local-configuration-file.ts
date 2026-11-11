@@ -5,6 +5,6 @@ import { type ConfFileStream, getFileStream } from './get-file-stream.ts';
 export async function getLocalConfigurationFile(
     repositoryRoot: string,
 ): Promise<ConfFileStream | null> {
-    const filePath = join(repositoryRoot, '.coderail', 'coderail.conf');
+    const filePath = join(repositoryRoot, '.coderail', 'config');
     return await getFileStream(filePath);
 }

@@ -231,14 +231,14 @@ contract below and the agreed iterable runner interface.
 - Agreed run output location: `.coderail/loop/<run-id>/`.
 - Use a `.coderail/.gitignore` managed by `cr init` instead of modifying the
   repository-root `.gitignore` or Git's local exclude file. Ignore runtime
-  content while retaining `.gitignore`, `coderail.conf`, `plans/`, and `tickets/`.
+  content while retaining `.gitignore`, `config`, `plans/`, and `tickets/`.
   Git investigation confirms that `!plans/` and `!tickets/` alone leave their
   contents ignored by `*`; include recursive exceptions as well. Agreed content:
 
   ```gitignore
   *
   !.gitignore
-  !coderail.conf
+  !config
   !plans/
   !plans/**
   !tickets/

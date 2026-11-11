@@ -72,7 +72,7 @@ export class Init implements Command<InitArguments> {
         await Fs.makeDirectory(directoryPath);
 
         using spinner = Log.spinner('Creating base structure...');
-        const filePath = join(directoryPath, 'coderail.conf');
+        const filePath = join(directoryPath, 'config');
         try {
             const fileInfo = await Deno.lstat(filePath);
             if (!fileInfo.isFile && !fileInfo.isSymlink) {

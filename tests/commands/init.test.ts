@@ -45,7 +45,7 @@ function context(
 
 Deno.test('Init creates a configuration scaffold and preserves it on repeated runs', async () => {
     const root = await Deno.makeTempDir();
-    const path = join(root, '.coderail', 'coderail.conf');
+    const path = join(root, '.coderail', 'config');
     try {
         const command = new Init();
         await command.run(context(root));
@@ -55,7 +55,7 @@ Deno.test('Init creates a configuration scaffold and preserves it on repeated ru
         await command.run(context(root));
         expect(await Deno.readTextFile(path)).toBe(defaultConfiguration);
         await Deno.writeTextFile(path, 'existing configuration');
-        await Deno.writeTextFile(join(root, '.coderail', '.~coderail.conf.lock'), 'other process');
+        await Deno.writeTextFile(join(root, '.coderail', '.~config.lock'), 'other process');
         await command.run(context(root));
         expect(await Deno.readTextFile(path)).toBe('existing configuration');
     } finally {
@@ -96,7 +96,7 @@ Deno.test('Init handles help and rejects invalid options', () => {
 
 Deno.test('Init accepts templates on fresh and existing configurations', async () => {
     const root = await Deno.makeTempDir();
-    const path = join(root, '.coderail', 'coderail.conf');
+    const path = join(root, '.coderail', 'config');
     try {
         const command = new Init();
         await command.run(context(root, ['first', 'second']));
@@ -116,9 +116,7 @@ Deno.test('Init fills an existing directory without replacing its contents', asy
         await Deno.mkdir(directory);
         await Deno.writeTextFile(join(directory, 'existing'), 'preserved');
         await new Init().run(context(root));
-        expect(await Deno.readTextFile(join(directory, 'coderail.conf'))).toBe(
-            defaultConfiguration,
-        );
+        expect(await Deno.readTextFile(join(directory, 'config'))).toBe(defaultConfiguration);
         expect(await Deno.readTextFile(join(directory, 'existing'))).toBe('preserved');
     } finally {
         await Deno.remove(root, { recursive: true });
@@ -128,7 +126,7 @@ Deno.test('Init fills an existing directory without replacing its contents', asy
 Deno.test('Init rejects a lock conflict and keeps the existing directory', async () => {
     const root = await Deno.makeTempDir();
     const directory = join(root, '.coderail');
-    const lock = join(directory, '.~coderail.conf.lock');
+    const lock = join(directory, '.~config.lock');
     try {
         await Deno.mkdir(directory);
         await Deno.writeTextFile(lock, 'another process');
@@ -136,7 +134,7 @@ Deno.test('Init rejects a lock conflict and keeps the existing directory', async
             Deno.errors.AlreadyExists,
         );
         expect(await Deno.readTextFile(lock)).toBe('another process');
-        await expect(Deno.stat(join(directory, 'coderail.conf'))).rejects.toBeInstanceOf(
+        await expect(Deno.stat(join(directory, 'config'))).rejects.toBeInstanceOf(
             Deno.errors.NotFound,
         );
     } finally {
@@ -157,7 +155,7 @@ Deno.test('Init rejects a file blocking the configuration directory', async () =
 
 Deno.test('Init rejects a directory blocking the configuration file', async () => {
     const root = await Deno.makeTempDir();
-    const path = join(root, '.coderail', 'coderail.conf');
+    const path = join(root, '.coderail', 'config');
     try {
         await Deno.mkdir(path, { recursive: true });
         await expect(new Init().run(context(root))).rejects.toThrow(
@@ -171,7 +169,7 @@ Deno.test('Init rejects a directory blocking the configuration file', async () =
 
 Deno.test('Init preserves existing and dangling configuration symlinks', async () => {
     const root = await Deno.makeTempDir();
-    const path = join(root, '.coderail', 'coderail.conf');
+    const path = join(root, '.coderail', 'config');
     const target = join(root, 'existing.conf');
     try {
         await Deno.mkdir(join(root, '.coderail'));
@@ -192,7 +190,7 @@ Deno.test('Init preserves existing and dangling configuration symlinks', async (
 const requiredIgnoreLines = [
     '*',
     '!.gitignore',
-    '!coderail.conf',
+    '!config',
     '!plans/',
     '!plans/**',
     '!tickets/',
@@ -254,7 +252,7 @@ Deno.test('Init ignores runtime output without untracking existing files', async
         await new Init().run(context(root));
         const visible = [
             '.gitignore',
-            'coderail.conf',
+            'config',
             'plans/IDEA.md',
             'plans/nested/content.md',
             'tickets/open/ticket.md',
@@ -263,7 +261,7 @@ Deno.test('Init ignores runtime output without untracking existing files', async
         for (const path of [...visible, 'output/run/log.txt', 'runtime.json']) {
             const target = join(root, '.coderail', path);
             await Deno.mkdir(join(target, '..'), { recursive: true });
-            if (!['.gitignore', 'coderail.conf'].includes(path)) {
+            if (!['.gitignore', 'config'].includes(path)) {
                 await Deno.writeTextFile(target, 'content');
             }
         }

@@ -20,8 +20,8 @@ Deno.test(
     'Fs::write stages mixed content, replaces the target, and unregisters the lock',
     async () => {
         const root = await Deno.makeTempDir();
-        const path = join(root, 'coderail.conf');
-        const lock = join(root, '.~coderail.conf.lock');
+        const path = join(root, 'config');
+        const lock = join(root, '.~config.lock');
         try {
             await Deno.writeTextFile(path, 'original');
             await write(path, content('héllo', new TextEncoder().encode(' world')));
@@ -39,8 +39,8 @@ Deno.test(
 
 Deno.test('Fs::write rejects an existing lock without registering or modifying it', async () => {
     const root = await Deno.makeTempDir();
-    const path = join(root, 'coderail.conf');
-    const lock = join(root, '.~coderail.conf.lock');
+    const path = join(root, 'config');
+    const lock = join(root, '.~config.lock');
     try {
         await Deno.writeTextFile(path, 'original');
         await Deno.writeTextFile(lock, 'another process');
@@ -60,8 +60,8 @@ Deno.test(
     'Fs::write preserves the target on stream failure and leaves the lock for cleanup',
     async () => {
         const root = await Deno.makeTempDir();
-        const path = join(root, 'coderail.conf');
-        const lock = join(root, '.~coderail.conf.lock');
+        const path = join(root, 'config');
+        const lock = join(root, '.~config.lock');
         const failure = new Error('stream failed');
         try {
             await Deno.writeTextFile(path, 'original');
@@ -84,8 +84,8 @@ Deno.test(
 
 Deno.test('Fs::write retains a failed rename lock for cleanup', async () => {
     const root = await Deno.makeTempDir();
-    const path = join(root, 'coderail.conf');
-    const lock = join(root, '.~coderail.conf.lock');
+    const path = join(root, 'config');
+    const lock = join(root, '.~config.lock');
     try {
         await Deno.mkdir(path);
         await expect(write(path, content('replacement'))).rejects.toBeInstanceOf(Error);

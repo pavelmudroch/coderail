@@ -11,6 +11,6 @@
         ]
     },
     "files.associations": {
-        "*.conf": "ini"
+        "config": "ini"
     }
 }
