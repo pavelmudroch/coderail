@@ -1,3 +1,11 @@
+default_harness = "codex"
+
+[loop.codex]
+model = "gpt-6.1-sol"
+effort = "medium"
+commit_model = "gpt-6.1-terra"
+commit_effort = "low"
+
 [verify]
 pre = [
     ["rm", "-rf", "coverage"],
