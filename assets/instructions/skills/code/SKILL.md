@@ -23,3 +23,8 @@ Deliver the minimum complete working solution satisfying the request.
 - Remove imports, variables, functions, types, and other code made unused or obsolete by your changes.
 - Preserve pre-existing unused or obsolete code unless its removal is requested or necessary.
 - Report unrelated issues without modifying them.
+- Add meaningful behavioral tests, including value independence where relevant. Do not test type declarations or empty runtime exports.
+- Do not introduce production behavior solely to satisfy coverage or mutation testing.
+- Preserve useful tests, fix relevant failures, and never weaken coverage thresholds to conceal failures.
+- Follow configured verification rules and file dependencies. Run applicable lint and format checks even without tests; require paired source/test files only for checks that depend on them.
+

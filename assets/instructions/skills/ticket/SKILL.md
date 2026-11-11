@@ -13,7 +13,7 @@ Decompose available implementation context into small, actionable tickets.
 - Keep tickets small and actionable.
 - Minimize task dependencies and file overlap.
 - Declare explicit dependencies between tickets.
-- Place test tasks before implementation tasks.
+- Include test tasks where they provide meaningful behavioral validation, and place them before the corresponding implementation tasks. Do not manufacture runtime-test tasks for type-only changes; define independently verifiable tasks using type correctness and configured verification instead.
 
 ## Boundary
 

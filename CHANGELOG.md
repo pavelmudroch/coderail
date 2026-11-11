@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Testing guidance calls for meaningful behavioral tests, avoiding placeholder
+  runtime tests and production coverage workarounds for type-only modules.
 - Upgrade summaries report completed write, removal, and skipped-file counts and
   manifest status on stderr, with file paths shown under `--verbose`.
 

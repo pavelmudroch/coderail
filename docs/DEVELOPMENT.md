@@ -73,6 +73,15 @@ deno check src/**/*.ts tests/**/*.ts tools/**/*.ts
 deno test -A
 ```
 
+The repository's `.coderail/config` applies Bun lint/fix to TypeScript files.
+Source-file test and coverage checks require the corresponding test file;
+application test-file test, coverage, and mutation checks require the corresponding
+source. Maintainer-tool tests under `tests/tools/` have a separate test rule that
+does not require a corresponding application source file.
+Type-only modules do not need runtime tests that assert empty exports, or runtime
+helpers added solely for coverage. Keep meaningful behavioral tests and follow
+the configured checks; do not weaken coverage thresholds to hide failures.
+
 ## Existing style violations and CI
 
 This migration intentionally does not reformat existing code. Style checks will report existing

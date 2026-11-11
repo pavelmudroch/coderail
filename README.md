@@ -82,6 +82,10 @@ Invoke `ticket` with the ready idea. The agent breaks the work into small ticket
 with explicit dependencies, tasks, and validation criteria. Review the scope so
 each ticket has a clear outcome.
 
+Plan test tasks before related implementation where they validate behavior.
+Type-only changes use type correctness and configured checks without placeholder
+runtime tests or production helpers added solely for coverage.
+
 ### 4. Implement and verify
 
 Invoke `implement` with a ticket, or let it select the next ready one. The agent
