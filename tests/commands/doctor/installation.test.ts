@@ -6,6 +6,97 @@ import { Installation } from '../../../src/commands/doctor/installation.ts';
 import { windowsLauncher } from '../../../src/commands/upgrade/activation.ts';
 import { DISTRIBUTION_MANIFEST } from '../../../src/commands/upgrade/assets.ts';
 
+Deno.test({
+    name: 'installation rejects a FIFO manifest and continues independent checks without opening it',
+    ignore: Deno.build.os === 'windows',
+    async fn() {
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const open = Deno.open;
+        const readTextFile = Deno.readTextFile;
+        const stat = Deno.stat;
+        const controller = new AbortController();
+        try {
+            await Deno.mkdir(join(root, 'libexec'));
+            const entryPath = join(root, 'libexec', 'cr-1');
+            await Deno.writeTextFile(entryPath, 'binary');
+            const manifestPath = join(root, DISTRIBUTION_MANIFEST);
+            const result = await new Deno.Command('mkfifo', { args: [manifestPath] }).output();
+            expect(result.success).toBe(true);
+            // Fail immediately if the stream loader regresses to opening the FIFO.
+            Deno.open = (path, options) => {
+                expect(path).not.toBe(manifestPath);
+                return open(path, options);
+            };
+            Deno.readTextFile = (path, options) => {
+                expect(path).not.toBe(manifestPath);
+                return readTextFile(path, options);
+            };
+            const settings = { entryPath, standalone: true, windows: false, path: '' };
+            const report = await Installation.check(controller.signal, settings);
+            expect(report.failures.map((failure) => failure.message)).toEqual([
+                'Distribution manifest: Error: Distribution manifest must be a regular file',
+                'Launcher: Error: Missing or broken installation launcher',
+                `PATH: Error: Installation bin "${join(root, 'bin')}" is absent from PATH`,
+            ]);
+            expect(report.skipped).toEqual(['Owned files: distribution manifest unavailable.']);
+            expect((await stat(manifestPath)).isFifo).toBe(true);
+            Deno.stat = async (path) => {
+                const info = await stat(path);
+                if (path === manifestPath) {
+                    controller.abort(new Error('cancelled during manifest metadata'));
+                }
+                return info;
+            };
+            await expect(Installation.check(controller.signal, settings)).rejects.toThrow(
+                'cancelled during manifest metadata',
+            );
+        } finally {
+            Deno.open = open;
+            Deno.readTextFile = readTextFile;
+            Deno.stat = stat;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+});
+
+Deno.test('installation propagates cancellation during the manifest read', async () => {
+    const root = await Deno.realPath(await Deno.makeTempDir());
+    const readTextFile = Deno.readTextFile;
+    const controller = new AbortController();
+    try {
+        await Deno.mkdir(join(root, 'libexec'));
+        const entryPath = join(root, 'libexec', 'cr-1');
+        await Deno.writeTextFile(entryPath, 'binary');
+        const manifestPath = join(root, DISTRIBUTION_MANIFEST);
+        await InstallManifest.save(manifestPath, { version: 1, files: [] });
+        Deno.readTextFile = (path, options) => {
+            expect(path).toBe(manifestPath);
+            expect(options?.signal).toBe(controller.signal);
+            return new Promise((_resolve, reject) => {
+                controller.signal.addEventListener(
+                    'abort',
+                    () => reject(controller.signal.reason),
+                    {
+                        once: true,
+                    },
+                );
+                controller.abort(new Error('cancelled during manifest read'));
+            });
+        };
+        await expect(
+            Installation.check(controller.signal, {
+                entryPath,
+                standalone: true,
+                windows: false,
+                path: '',
+            }),
+        ).rejects.toThrow('cancelled during manifest read');
+    } finally {
+        Deno.readTextFile = readTextFile;
+        await Deno.remove(root, { recursive: true });
+    }
+});
+
 Deno.test(
     'installation checks source and compiled layouts read only and accumulates failures',
     async () => {
@@ -265,7 +356,7 @@ Deno.test(
     'installation accumulates missing and modified owned files and rejects foreign ownership',
     async () => {
         const root = await Deno.realPath(await Deno.makeTempDir());
-        const load = InstallManifest.load;
+        const readTextFile = Deno.readTextFile;
         const controller = new AbortController();
         try {
             await Deno.mkdir(join(root, 'libexec'));
@@ -291,14 +382,17 @@ Deno.test(
             report = await Installation.check(controller.signal, settings);
             expect(report.failures[0]?.message).toContain('Invalid distribution ownership path');
             expect(report.skipped).toEqual(['Owned files: distribution manifest unavailable.']);
-            InstallManifest.load = () => {
-                throw new Deno.errors.PermissionDenied('manifest denied');
+            Deno.readTextFile = (path, options) => {
+                if (path === manifestPath) {
+                    throw new Deno.errors.PermissionDenied('manifest denied');
+                }
+                return readTextFile(path, options);
             };
             report = await Installation.check(controller.signal, settings);
             expect(report.failures[0]?.message).toContain('manifest denied');
             expect(report.failures).toHaveLength(3);
         } finally {
-            InstallManifest.load = load;
+            Deno.readTextFile = readTextFile;
             await Deno.remove(root, { recursive: true });
         }
     },

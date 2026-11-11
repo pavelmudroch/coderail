@@ -1,6 +1,7 @@
 import { InstallManifest, type Manifest } from '@install-manifest';
 import { dirname, fromFileUrl, join } from '@std/path';
 
+import { validate } from '../../install-manifest/validate.ts';
 import { launcherTarget } from '../upgrade/activation.ts';
 import { DISTRIBUTION_MANIFEST, ownedPath } from '../upgrade/assets.ts';
 import { createDoctorReport, type DoctorReport } from './types.ts';
@@ -98,10 +99,14 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
     }
     let manifest: Manifest | undefined;
     await attempt('Distribution manifest', async () => {
-        const loaded = await InstallManifest.load(join(installationRoot, DISTRIBUTION_MANIFEST));
-        if (loaded === null) {
-            throw new Error('Missing distribution manifest');
+        const path = join(installationRoot, DISTRIBUTION_MANIFEST);
+        const info = await Deno.stat(path);
+        signal.throwIfAborted();
+        if (!info.isFile) {
+            throw new Error('Distribution manifest must be a regular file');
         }
+        const loaded: unknown = JSON.parse(await Deno.readTextFile(path, { signal }));
+        validate(loaded);
         for (const file of loaded.files) {
             ownedPath(file.path);
         }

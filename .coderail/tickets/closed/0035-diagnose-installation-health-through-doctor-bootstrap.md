@@ -2,10 +2,11 @@
 id: "0035"
 slug: "diagnose-installation-health-through-doctor-bootstrap"
 title: "Diagnose installation health through doctor bootstrap"
-status: "open"
+status: "closed"
 created_at: "2026-11-11T10:51:57.703Z"
-updated_at: "2026-11-11T11:18:55.366Z"
+updated_at: "2026-11-11T11:21:19.749Z"
 dependencies: []
+reason: "done"
 ---
 
 # Diagnose installation health through doctor bootstrap
@@ -18,7 +19,7 @@ Make `cr doctor` usable when normal runtime/configuration startup would fail, an
 2. [x] Implement bootstrap dispatch and doctor reporting
 3. [x] Implement source and compiled installation diagnostics
 4. [x] Verify the installation diagnostic delivery
-5. [ ] Reject non-regular distribution manifests without blocking diagnostics
+5. [x] Reject non-regular distribution manifests without blocking diagnostics
 
 ## Task details
 
@@ -92,10 +93,11 @@ Validation: add an isolated regression for a FIFO or equivalent deterministicall
 
 ## Review validation
 
-- Focused tests: 41 passed across `tests/main.test.ts`, `tests/commands/doctor.test.ts`, `tests/commands/doctor/`, and `tests/commands/upgrade/assets.test.ts`.
+- Follow-up review: 43 focused tests passed across `tests/main.test.ts`, `tests/commands/doctor.test.ts`, `tests/commands/doctor/`, and `tests/commands/upgrade/assets.test.ts`, including FIFO rejection and manifest cancellation regressions.
 - `deno check` passed for all five changed/new source files.
 - CLI source diagnostics with a nonexistent `--cwd`, doctor help, and the exact `not implemented` repair error behaved as specified.
-- Review decision: needs fix; reopened for task 5. Existing dependencies of 0036/0037 keep subsequent work blocked until 0035 is complete.
+- `git diff --check` passed. Reviewed all unstaged changes and the untracked closed ticket; staged implementations were used only as context.
+- Review decision: pass. Task 5 resolves the prior blocking finding; no additional actionable findings. Ticket 0035 remains closed, with no new tickets required.
 
 ## References
 
@@ -109,6 +111,7 @@ Validation: add an isolated regression for a FIFO or equivalent deterministicall
 
 ## Delivery notes
 
+- Reopened task 5: distribution manifest targets are checked for regular-file status before a cancellable text read, using the existing manifest validator. FIFO regression coverage confirms independent launcher/PATH findings, owned-file skips, and cancellation during metadata collection and manifest reads. Required per-file verification passes with nine installation tests and 100% installation-module coverage.
 - Doctor dispatches before runtime/project discovery and configuration loading, with globals and the registered AbortSignal preserved.
 - Source resources and compiled manifest ownership, launcher and current PATH checks collect local, read-only findings with manual recovery options. Independent errors continue; unavailable prerequisites skip dependent checks.
 - Reused distribution ownership validation by exporting the existing validator. Canonicalized the upgrade asset test fixture so permission fault injection works on systems where temporary paths contain symlink ancestors.
