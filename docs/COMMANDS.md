@@ -201,6 +201,15 @@ command results are reused. Rules can also declare `requires` paths; a rule is
 skipped when its required files are missing. Optional `[verify]` `pre` and `post`
 command arrays run once around matching work; place that section before rule entries.
 
+During implementation, prefer one summary invocation with explicit changed source
+and test paths, such as `cr verify -s ./src/main.ts ./tests/main.test.ts`, then use
+`cr verify <failed-file>` for failure details. This reuses shared checks and runs
+preparation once. Include every file required by repository instructions and honor
+requirements for separate invocations. If running checks separately, stop on failure
+or accumulate failures so a passing final command cannot hide an earlier failure.
+After corrections, repeat relevant checks and the final aggregate verification
+before closing the ticket. A `skipped` result does not validate behavior.
+
 Add `--dry` to preview expanded commands, including preparation and cleanup,
 without executing them. Applicable files and commands are reported as `planned`;
 `--short` shows only file statuses. Required files are checked against the current

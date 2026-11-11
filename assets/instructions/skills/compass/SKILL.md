@@ -71,15 +71,15 @@ Use `code` for implementation and code-review conventions, `question` for focuse
 ## Create and progress tickets
 
 - Use `ticket` to turn agreed implementation context into vertical slices of value, with focused numbered checkbox tasks, task details, verifiable outcomes, and references.
-- Place test tasks before implementation tasks where applicable. Minimize dependencies and file overlap; retain meaningful acceptance criteria for each task.
+- Place test tasks before implementation tasks where applicable as a planning convention; related implementation may be needed before tests pass. Minimize dependencies and file overlap; retain meaningful acceptance criteria for each task.
 - Create tickets with `cr ticket create "Title"`; add dependencies with repeated `-d <ticket>` or `--depends-on <ticket>`. Ticket arguments, dependencies, and duplicate targets accept numeric ID, filename, or ticket path.
 - Preserve generated frontmatter. Track tickets under `.coderail/tickets/open/`, `active/`, and `closed/`; use CLI transitions instead of manually moving files or changing lifecycle fields.
 - Maintain `TICKETS.md` beside the corresponding `IDEA.md` when applicable; link tickets to their design and relevant artifacts.
 - Select work with `cr ticket next -l 1`; explain that selection lists dependency-ready open tickets in ascending ID order without activating them.
 - Inspect active tickets separately when reconstructing unfinished work; do not assume `next` lists every unfinished ticket.
-- Activate an open ticket with `cr ticket activate <ticket>` and use its returned path after the move. Follow tasks in numbered order.
+- Activate an open ticket with `cr ticket activate <ticket>` and use its returned path after the move. For autonomous implementation, use numbered order as the default; interleave or reorder work when dependencies and practical implementation needs justify it. Preserve declared ticket dependencies and explicit task prerequisites.
 - Use `implement` for autonomous coding, correction, verification, and closure. Use `mentor` when the user owns implementation; let it inspect and explain without writing implementation code and wait for user readiness before reviewing or advancing tasks.
-- Mark tasks complete only after their validation criteria pass. Close completed, verified work with `cr ticket close --reason=done <ticket>`.
+- Treat numbered tasks as scope and validation checkpoints; reordering never permits skipping requirements. Mark tasks complete only after their validation criteria pass and leave incomplete or unvalidated tasks unchecked. Close work with `cr ticket close --reason=done <ticket>` only after all tasks and required verification pass.
 - Close redundant work with `cr ticket close --reason=duplicate --duplicate-of=<canonical-id> <ticket>`; use `--reason=dismissed` for intentionally abandoned scope.
 - Explain dependency satisfaction precisely: require closure as `done`, or a duplicate chain reaching a ticket closed as `done`. Treat dismissed, open, active, and cyclic duplicate chains as unsatisfied.
 - Reopen any ticket with `cr ticket reopen <ticket>`; add dependencies with repeated `-d <ticket-id>` when needed. Account for movement to `open/`, preserved tasks, merged dependencies, and cleared closure metadata.
@@ -99,12 +99,15 @@ Use `code` for implementation and code-review conventions, `question` for focuse
 
 - Explain `*`, `**`, and `?` glob matching and `${name:glob}` captures; reference captures as `${name}`. Preserve optional directory separators as in the example; reject undefined capture references.
 - Run `cr verify <file...>` for changed implementation files, `cr verify <directory>` for a subtree, or `cr verify -c` / `cr verify --changed` for Git-changed files. Add `-s` or `--short` for per-file summaries.
-- Follow repository-specific verification requirements. During ticket implementation, exclude ticket files and unrelated unchanged files from the implementation verification scope.
-- Explain that checks run from the project root and duplicate commands reuse results. Account for commands that modify files, such as formatters.
+- During ticket implementation, prefer one `cr verify -s <changed-files...>` invocation with explicit relevant paths, including both a changed source file and its changed test file. Inspect failed files with `cr verify <failed-file>` for detailed output.
+- Follow repository-specific verification requirements: include every required modified file and honor explicit requirements for separate invocations over the batching preference. Exclude ticket files and unrelated unchanged files from implementation verification.
+- Explain that checks run from the project root. A combined invocation reuses duplicate command results and runs preparation once, avoiding repeated work for overlapping source/test checks. Account for commands that modify files, such as formatters.
+- Treat any failed check as failure even if the final file passes. Avoid shell loops that return only the last verification's status; prefer the CLI's multi-path invocation. When separate invocations are required, stop on failure or accumulate failure status so any failure makes the overall operation fail.
 - Interpret `ok` as passing applicable checks, `fail` as failure, and `skipped` as no applicable commands, including missing required paths. Do not equate skipped files or `No tests found` with validated behavior.
 - Add optional `[verify]` `pre` and `post` command arrays before rule entries; use them for once-per-run preparation and cleanup around matching work.
 - Inspect failures with `cr verify <failed-file>` to expose command output. Check rule matches, `requires` files, capture substitutions, executable availability, working directory, and configuration diagnostics before attributing failures to code.
-- Correct in-scope failures and repeat relevant verification until it passes; distinguish implementation defects from unrelated failures and report unresolved blockers without claiming completion.
+- Correct in-scope failures and repeat relevant verification until it passes; complete the final `cr verify -s <changed-files...>` aggregate check before ticket closure, in addition to any required separate invocations. In mentoring, let the user make corrections and wait for readiness before review or advancement. Distinguish implementation defects from unrelated failures and report unresolved blockers without claiming completion.
+- Avoid redundant broad reruns without edits, failures, or unresolved concerns.
 - Avoid rerunning verification solely because existing changes are staged, reviewed, or committed; run it after relevant modifications or when needed to investigate a concrete concern.
 
 ## Run and recover autonomous loops

@@ -92,6 +92,10 @@ Invoke `implement` with a ticket, or let it select the next ready one. The agent
 works through its tasks, runs the configured checks, fixes failures, and closes
 the ticket after its tasks and verification pass. Repeat for the remaining tickets.
 
+Numbered order is the default; the agent may interleave or reorder tasks while
+respecting dependencies and explicit prerequisites. Every task must still meet
+its validation criteria before completion.
+
 If you want to write the code yourself, invoke `mentor` instead. It explains the
 tasks, reviews your work when you are ready, and guides corrections and verification.
 For unattended ticket processing with optional review and commits, see

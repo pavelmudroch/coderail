@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Agent skills allow autonomous tasks to be interleaved while preserving
+  dependencies, validation criteria, and completion checks.
+- Implementation and mentoring guidance prefers batched verification with
+  failure-preserving execution and respects repository-specific requirements.
 - Testing guidance calls for meaningful behavioral tests, avoiding placeholder
   runtime tests and production coverage workarounds for type-only modules.
 - Upgrade summaries report completed write, removal, and skipped-file counts and
