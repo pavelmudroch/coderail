@@ -50,12 +50,17 @@ The long flags can also be combined.
 
 ## Working tree requirements
 
-The initialized project subtree must have no staged, unstaged, or untracked changes
-at startup. Other Git subtrees may have unstaged or untracked changes in either mode.
-Without auto-commit, outside staged changes are also allowed and preserved. With
-auto-commit, any outside staged changes are rejected before preflight, including
-in a parent Coderail project sharing the Git repository. For older
-projects, run `cr init` manually to migrate the project ignore rules before looping.
+Without auto-commit, the initialized project subtree may have staged changes at
+startup, but all unstaged and untracked project changes must be staged first.
+This allows restarting the loop without an intervening commit. Existing staged
+work is preserved as context for implementation and review.
+
+With auto-commit, the initialized project subtree must have no staged, unstaged,
+or untracked changes, and any outside staged changes are rejected before preflight,
+including in a parent CodeRail project sharing the Git repository. Other Git
+subtrees may have unstaged or untracked changes in either mode. Without auto-commit,
+outside staged changes are also allowed and preserved. For older projects, run
+`cr init` manually to migrate the project ignore rules before looping.
 
 ## Preflight and implementation
 
@@ -113,5 +118,7 @@ output (`step: "implement"`, `"review"`, or `"commit"`). Repeated attempts appen
 the same selected ticket log.
 Each appended record has `timestamp`, `step`, `stream`, and `output`; chunks and
 receipt timestamps are preserved. Agent text does not appear in terminal lifecycle
-output. Quiet and non-interactive modes retain contextual completion lines, durations,
-and a final attempt count, stop reason, and unfinished ticket when present.
+output. Normal and verbose modes show iteration completion lines with durations;
+`--verbose` also shows preflight details and individual stage completion lines.
+The final summary appears in every mode, including quiet and non-interactive,
+with the attempt count, stop reason, duration, and unfinished ticket when present.

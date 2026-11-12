@@ -71,17 +71,19 @@ being fixed directly by the review invocation.
 - Combined short flags are supported: `cr loop -rc` enables both review and
   commit, with review preceding staging and commit.
 - Plain `cr loop` performs implementation without automatic review or commit.
-- Every loop invocation requires the initialized Coderail project subtree to be
-  clean at startup: no staged, unstaged, or untracked changes, regardless of
-  review and commit flags. Outside unstaged/untracked changes are allowed.
-- With `--auto-commit`, additionally reject staged changes outside that subtree
-  at startup, because the commit skill consumes the shared Git index. Without
-  automatic commit, outside staged changes may remain and must be preserved.
-- Cleanliness is checked at startup, not before every iteration. Without
-  automatic commit, staged changes accumulate across iterations during the run.
+- Without `--auto-commit`, startup accepts a clean initialized project or one
+  with all changes staged; reject unstaged and untracked changes in that subtree.
+  Existing staged work forms the baseline, allowing another run without an
+  intervening commit. Outside changes may remain and must be preserved.
+- With `--auto-commit`, require a clean initialized project at startup and reject
+  staged changes outside that subtree, because the commit skill consumes the
+  shared Git index. Outside unstaged/untracked changes are allowed.
+- These checks run at startup, not before every iteration. Without automatic
+  commit, staged changes accumulate across iterations and invocations.
 - Failure preserves the resulting worktree and index for inspection rather than
-  rolling changes back. A failed run may leave a dirty worktree; the user must
-  resolve it before starting another run.
+  rolling changes back. Before restarting, the user must resolve or stage
+  unstaged/untracked project changes; with automatic commit, restore a clean
+  project and satisfy the outside-index restriction.
 
 ## Agreed change boundaries
 
@@ -417,7 +419,8 @@ within the agreed behavior. No further idea decomposition is required.
 - `src/commands/loop.ts`: CLI parsing/help, startup checks, and summary reporting.
 - `src/commands/loop/run-loop.ts`: iteration ordering, stage transitions,
   completion checks, limits, and failure propagation.
-- `src/commands/loop/git.ts`: clean-worktree check and end-of-iteration staging.
+- `src/commands/loop/git.ts`: staged-work/clean-worktree startup checks and
+  end-of-iteration staging.
 - `src/commands/init.ts`: create or repair `.coderail/.gitignore` alongside the
   existing initialization work. `src/runtime/context.ts`: validate the agreed
   initialization requirements at the nearest project boundary, preserving the
@@ -523,8 +526,11 @@ clients expose different output/event formats, which the connectors own.
   precedence level, including global/project per-key merging.
 - Exercise loop stage ordering, reopening/follow-up selection, limits, all
   failure boundaries, and cancellation using fake harness execution.
-- Use temporary Git repositories to verify dirty-start rejection, staged versus
-  unstaged boundaries across iterations, new files/deletions, and commit checks.
+- Use temporary Git repositories to verify staged-start acceptance without
+  automatic commit, clean-start requirements with automatic commit, rejection
+  of unstaged/untracked project changes, restart without an intervening commit,
+  staged versus unstaged boundaries across iterations, new files/deletions,
+  and commit checks.
 - Cover nested initialized projects: allow outside unstaged/untracked changes,
   preserve outside staged changes without automatic commit, reject them with
   automatic commit, and stage/review only the initialized subtree.

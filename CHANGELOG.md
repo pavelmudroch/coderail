@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `cr loop` accepts existing staged project changes without auto-commit, allowing
+  restarts without an intervening commit. Unstaged and untracked project changes
+  must be staged first; auto-commit still requires a clean project.
 - Agent skills allow autonomous tasks to be interleaved while preserving
   dependencies, validation criteria, and completion checks.
 - Implementation and mentoring guidance prefers batched verification with

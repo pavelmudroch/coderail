@@ -5,6 +5,7 @@ import {
     assertCleanProject,
     assertCommittedProject,
     assertNoOutsideStagedChanges,
+    assertStagedProject,
     getHead,
     hasStagedChanges,
     stageProject,
@@ -99,11 +100,39 @@ Deno.test('Loop Git failures propagate', async () => {
     const root = await Deno.makeTempDir();
     try {
         await expect(assertCleanProject(root)).rejects.toThrow('Git failed');
+        await expect(assertStagedProject(root)).rejects.toThrow('Git failed');
         await expect(stageProject(root)).rejects.toThrow('Git failed');
     } finally {
         await Deno.remove(root, { recursive: true });
     }
 });
+
+Deno.test(
+    'Staged project check allows staged work and rejects unstaged or untracked work',
+    async () => {
+        await fixture(async (root, project) => {
+            await Deno.writeTextFile(join(root, 'outside'), 'outside unstaged');
+            await Deno.writeTextFile(join(root, 'untracked'), 'outside untracked');
+            await assertStagedProject(project);
+            const path = join(project, 'file with spaces\nand newline');
+            await Deno.writeTextFile(path, 'new');
+            await expect(assertStagedProject(project)).rejects.toThrow('all changes');
+            await stageProject(project);
+            await assertStagedProject(project);
+            await Deno.writeTextFile(path, 'modified');
+            await expect(assertStagedProject(project)).rejects.toThrow('all changes');
+            await stageProject(project);
+            await assertStagedProject(project);
+            await git(root, 'commit', '-qm', 'new file');
+            await Deno.remove(path);
+            await expect(assertStagedProject(project)).rejects.toThrow('all changes');
+            await stageProject(project);
+            await assertStagedProject(project);
+            await git(root, 'mv', 'nested/.coderail/tickets/open/0001-ticket.md', 'nested/renamed');
+            await assertStagedProject(project);
+        });
+    },
+);
 
 Deno.test(
     'Commit Git checks require new commits and clean scope, supporting unborn HEAD',

@@ -111,10 +111,12 @@ export class Loop implements Command<LoopArguments> {
     getUsage(): string {
         return [
             'Usage:',
-            '  cr loop [<harness>] [-l <n>] [-r] [-c] [-o <settings>] [--help]',
+            '  cr loop [--help] [--limit <n>] [--auto-review] [--auto-commit]',
+            '          [--options <settings>] [<harness>]',
             '',
             '  Implement ready tickets in fresh sessions and stage each successful attempt.',
-            '  Requires an initialized, clean project in Git. Uses defaultHarness when omitted.',
+            '  Requires an initialized Git project with all changes staged.',
+            '  With --auto-commit, the project must be clean. Uses defaultHarness when omitted.',
             '',
             'Options:',
             '  -h, --help           Show this help message and exit.',

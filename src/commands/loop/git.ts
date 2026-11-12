@@ -32,6 +32,21 @@ export async function stageProject(projectRoot: string): Promise<void> {
     await git(projectRoot, ['add', '-A', '--', '.']);
 }
 
+export async function assertStagedProject(projectRoot: string): Promise<void> {
+    const unstaged = await git(projectRoot, ['diff', '--name-only', '-z', '--', '.']);
+    const untracked = await git(projectRoot, [
+        'ls-files',
+        '--others',
+        '--exclude-standard',
+        '-z',
+        '--',
+        '.',
+    ]);
+    if (unstaged !== '' || untracked !== '') {
+        throw new Error('Loop requires all changes in the initialized project to be staged.');
+    }
+}
+
 /** Automatic commits consume the repository index, so no outside entries may be staged. */
 export async function assertNoOutsideStagedChanges(projectRoot: string): Promise<void> {
     const args = ['diff', '--cached', '--name-only', '--no-renames', '--no-relative', '-z'];

@@ -25,6 +25,18 @@
   normal, quiet, verbose, and non-interactive modes. Run the required per-file
   verification for modified source and test files for both fixes.
 
+## Agreed startup decision
+
+Without automatic commit, accept existing staged project changes and reject
+unstaged/untracked project changes. This permits restarting a loop without an
+intervening commit. With automatic commit, retain the clean-project requirement
+and rejection of outside staged changes. The staged implementation and help
+reflect this decision; IDEA.md has been aligned with it.
+
+The walkthrough of this startup change was completed and confirmed by the user
+on 2026-11-12, with no new implementation tasks. Existing review tasks above
+retain their recorded status.
+
 ## Deferred documentation
 
 - README updates remain deferred: remove the stale statement that loop CLI

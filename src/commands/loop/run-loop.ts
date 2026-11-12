@@ -8,6 +8,7 @@ import {
     assertCleanProject,
     assertCommittedProject,
     assertNoOutsideStagedChanges,
+    assertStagedProject,
     getHead,
     hasStagedChanges,
     stageProject,
@@ -113,9 +114,11 @@ export async function runLoop(request: LoopRequest): Promise<LoopResult> {
         const preflightStart = performance.now();
         try {
             signal.throwIfAborted();
-            await assertCleanProject(projectRoot);
             if (commitSettings !== undefined) {
+                await assertCleanProject(projectRoot);
                 await assertNoOutsideStagedChanges(projectRoot);
+            } else {
+                await assertStagedProject(projectRoot);
             }
             const runId =
                 new Date().toISOString().replace(/[-:.]/g, '') +

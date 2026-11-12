@@ -342,8 +342,6 @@ Deno.test(
             const first = await runLoop({ ...options, limit: 1 });
             expect(first.reason).toBe('limit reached');
             expect(first.attempts).toBe(1);
-            // A new invocation requires a clean project; simulate the user's manual commit.
-            await git(root, 'commit', '-qm', 'iteration');
             const second = await runLoop(options);
             expect(second.reason).toBe('blocked queue');
             expect(second.attempts).toBe(0);
@@ -1122,6 +1120,61 @@ Deno.test(
         }
     },
 );
+
+Deno.test('Loop startup requires staged changes, or a clean project with auto commit', async () => {
+    for (const autoCommit of [false, true]) {
+        for (const mode of ['clean', 'staged', 'unstaged', 'untracked']) {
+            await fixture(async (root, project) => {
+                const path = join(project, 'existing work');
+                if (mode !== 'clean') {
+                    await Deno.writeTextFile(path, 'staged');
+                    if (mode !== 'untracked') {
+                        await stageProject(project);
+                    }
+                    if (mode === 'unstaged') {
+                        await Deno.writeTextFile(path, 'unstaged');
+                    }
+                }
+                const before = await git(root, 'status', '--porcelain');
+                const calls: RunRequest[] = [];
+                const result = runLoop({
+                    projectRoot: project,
+                    connector: connector(
+                        async (request) => {
+                            if (request.prompt.includes('$commit')) {
+                                await git(root, 'commit', '-qm', 'iteration');
+                            } else if (request.prompt !== preflightPrompt) {
+                                await close(project, '0001');
+                                if (!autoCommit && mode === 'staged') {
+                                    expect(await git(root, 'show', ':nested/existing work')).toBe(
+                                        'staged',
+                                    );
+                                }
+                            }
+                            return 'OK';
+                        },
+                        calls,
+                        [],
+                    ),
+                    settings: {},
+                    commitSettings: autoCommit ? {} : undefined,
+                    signal: new AbortController().signal,
+                    limit: 1,
+                });
+                if (mode === 'clean' || (!autoCommit && mode === 'staged')) {
+                    expect((await result).attempts).toBe(1);
+                    expect(calls).toHaveLength(autoCommit ? 3 : 2);
+                } else {
+                    await expect(result).rejects.toThrow(
+                        autoCommit ? 'clean initialized project' : 'all changes',
+                    );
+                    expect(calls).toHaveLength(0);
+                    expect(await git(root, 'status', '--porcelain')).toBe(before);
+                }
+            });
+        }
+    }
+});
 
 Deno.test(
     'Auto commit rejects outside staged work before preflight, including nested projects',
