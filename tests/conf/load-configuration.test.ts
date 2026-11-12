@@ -683,3 +683,32 @@ Deno.test(
         }
     },
 );
+
+Deno.test(
+    'Conf runtime loading retains repeated commands and rules independently of document normalization',
+    async () => {
+        const source =
+            '[verify]\npre = [["same"], ["same"]]\npost = [["last"]]\n[[verify.rules]]\npattern = "*"\ncommands = [["x", "x"], ["x", "x"]]\nrequires = ["input", "input"]';
+        const configuration = await read(source, source);
+        expect(configuration.verify.pre).toEqual([['same'], ['same'], ['same'], ['same']]);
+        expect(configuration.verify.post).toEqual([['last'], ['last']]);
+        expect(configuration.verify.rules).toEqual([
+            {
+                pattern: '*',
+                commands: [
+                    ['x', 'x'],
+                    ['x', 'x'],
+                ],
+                requires: ['input', 'input'],
+            },
+            {
+                pattern: '*',
+                commands: [
+                    ['x', 'x'],
+                    ['x', 'x'],
+                ],
+                requires: ['input', 'input'],
+            },
+        ]);
+    },
+);

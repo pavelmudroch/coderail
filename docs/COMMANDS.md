@@ -227,7 +227,74 @@ Use `cr --help`, `cr <command> --help`, or a subcommand's help, such as
 `--cwd <path>`, `--non-interactive`, `--no-color`, `--verbose`, and `--quiet`.
 For example, `cr --cwd /path/to/project ticket next` selects another project.
 
-Some commands listed in help are still under development: `template` is a
-placeholder, and template installation through `cr init <template>` is simulated.
+Templates are stored at `<installRoot>/templates/<name>`, including during source
+development. Use `cr template` to list them alphabetically or `cr template <name>`
+to inspect an exact name. `--json` returns an array of `{ name, description, path }`
+entries; `--path` prints absolute paths, one per line. These output flags are
+mutually exclusive. Use `cr template -- create` or `cr template -- delete` to
+inspect a template with a reserved name.
+
+`cr template create <name> [--description <text>] [--json | --path]` scaffolds an
+empty `assets/` directory, an empty `config` file, and an extensionless `template`
+metadata file using Coderail config syntax (`description = "text"`). The description
+defaults to an empty string. Startup scripts (`startup.sh`, `startup.ps1`, or
+`startup.ts`) are optional and are not generated. Existing directories are protected.
+
+`cr template delete <name> [--yes] [--json | --path]` recursively removes the
+named template after confirmation. Declining succeeds without a result record.
+Noninteractive deletion requires `--yes`. Deletion returns the removed template's
+former path and metadata in the selected output format.
+
+`cr init <template> ...` applies installation templates to the effective working
+directory selected by `--cwd`, in the order supplied. Nested assets are copied
+into the project and settings are merged into `.coderail/config`: later scalar
+values override earlier values, arrays are appended and deduplicated, and
+property comments are preserved. Existing directories merge and identical files
+are skipped. By default, a differing file or file/directory mismatch fails before
+any of that template's assets or configuration are written. Invalid layout or settings
+also fail before copying. Errors and cancellation stop subsequent templates;
+earlier applications and partial I/O changes remain in place.
+
+After copying assets and saving merged settings, each template runs at most one
+startup script before the next template begins. On Unix, `startup.sh` takes
+precedence over `startup.ts`; on Windows, `startup.ps1` takes precedence over
+`startup.ts`. A script for the other platform is ignored. If no applicable script
+exists, initialization continues without startup. Scripts run from the target
+project root using `sh`, `pwsh -File`, or `deno run -A`, with inherited input and
+output streams. The required interpreter must be available on `PATH`.
+
+Missing interpreters and nonzero exits fail initialization. Cancellation
+terminates the running child and stops later templates. Script effects, copied
+assets, and merged settings remain in place after failure or cancellation.
+
+Use `cr init --force <template> ...` to confirm each differing-file overwrite.
+All required answers are collected before that template writes any assets or
+configuration. Declining preserves the file and continues with remaining assets,
+configuration merging, startup, and subsequent templates. Identical files and
+merging directories need no confirmation; file/directory mismatches always fail.
+For unattended use, add `--yes` to accept every overwrite or `--no` to skip every
+conflicting file. Both require `--force` and cannot be combined. Force alone
+requires an interactive terminal when a differing file is encountered. The short
+forms are `-f`, `-y`, and `-n`.
+
+Use `cr init my-template --dry` for a read-only preview. It reports planned
+copies, skips, configuration merges, asset conflicts, and selected startup
+scripts, including when the project directory does not exist. Templates are
+compared in order against preceding planned files and cumulative configuration.
+Preview never creates files, asks overwrite questions, or runs scripts; arbitrary
+startup effects are not predicted. All known asset conflicts are reported and
+cause failure even with `--force --yes` or `--force --no`.
+
+Use `cr init my-template --dry ./preview` to perform full initialization in an
+alternate directory, creating it if needed. Relative directories resolve against
+the effective `--cwd`. Assets, merged configuration, startup scripts, and normal
+overwrite confirmation rules all apply there. With no templates, this creates
+only the base project setup. The original working directory is left untouched.
+
+`--dry` consumes its next argument as a directory unless that argument starts
+with `-`. Put template names before `--dry`: `cr init --dry my-template` initializes
+a directory named `my-template` without applying a template. An option immediately
+after `--dry` leaves it in preview mode. Arguments after `--` remain literal
+template names.
 Use `cr doctor --repair` for supported automatic repairs; see
 [diagnostics and repair limits](INSTALLATION.md#diagnosing-setup-problems).

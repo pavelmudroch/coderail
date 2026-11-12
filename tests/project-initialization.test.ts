@@ -9,7 +9,10 @@ Deno.test('initialization helpers cancel before I/O and after pending reads', as
     const lstat = Deno.lstat;
     try {
         await Deno.mkdir(join(root, '.coderail'));
-        for (const helper of Object.values(ProjectInitialization)) {
+        for (const helper of [
+            ProjectInitialization.ensureConfig,
+            ProjectInitialization.ensureIgnoreRules,
+        ]) {
             const controller = new AbortController();
             controller.abort(new Error('cancelled'));
             await expect(helper(root, controller.signal)).rejects.toThrow('cancelled');
@@ -154,6 +157,96 @@ Deno.test(
             expect(await Deno.readTextFile(path)).toBe(projectIgnoreLines.join('\n') + '\n');
         } finally {
             Deno.open = open;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test('initialize owns base setup and rejects cancellation before writes', async () => {
+    const root = await Deno.makeTempDir();
+    const options = {
+        projectRoot: root,
+        installRoot: root,
+        names: [],
+        mode: 'apply' as const,
+        overwrite: 'error' as const,
+        signal: new AbortController().signal,
+    };
+    try {
+        for (const overrides of [{ signal: AbortSignal.abort() }]) {
+            await expect(
+                ProjectInitialization.initialize({ ...options, ...overrides }),
+            ).rejects.toThrow();
+            await expect(Deno.stat(join(root, '.coderail'))).rejects.toThrow();
+        }
+        expect(
+            await ProjectInitialization.initialize({
+                ...options,
+                overwrite: () => Promise.resolve(false),
+            }),
+        ).toEqual({
+            actions: [],
+            conflicts: [],
+        });
+        expect(await Deno.readTextFile(join(root, '.coderail', 'config'))).toContain(
+            '# Coderail configuration',
+        );
+        expect(await Deno.readTextFile(join(root, '.coderail', '.gitignore'))).toContain(
+            '!tickets/**',
+        );
+    } finally {
+        await Deno.remove(root, { recursive: true });
+    }
+});
+
+Deno.test('preview plans missing base files without creating a project', async () => {
+    const root = await Deno.makeTempDir();
+    try {
+        const target = join(root, 'missing', 'project');
+        const report = await ProjectInitialization.initialize({
+            installRoot: root,
+            projectRoot: target,
+            names: [],
+            mode: 'preview',
+            overwrite: 'error',
+            signal: new AbortController().signal,
+        });
+        expect(report.conflicts).toEqual([]);
+        expect(report.actions).toEqual([
+            { kind: 'copy', path: join(target, '.coderail', 'config') },
+            { kind: 'copy', path: join(target, '.coderail', '.gitignore') },
+        ]);
+        await expect(Deno.stat(join(root, 'missing'))).rejects.toThrow();
+    } finally {
+        await Deno.remove(root, { recursive: true });
+    }
+});
+
+Deno.test(
+    'preview preserves existing base files and validates a blocked base directory',
+    async () => {
+        const root = await Deno.makeTempDir();
+        const options = {
+            installRoot: root,
+            projectRoot: root,
+            names: [],
+            mode: 'preview' as const,
+            overwrite: 'error' as const,
+            signal: new AbortController().signal,
+        };
+        try {
+            const marker = join(root, '.coderail');
+            await Deno.writeTextFile(marker, 'blocked');
+            await expect(ProjectInitialization.initialize(options)).rejects.toThrow('Expected');
+            await Deno.remove(marker);
+            await Deno.mkdir(marker);
+            await Deno.writeTextFile(join(marker, 'config'), 'no_color = true');
+            await Deno.writeTextFile(join(marker, '.gitignore'), '# custom');
+            const report = await ProjectInitialization.initialize(options);
+            expect(report.actions).toEqual([{ kind: 'copy', path: join(marker, '.gitignore') }]);
+            expect(await Deno.readTextFile(join(marker, 'config'))).toBe('no_color = true');
+            expect(await Deno.readTextFile(join(marker, '.gitignore'))).toBe('# custom');
+        } finally {
             await Deno.remove(root, { recursive: true });
         }
     },

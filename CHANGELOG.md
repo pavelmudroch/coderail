@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Installation template listing, inspection, creation, and deletion with `cr template`,
+  including JSON and path output.
+- `cr init <template> ...` copies template assets, merges project configuration,
+  and runs platform-specific startup scripts in template order. Supports confirmed
+  overwrites, a read-only `--dry` preview, and initialization in an alternate
+  directory with `--dry <directory>`.
 - `cr idea archive <idea>` archives ready ideas after ticket creation; archived
   ideas remain listed and can be reopened.
 - `cr doctor --repair` repairs missing project configuration and incomplete ignore

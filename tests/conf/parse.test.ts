@@ -724,3 +724,53 @@ Deno.test('Conf::parse metadata helper', async (test) => {
         }
     });
 });
+
+Deno.test(
+    'Conf::parse associates independent comments by full paths and excludes arrays',
+    async () => {
+        const parsed = await parse(
+            stream([
+                encoder.encode(`# Root
+
+root_key = "a" # inline
+# Section
+[left_side]
+# Left value
+value = 1
+# Array
+items = [
+# Inside
+1] # ignored
+# Right section
+[right_side] # header inline
+value = 2 # right value
+# Object array
+[[rules]]
+# Element
+pattern = "*" # ignored
+# Nested element
+[rules.options]
+flag = true
+# Back to object
+[other]
+flag = false
+# Trailing
+`),
+            ]),
+        );
+        const expected = new Map([
+            ['rootKey', ['Root', 'inline']],
+            ['leftSide', ['Section']],
+            ['leftSide.value', ['Left value']],
+            ['rightSide', ['Right section', 'header inline']],
+            ['rightSide.value', ['right value']],
+            ['other', ['Back to object']],
+        ]);
+        expect(parsed.getComments()).toEqual(expected);
+        const comments = parsed.getComments();
+        comments.get('rootKey')?.push('changed');
+        comments.delete('leftSide');
+        comments.set('extra', ['extra']);
+        expect(parsed.getComments()).toEqual(expected);
+    },
+);

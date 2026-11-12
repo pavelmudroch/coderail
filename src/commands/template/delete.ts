@@ -1,20 +1,24 @@
 import type { Command, ParsedArguments, RunContext } from '@commands';
+import { Log } from '@log';
 
-export class Delete implements Command {
+import { Templates } from '../../templates.ts';
+import { outputTemplates, parseTemplateArguments, type TemplateArguments } from './create.ts';
+
+export class Delete implements Command<TemplateArguments> {
     readonly requiresInit = false;
 
-    parseArguments(_args: readonly string[]): ParsedArguments {
-        return { args: {}, rest: [] };
+    parseArguments(args: readonly string[]): ParsedArguments<TemplateArguments> {
+        return parseTemplateArguments(this, args, 'delete');
     }
 
-    shouldHandleHelp(_parsedArguments: ParsedArguments): boolean {
-        return false;
+    shouldHandleHelp(parsedArguments: ParsedArguments<TemplateArguments>): boolean {
+        return parsedArguments.args.help;
     }
 
     getUsage(): string {
         const usageLines = [
             'Usage:',
-            '  cr template delete [--help] [--json | --path] <name>',
+            '  cr template delete [--help] [--json | --path] [--yes] <name>',
             '',
             '  Delete the template directory with the specified name.',
             '',
@@ -22,6 +26,7 @@ export class Delete implements Command {
             '  -h, --help           Show this help message and exit.',
             '      --json           Output in JSON format.',
             '      --path           Show only the path to the template.',
+            '      --yes            Confirm deletion without prompting.',
             '',
             'Arguments:',
             '  <name>               Name of the template to delete.',
@@ -33,7 +38,26 @@ export class Delete implements Command {
         return undefined;
     }
 
-    run(_context: RunContext): Promise<void> {
-        return Promise.resolve();
+    async run(context: RunContext<TemplateArguments>): Promise<void> {
+        const args = context.parsedArguments.args;
+        const info = await Templates.get(
+            context.context.installRoot,
+            args.name as string,
+            context.signal,
+        );
+        if (!args.yes) {
+            if (context.configuration.nonInteractive || !Deno.stdin.isTerminal()) {
+                throw new Error(
+                    'Template deletion requires confirmation. Use --yes in noninteractive mode.',
+                );
+            }
+            if (!Log.confirm(`Delete template "${info.name}" at "${info.path}"?`)) {
+                return;
+            }
+        }
+        outputTemplates(
+            [await Templates.delete(context.context.installRoot, info.name, context.signal)],
+            args,
+        );
     }
 }

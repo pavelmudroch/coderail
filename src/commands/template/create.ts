@@ -1,14 +1,121 @@
+import { Cli } from '@cli';
 import type { Command, ParsedArguments, RunContext } from '@commands';
+import { Log } from '@log';
 
-export class Create implements Command {
+import { type TemplateInfo, Templates } from '../../templates.ts';
+
+export type TemplateArguments = {
+    help: boolean;
+    json: boolean;
+    path: boolean;
+    name?: string;
+    description: string;
+    yes: boolean;
+    command?: string;
+};
+
+export function parseTemplateArguments(
+    command: Command,
+    original: readonly string[],
+    mode: 'list' | 'create' | 'delete',
+): ParsedArguments<TemplateArguments> {
+    const args: TemplateArguments = {
+        help: false,
+        json: false,
+        path: false,
+        description: '',
+        yes: false,
+    };
+    let literal = false;
+    for (let i = 0; i < original.length; i++) {
+        const arg = original[i];
+        if (arg === undefined) {
+            continue;
+        }
+        if (!literal) {
+            if (arg === '--') {
+                literal = true;
+                continue;
+            }
+            if (arg === '--help' || arg === '-h') {
+                args.help = true;
+                return { args, rest: [] };
+            }
+            if (arg === '--json') {
+                args.json = true;
+                continue;
+            }
+            if (arg === '--path') {
+                args.path = true;
+                continue;
+            }
+            if (mode === 'delete' && (arg === '--yes' || arg === '-y')) {
+                args.yes = true;
+                continue;
+            }
+            if (
+                mode === 'create' &&
+                (arg === '--description' || arg === '-d' || arg.startsWith('--description='))
+            ) {
+                const value = arg.startsWith('--description=') ? arg.slice(14) : original[++i];
+                if (value === undefined) {
+                    Cli.raiseUsageError('Option "--description" requires a value.', command);
+                }
+                args.description = value;
+                continue;
+            }
+            if (arg.startsWith('-')) {
+                Cli.raiseUsageError(`Unknown option "${arg}".`, command);
+            }
+            if (
+                mode === 'list' &&
+                (arg === 'create' || arg === 'delete') &&
+                args.name === undefined
+            ) {
+                if (args.json || args.path) {
+                    Cli.raiseUsageError('Put output options after the subcommand.', command);
+                }
+                args.command = arg;
+                return { args, rest: original.slice(i + 1) };
+            }
+        }
+        if (args.name !== undefined) {
+            Cli.raiseUsageError(`Unexpected argument "${arg}".`, command);
+        }
+        args.name = arg;
+    }
+    if (args.json && args.path) {
+        Cli.raiseUsageError('Options --json and --path are mutually exclusive.', command);
+    }
+    if (mode !== 'list' && !args.name?.trim()) {
+        Cli.raiseUsageError('Missing required template name.', command);
+    }
+    return { args, rest: [] };
+}
+
+export function outputTemplates(entries: TemplateInfo[], args: TemplateArguments): void {
+    if (args.json) {
+        console.log(JSON.stringify(entries, null, 2));
+        return;
+    }
+    for (const entry of entries) {
+        if (args.path) {
+            console.log(entry.path);
+        } else {
+            Log.output(`${entry.name}  ${entry.description}\n  ${entry.path}`);
+        }
+    }
+}
+
+export class Create implements Command<TemplateArguments> {
     readonly requiresInit = false;
 
-    parseArguments(_args: readonly string[]): ParsedArguments {
-        return { args: {}, rest: [] };
+    parseArguments(args: readonly string[]): ParsedArguments<TemplateArguments> {
+        return parseTemplateArguments(this, args, 'create');
     }
 
-    shouldHandleHelp(_parsedArguments: ParsedArguments): boolean {
-        return false;
+    shouldHandleHelp(parsedArguments: ParsedArguments<TemplateArguments>): boolean {
+        return parsedArguments.args.help;
     }
 
     getUsage(): string {
@@ -30,13 +137,13 @@ export class Create implements Command {
             '',
             'Template structure is as follows:',
             '  <template-name>/',
-            '    ├── template.conf  Configuration describing the template.',
-            '    ├── startup.{sh|ps1|bat|ts|conf}',
-            '    |                  Startup script for the template. Run with precedence:',
-            '    |                    1. platform specific script (sh, ps1, bat).',
+            '    ├── template       Config-format metadata: description = "text".',
+            '    ├── config         Coderail configuration to be merged into project.',
+            '    ├── startup.{sh|ps1|ts}',
+            '    |                  Optional startup script (not generated). Precedence:',
+            '    |                    1. platform specific script (sh, ps1).',
             '    |                    2. TypeScript script (ts).',
-            '    |                    3. Configuration file (conf).',
-            '    └── structure/     Directory containing the structure of the template.',
+            '    └── assets/        Directory containing the structure of the template.',
         ];
         return usageLines.join('\n');
     }
@@ -45,7 +152,14 @@ export class Create implements Command {
         return undefined;
     }
 
-    run(_context: RunContext): Promise<void> {
-        return Promise.resolve();
+    async run(context: RunContext<TemplateArguments>): Promise<void> {
+        const args = context.parsedArguments.args;
+        const info = await Templates.create(
+            context.context.installRoot,
+            args.name as string,
+            args.description,
+            context.signal,
+        );
+        outputTemplates([info], args);
     }
 }

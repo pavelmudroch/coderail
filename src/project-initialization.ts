@@ -1,6 +1,8 @@
 import { Fs } from '@fs';
 import { Log } from '@log';
-import { join } from '@std/path';
+import { join, resolve } from '@std/path';
+
+import { type ApplyOptions, type TemplateReport, Templates } from './templates.ts';
 
 export const projectIgnoreLines = [
     '*',
@@ -18,11 +20,12 @@ async function ensureConfig(
     projectRoot: string,
     signal: AbortSignal,
     collected?: CollectedInput,
+    preview?: Map<string, Uint8Array | null>,
 ): Promise<void> {
     signal.throwIfAborted();
     const filePath = join(projectRoot, '.coderail', 'config');
     if (collected) {
-        await writeInitialization(filePath, defaultConfigContent(), signal, collected);
+        await writeInitialization(filePath, defaultConfigContent(), signal, collected, preview);
         return;
     }
     try {
@@ -37,8 +40,10 @@ async function ensureConfig(
             throw error;
         }
         signal.throwIfAborted();
-        await writeInitialization(filePath, defaultConfigContent(), signal, collected);
-        Log.notice(`Created new configuration file at "${filePath}".`);
+        await writeInitialization(filePath, defaultConfigContent(), signal, collected, preview);
+        if (!preview) {
+            Log.notice(`Created new configuration file at "${filePath}".`);
+        }
     }
     signal.throwIfAborted();
 }
@@ -47,6 +52,7 @@ async function ensureIgnoreRules(
     projectRoot: string,
     signal: AbortSignal,
     collected?: CollectedInput,
+    preview?: Map<string, Uint8Array | null>,
 ): Promise<void> {
     signal.throwIfAborted();
     const ignorePath = join(projectRoot, '.coderail', '.gitignore');
@@ -76,7 +82,13 @@ async function ensureIgnoreRules(
     }
     signal.throwIfAborted();
     if (repaired !== original) {
-        await writeInitialization(ignorePath, new Blob([repaired]).stream(), signal, collected);
+        await writeInitialization(
+            ignorePath,
+            new Blob([repaired]).stream(),
+            signal,
+            collected,
+            preview,
+        );
     }
     signal.throwIfAborted();
 }
@@ -87,7 +99,14 @@ async function writeInitialization(
     content: ReadableStream<Uint8Array>,
     signal: AbortSignal,
     collected: CollectedInput | undefined,
+    preview?: Map<string, Uint8Array | null>,
 ): Promise<void> {
+    if (preview) {
+        const bytes = new Uint8Array(await new Response(content).arrayBuffer());
+        signal.throwIfAborted();
+        preview.set(path, bytes);
+        return;
+    }
     if (!collected) {
         await Fs.write(path, content);
         return;
@@ -122,7 +141,36 @@ async function writeInitialization(
     file.truncateSync(bytes.length);
 }
 
-export const ProjectInitialization = { ensureConfig, ensureIgnoreRules };
+async function initialize(options: ApplyOptions): Promise<TemplateReport> {
+    options.signal.throwIfAborted();
+    const projectRoot = resolve(options.projectRoot);
+    const preview = options.mode === 'preview' ? new Map<string, Uint8Array | null>() : undefined;
+    const directory = join(projectRoot, '.coderail');
+    if (preview) {
+        try {
+            const info = await Deno.stat(directory);
+            if (!info.isDirectory) {
+                throw new Error(`Expected "${directory}" to be a directory.`);
+            }
+        } catch (error) {
+            if (!(error instanceof Deno.errors.NotFound)) {
+                throw error;
+            }
+        }
+    } else {
+        await Fs.makeDirectory(directory);
+    }
+    await ensureConfig(projectRoot, options.signal, undefined, preview);
+    await ensureIgnoreRules(projectRoot, options.signal, undefined, preview);
+    const actions = [...(preview?.keys() ?? [])].map((path) => ({ kind: 'copy' as const, path }));
+    if (preview) {
+        preview.set(directory, null);
+    }
+    const report = await Templates.apply({ ...options, projectRoot }, preview);
+    return { actions: [...actions, ...report.actions], conflicts: report.conflicts };
+}
+
+export const ProjectInitialization = { initialize, ensureConfig, ensureIgnoreRules };
 
 function defaultConfigContent(): ReadableStream<Uint8Array> {
     const configContentLines = [

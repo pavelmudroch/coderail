@@ -10,13 +10,26 @@ import {
     diagnoseConfiguration,
     loadConfiguration,
 } from './conf/load-configuration.ts';
+import { merge } from './conf/merge.ts';
 import { parse, type ParsedConf } from './conf/parse.ts';
+import { stringify } from './conf/stringify.ts';
+import { validateConfiguration } from './conf/validate-configuration.ts';
 
 export type { Configuration };
 export type { ConfFileStream };
-export type { Meta, MetaType, ParsedConf, ParseResult } from './conf/parse.ts';
+export type {
+    CommentMap,
+    ConfigDocument,
+    Meta,
+    MetaType,
+    ParsedConf,
+    ParseResult,
+} from './conf/parse.ts';
 
 export interface Conf {
+    merge: typeof merge;
+    stringify: typeof stringify;
+    validateConfiguration: typeof validateConfiguration;
     createConfiguration: typeof createConfiguration;
     diagnoseConfiguration: typeof diagnoseConfiguration;
     loadConfiguration(context: RuntimeContext, global: GlobalArguments): Promise<Configuration>;
@@ -41,6 +54,9 @@ export interface Conf {
 }
 
 export const Conf: Conf = {
+    merge,
+    stringify,
+    validateConfiguration,
     createConfiguration,
     diagnoseConfiguration,
     loadConfiguration,

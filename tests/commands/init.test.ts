@@ -1,10 +1,12 @@
 import { Conf } from '@conf';
+import { Log } from '@log';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
 import { UsageError } from '../../src/cli/usage-error.ts';
 import type { RunContext } from '../../src/commands/helpers/command.ts';
 import { Init } from '../../src/commands/init.ts';
+import { Templates } from '../../src/templates.ts';
 
 const defaultConfiguration = [
     '# Coderail configuration file, lines starting with "#" are comments.',
@@ -68,15 +70,39 @@ Deno.test('Init parses positional templates and literal arguments after --', () 
     expect(command.requiresInit).toBe(false);
     expect(command.getSubcommand()).toBeUndefined();
     expect(command.parseArguments([])).toEqual({
-        args: { help: false, templates: [] },
+        args: {
+            help: false,
+            force: false,
+            yes: false,
+            no: false,
+            dry: false,
+            dryPath: undefined,
+            templates: [],
+        },
         rest: [],
     });
     expect(command.parseArguments(new Array<string>(1))).toEqual({
-        args: { help: false, templates: [] },
+        args: {
+            help: false,
+            force: false,
+            yes: false,
+            no: false,
+            dry: false,
+            dryPath: undefined,
+            templates: [],
+        },
         rest: [],
     });
     expect(command.parseArguments(['first', 'second', '--', '-literal', '--help'])).toEqual({
-        args: { help: false, templates: ['first', 'second', '-literal', '--help'] },
+        args: {
+            help: false,
+            force: false,
+            yes: false,
+            no: false,
+            dry: false,
+            dryPath: undefined,
+            templates: ['first', 'second', '-literal', '--help'],
+        },
         rest: [],
     });
 });
@@ -88,7 +114,9 @@ Deno.test('Init handles help and rejects invalid options', () => {
         const parsed = command.parseArguments(['template', help, '--unknown']);
         expect(command.shouldHandleHelp(parsed)).toBe(true);
     }
-    expect(command.getUsage()).toContain('cr init [--help] [<template> ...]');
+    expect(command.getUsage()).toContain(
+        'cr init [--help] [--force [--yes | --no]] [<template> ...]',
+    );
     for (const option of ['--unknown', '-x', '--help=value']) {
         expect(() => command.parseArguments([option])).toThrow(UsageError);
     }
@@ -97,14 +125,29 @@ Deno.test('Init handles help and rejects invalid options', () => {
 Deno.test('Init accepts templates on fresh and existing configurations', async () => {
     const root = await Deno.makeTempDir();
     const path = join(root, '.coderail', 'config');
+    const output = Log.output;
+    const messages: unknown[][] = [];
+    Log.output = (...args) => {
+        messages.push(args);
+    };
     try {
         const command = new Init();
+        for (const name of ['first', 'second', 'third', 'fourth']) {
+            const info = await Templates.create(root, name, '', new AbortController().signal);
+            await Deno.writeTextFile(join(info.path, 'assets', name), name);
+            await Deno.writeTextFile(join(info.path, 'config'), `default_harness = "${name}"`);
+        }
         await command.run(context(root, ['first', 'second']));
-        expect(await Deno.readTextFile(path)).toBe(defaultConfiguration);
-        await Deno.writeTextFile(path, 'preserved');
+        expect(await Deno.readTextFile(path)).toContain('default_harness = "second"');
         await command.run(context(root, ['third', 'fourth']));
-        expect(await Deno.readTextFile(path)).toBe('preserved');
+        expect(await Deno.readTextFile(path)).toContain('default_harness = "fourth"');
+        expect(messages.flat().join('\n')).toContain(`copy: ${join(root, 'first')}`);
+        expect(messages.flat().join('\n')).toContain(`merge-config: ${path}`);
+        for (const name of ['first', 'second', 'third', 'fourth']) {
+            expect(await Deno.readTextFile(join(root, name))).toBe(name);
+        }
     } finally {
+        Log.output = output;
         await Deno.remove(root, { recursive: true });
     }
 });
@@ -290,3 +333,317 @@ Deno.test('Init propagates ignore file read errors', async () => {
         await Deno.remove(root, { recursive: true });
     }
 });
+
+Deno.test(
+    'Init uses the effective cwd and propagates template errors and cancellation',
+    async () => {
+        const root = await Deno.makeTempDir();
+        try {
+            const target = join(root, 'effective-cwd');
+            await Deno.mkdir(target);
+            const run = context(target, ['missing']);
+            run.context.installRoot = root;
+            await expect(new Init().run(run)).rejects.toThrow('missing');
+            expect((await Deno.stat(join(target, '.coderail'))).isDirectory).toBe(true);
+            await expect(Deno.stat(join(root, '.coderail'))).rejects.toThrow();
+            run.signal = AbortSignal.abort();
+            await expect(new Init().run(run)).rejects.toThrow();
+        } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test('Init validates force and automatic answer flags', () => {
+    const command = new Init();
+    for (const flags of [
+        ['--force', '--yes'],
+        ['-f', '-y'],
+        ['--force', '--no'],
+        ['-f', '-n'],
+    ]) {
+        const args = command.parseArguments(flags).args;
+        expect(args.force).toBe(true);
+        expect(args.yes).toBe(flags[1] === '--yes' || flags[1] === '-y');
+        expect(args.no).toBe(flags[1] === '--no' || flags[1] === '-n');
+    }
+    for (const flags of [
+        ['--yes'],
+        ['--no'],
+        ['--force', '--yes', '--no'],
+        ['--force=x'],
+        ['--yes=x'],
+        ['--no=x'],
+    ]) {
+        expect(() => command.parseArguments(flags)).toThrow(UsageError);
+    }
+});
+
+Deno.test(
+    'Init prompts only for differing files and supports automatic and noninteractive decisions',
+    async () => {
+        const confirm = Log.confirm;
+        const terminal = Deno.stdin.isTerminal;
+        try {
+            for (const mode of [
+                'yes',
+                'no',
+                'accept',
+                'decline',
+                'configured',
+                'terminal',
+                'normal',
+                'clean',
+            ]) {
+                const root = await Deno.makeTempDir();
+                let calls = 0;
+                try {
+                    const info = await Templates.create(
+                        root,
+                        'template',
+                        '',
+                        new AbortController().signal,
+                    );
+                    await Deno.writeTextFile(join(info.path, 'assets', 'a-new'), 'new');
+                    await Deno.writeTextFile(
+                        join(info.path, 'assets', 'z-conflict'),
+                        'replacement',
+                    );
+                    if (mode !== 'clean') {
+                        await Deno.writeTextFile(join(root, 'z-conflict'), 'original');
+                    }
+                    Log.confirm = (message) => {
+                        expect(message).toContain(join(root, 'z-conflict'));
+                        expect(Deno.readTextFileSync(join(root, 'z-conflict'))).toBe('original');
+                        expect(() => Deno.statSync(join(root, 'a-new'))).toThrow();
+                        calls++;
+                        return mode === 'accept';
+                    };
+                    Deno.stdin.isTerminal = () =>
+                        !['terminal', 'clean', 'yes', 'no'].includes(mode);
+                    const flags = mode === 'normal' ? [] : ['--force'];
+                    if (mode === 'yes' || mode === 'no') {
+                        flags.push('--' + mode);
+                    }
+                    const run = context(root, [...flags, 'template']);
+                    run.configuration.nonInteractive = [
+                        'configured',
+                        'clean',
+                        'yes',
+                        'no',
+                    ].includes(mode);
+                    if (['configured', 'terminal', 'normal'].includes(mode)) {
+                        try {
+                            await new Init().run(run);
+                            throw new Error('Expected conflict failure');
+                        } catch (error) {
+                            expect(error).toBeInstanceOf(Error);
+                            if (mode !== 'normal') {
+                                expect(String((error as Error).cause)).toContain(
+                                    '--force --yes or --force --no',
+                                );
+                            } else {
+                                expect(String((error as Error).cause)).toContain(
+                                    'Template asset conflict',
+                                );
+                            }
+                        }
+                        await expect(Deno.stat(join(root, 'a-new'))).rejects.toThrow();
+                    } else {
+                        await new Init().run(run);
+                        expect(await Deno.readTextFile(join(root, 'z-conflict'))).toBe(
+                            ['yes', 'accept', 'clean'].includes(mode) ? 'replacement' : 'original',
+                        );
+                        expect(await Deno.readTextFile(join(root, 'a-new'))).toBe('new');
+                    }
+                    expect(calls).toBe(['accept', 'decline'].includes(mode) ? 1 : 0);
+                } finally {
+                    await Deno.remove(root, { recursive: true });
+                }
+            }
+        } finally {
+            Log.confirm = confirm;
+            Deno.stdin.isTerminal = terminal;
+        }
+    },
+);
+
+Deno.test(
+    'Init parses optional dry directories and preserves option and literal boundaries',
+    () => {
+        const command = new Init();
+        for (const [input, templates, path] of [
+            [['my-template', '--dry'], ['my-template'], undefined],
+            [['my-template', '--dry', './preview'], ['my-template'], './preview'],
+            [['--dry', 'my-template'], [], 'my-template'],
+            [['my-template', '--dry', '--force'], ['my-template'], undefined],
+            [['--dry', '--', 'literal'], ['literal'], undefined],
+            [['--', '--dry'], ['--dry'], undefined],
+        ] as const) {
+            const args = command.parseArguments(input).args;
+            expect(args.templates).toEqual(templates);
+            expect(args.dryPath).toBe(path);
+            expect(args.dry).toBe(input[0] !== '--');
+        }
+        for (const flags of [
+            ['--dry', '--yes'],
+            ['--dry', '--force', '--yes', '--no'],
+            ['--dry=x'],
+        ]) {
+            expect(() => command.parseArguments(flags)).toThrow(UsageError);
+        }
+    },
+);
+
+Deno.test(
+    'Init preview reports every conflict without prompting even with automatic answers',
+    async () => {
+        const root = await Deno.makeTempDir();
+        const confirm = Log.confirm;
+        const output = Log.output;
+        const messages: string[] = [];
+        try {
+            const template = await Templates.create(
+                root,
+                'example',
+                '',
+                new AbortController().signal,
+            );
+            for (const name of ['a', 'b']) {
+                await Deno.writeTextFile(join(template.path, 'assets', name), 'replacement');
+                await Deno.writeTextFile(join(root, name), 'original');
+            }
+            await Deno.writeTextFile(
+                join(template.path, 'startup.ts'),
+                'throw new Error("must not run");',
+            );
+            Log.confirm = () => {
+                throw new Error('must not prompt');
+            };
+            Log.output = (...args) => {
+                messages.push(args.join(' '));
+            };
+            for (const flags of [[], ['--force'], ['--force', '--yes'], ['--force', '--no']]) {
+                messages.length = 0;
+                await expect(
+                    new Init().run(context(root, ['example', '--dry', ...flags])),
+                ).rejects.toThrow('conflict');
+                for (const name of ['a', 'b']) {
+                    expect(messages.join('\n')).toContain(`conflict: ${join(root, name)}`);
+                    expect(await Deno.readTextFile(join(root, name))).toBe('original');
+                }
+                expect(messages.join('\n')).toContain('startup:');
+                await expect(Deno.stat(join(root, '.coderail'))).rejects.toThrow();
+            }
+        } finally {
+            Log.confirm = confirm;
+            Log.output = output;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'Init dry directory applies under effective cwd with normal overwrite rules',
+    async () => {
+        const root = await Deno.makeTempDir();
+        const confirm = Log.confirm;
+        const terminal = Deno.stdin.isTerminal;
+        try {
+            const template = await Templates.create(
+                root,
+                'example',
+                '',
+                new AbortController().signal,
+            );
+            await Deno.writeTextFile(join(template.path, 'assets', 'input'), 'new');
+            await Deno.writeTextFile(join(template.path, 'config'), 'no_color = true');
+            await Deno.writeTextFile(
+                join(template.path, 'startup.ts'),
+                "await Deno.writeTextFile('output', Deno.cwd() + ':' + await Deno.readTextFile('input'));",
+            );
+            const cwd = join(root, 'effective');
+            await Deno.mkdir(cwd);
+            const target = join(cwd, 'preview');
+            for (const flag of ['--yes', '--no', '--yes']) {
+                const run = context(cwd, ['example', '--dry', './preview', '--force', flag]);
+                run.context.installRoot = root;
+                await new Init().run(run);
+                expect(await Deno.readTextFile(join(target, '.coderail', 'config'))).toContain(
+                    'no_color = true',
+                );
+                expect(await Deno.readTextFile(join(target, 'output'))).toBe(
+                    target + ':' + (flag === '--no' ? 'old' : 'new'),
+                );
+                await Deno.writeTextFile(join(target, 'input'), 'old');
+            }
+            for (const answer of [false, true]) {
+                let calls = 0;
+                Log.confirm = (message) => {
+                    expect(message).toContain(join(target, 'input'));
+                    calls++;
+                    return answer;
+                };
+                Deno.stdin.isTerminal = () => true;
+                const interactive = context(cwd, ['example', '--dry', './preview', '--force']);
+                interactive.context.installRoot = root;
+                await new Init().run(interactive);
+                expect(calls).toBe(1);
+                expect(await Deno.readTextFile(join(target, 'input'))).toBe(answer ? 'new' : 'old');
+                await Deno.writeTextFile(join(target, 'input'), 'old');
+            }
+            const run = context(cwd, ['example', '--dry', './preview', '--force']);
+            run.context.installRoot = root;
+            run.configuration.nonInteractive = true;
+            await expect(new Init().run(run)).rejects.toThrow();
+            await Deno.writeTextFile(join(cwd, 'blocked'), 'file');
+            await expect(
+                new Init().run(context(cwd, ['--dry', 'blocked/nested'])),
+            ).rejects.toThrow();
+            await new Init().run(context(cwd, ['--dry', 'empty']));
+            expect((await Deno.stat(join(cwd, 'empty', '.coderail', 'config'))).isFile).toBe(true);
+            await expect(Deno.stat(join(cwd, '.coderail'))).rejects.toThrow();
+        } finally {
+            Log.confirm = confirm;
+            Deno.stdin.isTerminal = terminal;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'Init previews a missing project and template startup without creating anything',
+    async () => {
+        const root = await Deno.makeTempDir();
+        const output = Log.output;
+        const messages: string[] = [];
+        try {
+            const template = await Templates.create(
+                root,
+                'example',
+                '',
+                new AbortController().signal,
+            );
+            await Deno.writeTextFile(join(template.path, 'assets', 'input'), 'asset');
+            await Deno.writeTextFile(
+                join(template.path, 'startup.ts'),
+                "await Deno.readTextFile('input'); await Deno.writeTextFile('started', 'yes');",
+            );
+            const target = join(root, 'missing');
+            const run = context(target, ['example', '--dry']);
+            run.context.installRoot = root;
+            Log.output = (...args) => {
+                messages.push(args.join(' '));
+            };
+            await new Init().run(run);
+            expect(messages.join('\n')).toContain(`copy: ${join(target, 'input')}`);
+            expect(messages.join('\n')).toContain('Startup effects are not simulated');
+            await expect(Deno.stat(target)).rejects.toThrow();
+            await new Init().run(context(target, ['--dry']));
+            await expect(Deno.stat(target)).rejects.toThrow();
+        } finally {
+            Log.output = output;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);

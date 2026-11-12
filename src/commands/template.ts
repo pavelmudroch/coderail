@@ -1,16 +1,24 @@
 import type { Command, ParsedArguments } from '@commands';
 
+import { Templates } from '../templates.ts';
 import type { RunContext } from './helpers/command.ts';
+import {
+    Create,
+    outputTemplates,
+    parseTemplateArguments,
+    type TemplateArguments,
+} from './template/create.ts';
+import { Delete } from './template/delete.ts';
 
-export class Template implements Command {
+export class Template implements Command<TemplateArguments> {
     readonly requiresInit = false;
 
-    parseArguments(_args: readonly string[]): ParsedArguments {
-        return { args: {}, rest: [] };
+    parseArguments(args: readonly string[]): ParsedArguments<TemplateArguments> {
+        return parseTemplateArguments(this, args, 'list');
     }
 
-    shouldHandleHelp(_parsedArguments: ParsedArguments): boolean {
-        return false;
+    shouldHandleHelp(parsedArguments: ParsedArguments<TemplateArguments>): boolean {
+        return parsedArguments.args.help;
     }
 
     getUsage(): string {
@@ -36,11 +44,24 @@ export class Template implements Command {
         return usageLines.join('\n');
     }
 
-    getSubcommand(): Command | undefined {
+    getSubcommand(parsedArguments: ParsedArguments<TemplateArguments>): Command | undefined {
+        if (parsedArguments.args.command === 'create') {
+            return new Create();
+        }
+        if (parsedArguments.args.command === 'delete') {
+            return new Delete();
+        }
         return undefined;
     }
 
-    run(_context: RunContext): Promise<void> {
-        return Promise.resolve();
+    async run(context: RunContext<TemplateArguments>): Promise<void> {
+        const args = context.parsedArguments.args;
+        const root = context.context.installRoot;
+        outputTemplates(
+            args.name === undefined
+                ? await Templates.list(root, context.signal)
+                : [await Templates.get(root, args.name, context.signal)],
+            args,
+        );
     }
 }

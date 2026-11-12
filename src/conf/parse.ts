@@ -4,6 +4,9 @@ export type ParseResult = {
     [key: string]: ParseResult | Scalar | ParseResult[] | BracketArray;
 };
 
+export type CommentMap = Map<string, string[]>;
+export type ConfigDocument = { values: ParseResult; comments: CommentMap };
+
 interface Position {
     /** 1-based physical line. */
     line: number;
@@ -75,6 +78,8 @@ export interface Meta {
 export interface ParsedConf<T extends ParseResult = ParseResult> {
     /** Returns fresh objects and arrays with camelCase keys; mutations do not affect source metadata. */
     toObject(): T;
+    /** Returns independent comment lines keyed by full camelCase property paths. */
+    getComments(): CommentMap;
     /**
      * Looks up original file locations using camelCase or source property names and zero-based array indices.
      * Missing/invalid paths, the root, and array items requested as keys return undefined.
@@ -153,6 +158,9 @@ function toObject(root: ObjectNode): ParseResult {
 export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedConf> {
     const result: ObjectNode = { kind: 'object', properties: [] };
     let target = result;
+    const comments = new WeakMap<object, string[]>();
+    let pendingComments: string[] = [];
+    let statementComments: string[] = [];
     const indexes = new WeakMap<ObjectNode, Map<string, PropertyNode>>();
     const arrays: ArrayFrame[] = [];
     let key: KeyNode | undefined;
@@ -422,6 +430,11 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
         lineNumber++;
         whitespace();
         let header: HeaderNode | undefined;
+        const standalone = arrays.length === 0 && text[cursor] === '#';
+        if (arrays.length === 0 && cursor < text.length && !standalone) {
+            statementComments = pendingComments;
+            pendingComments = [];
+        }
         if (arrays.length === 0) {
             if (cursor === text.length || text[cursor] === '#') {
                 // Comments still obey physical line-ending rules.
@@ -476,6 +489,12 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
             }
             if (character === '#') {
                 comment = true;
+                const content = text.slice(cursor + 1).trim();
+                if (standalone) {
+                    pendingComments.push(content);
+                } else if (arrays.length === 0) {
+                    statementComments.push(content);
+                }
                 continue;
             }
             if (header || complete) {
@@ -508,6 +527,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
         }
         if (header) {
             namespace(header);
+            comments.set(target, statementComments);
         } else if (key !== undefined && arrays.length === 0) {
             if (!complete || value === undefined) {
                 fail('Expected value');
@@ -518,6 +538,7 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
                 fail('Duplicate assignment');
             }
             const property = { keys: [key], value };
+            comments.set(value, statementComments);
             target.properties.push(property);
             properties.set(propertyName, property);
             key = undefined;
@@ -678,5 +699,28 @@ export async function parse(file: ReadableStream<Uint8Array>): Promise<ParsedCon
         return { key: sourcePath.join('.'), line: location.line, column: location.column, type };
     }
 
-    return { toObject: () => toObject(result), getMeta };
+    function getComments(): CommentMap {
+        const resultComments: CommentMap = new Map();
+        function visit(node: ObjectNode, path: string[]): void {
+            for (const property of node.properties) {
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Every property has an assignment key or header segment.
+                const nested = [...path, camelCase(property.keys[0]!.name)];
+                const value = property.value;
+                if (value.kind === 'array' || value.kind === 'object-array') {
+                    continue;
+                }
+                const lines = comments.get(value);
+                if (lines !== undefined && lines.length > 0) {
+                    resultComments.set(nested.join('.'), [...lines]);
+                }
+                if (value.kind === 'object') {
+                    visit(value, nested);
+                }
+            }
+        }
+        visit(result, []);
+        return resultComments;
+    }
+
+    return { toObject: () => toObject(result), getMeta, getComments };
 }
