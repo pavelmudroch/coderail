@@ -202,11 +202,7 @@ export async function runLoop(request: LoopRequest): Promise<LoopResult> {
                 await execute(
                     'implement',
                     join(logDirectory, `${ticket.id}.jsonl`),
-                    [
-                        '<skill>implement</skill>',
-                        `@${JSON.stringify(ticket.path)}`,
-                        `The initialized project root is ${JSON.stringify(projectRoot)}.`,
-                    ].join('\n'),
+                    ['<skill>implement</skill>', `@${JSON.stringify(ticket.path)}`].join('\n'),
                 );
                 const completed = await resolveTicket(projectRoot, ticket.id);
                 if (
@@ -226,7 +222,6 @@ export async function runLoop(request: LoopRequest): Promise<LoopResult> {
                         join(logDirectory, `${ticket.id}.jsonl`),
                         [
                             '<review-context>',
-                            `The initialized project root is ${JSON.stringify(projectRoot)}.`,
                             `Selected ticket context: ${JSON.stringify(completed)}`,
                             '</review-context>',
                             '<review-instructions>',
