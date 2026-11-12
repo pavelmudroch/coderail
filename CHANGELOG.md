@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Download progress indicators for upgrade release archives and checksums.
+- Windows PowerShell installer for x86_64 and ARM64, with checksum verification,
+  a configurable installation directory, and support for reinstalling or repairing
+  an existing installation.
 
 ### Changed
 

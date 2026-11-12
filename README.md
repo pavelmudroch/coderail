@@ -49,7 +49,7 @@ wget -qO- https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.s
 </details>
 
 <details>
-<summary>Windows (powershell)</summary>
+<summary>Windows (PowerShell)</summary>
 
 ```powershell
 irm https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.ps1 | iex
@@ -61,7 +61,7 @@ irm https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.ps1 | i
 <summary>Windows (command line)</summary>
 
 ```cmd
-curl.exe -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.cmd -o install.cmd && install.cmd
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; irm https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.ps1 | iex"
 ```
 
 </details>

@@ -25,12 +25,25 @@ either `curl` or `wget`, plus `jq`, `unzip`, and either `sha256sum` or `shasum`,
 along with standard shell utilities. The installer prefers `curl` and falls back
 to `wget` when `curl` is unavailable. You do not need Deno or Bun to run the packaged CLI.
 
-Installation downloads the latest stable release, verifies its SHA-256 checksum,
-and installs into `~/.coderail` by default. To choose another directory, pass
+On Windows, use `install.ps1` with Windows PowerShell 5.1 or PowerShell 7.
+The [README](../README.md#installation) includes commands for both PowerShell
+and Command Prompt; both run the same PowerShell installer. It supports x86_64
+and ARM64 and defaults to `%USERPROFILE%\.coderail`. Set `CODERAIL_INSTALL_ROOT`
+to choose another directory.
+
+Both installers download the latest stable release and verify its SHA-256 checksum.
+The Linux and macOS default is `~/.coderail`. To choose another directory, pass
 `CODERAIL_INSTALL_ROOT` to the shell running the installer:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | CODERAIL_INSTALL_ROOT="$HOME/.local/share/coderail" sh
+```
+
+In PowerShell, set the environment variable before running the installer:
+
+```powershell
+$env:CODERAIL_INSTALL_ROOT = "$env:LOCALAPPDATA\coderail"
+irm https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.ps1 | iex
 ```
 
 The installer asks before adding its `bin` directory to PATH. Accept the prompt
@@ -42,8 +55,9 @@ cr --help
 ```
 
 If you skip PATH setup, follow the printed instructions or run
-`~/.coderail/bin/cr` directly. Running the installer again upgrades or reconciles
-the selected installation with the latest stable release.
+`~/.coderail/bin/cr` directly, or `& "$env:USERPROFILE\.coderail\bin\cr.cmd"`
+in PowerShell for the default Windows root. Running the installer again upgrades
+or reconciles the selected installation with the latest stable release.
 
 A healthy installation uses its existing CLI for the upgrade without downloading
 another bootstrap executable. A broken or incomplete installation downloads a
@@ -53,13 +67,16 @@ created templates and unrelated files are preserved. A different
 `CODERAIL_INSTALL_ROOT` creates a separate installation; it does not move an
 existing one.
 
-Piped installation can ask for PATH consent through a controlling terminal.
-Without a terminal, it prints manual setup instructions. To explicitly skip
-prompts and shell configuration edits, run:
+On Linux and macOS, piped installation can ask for PATH consent through a
+controlling terminal. Without a terminal, it prints manual setup instructions.
+To explicitly skip prompts and shell configuration edits, run:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | sh -s -- --non-interactive
 ```
+
+On Windows, save `install.ps1` locally and run
+`.\install.ps1 --non-interactive` from PowerShell to skip prompts and PATH edits.
 
 PATH setup belongs to `cr upgrade` and exposes only the selected root's `bin`
 directory. If editing your shell configuration fails, installation still succeeds
@@ -69,8 +86,7 @@ after setup; the installer cannot update its parent shell's environment.
 If installation fails or is interrupted, it removes its temporary downloads and
 unused bootstrap executable. Files already installed, active executables and user
 data remain in place; there is no automatic rollback. Fix the reported issue and
-rerun the installer to repair the selected root. Windows installation through
-PowerShell is not yet supported.
+rerun the installer to repair the selected root.
 
 ## Upgrading
 
