@@ -72,11 +72,15 @@ if (Deno.args[0]) {
             source,
         ]);
         const smoke = async (packageOptions: typeof options): Promise<void> => {
+            const expectedVersion =
+                packageOptions.version === 'canary'
+                    ? `${version}-canary+sha.${packageOptions.commit.slice(0, 7)}`
+                    : version;
             await checkPackage(packageOptions, async (stage) => {
                 const active = await activateDistribution(installation, stage);
                 if (
                     (await run(project, active.selectedExecutable, ['--no-color', '--version'])) !==
-                    `Coderail version ${version}`
+                    `Coderail version ${expectedVersion}`
                 ) {
                     throw new Error('Executable version mismatch');
                 }

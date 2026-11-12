@@ -121,7 +121,7 @@ Deno.test({
                     expect(result.selectedExecutable).toContain(`cr-canary-${commit}`);
                     expect(
                         await run(project, result.selectedExecutable, ['--no-color', '--version']),
-                    ).toBe(`Coderail version ${version}`);
+                    ).toBe(`Coderail version ${version}-canary+sha.${commit.slice(0, 7)}`);
                     const again = await activateDistribution(installation, stage);
                     expect(again.selectedExecutable).toBe(result.selectedExecutable);
                     executables.push(result.selectedExecutable);
@@ -147,7 +147,7 @@ Deno.test({
                                 '--no-color',
                                 '--version',
                             ]),
-                        ).toBe(`Coderail version ${version}`);
+                        ).toBe(`Coderail version ${version}-canary+sha.${commit.slice(0, 7)}`);
                     });
                 }
             }
@@ -246,8 +246,8 @@ try {
                     expect(again.selectedExecutable).toBe(first.selectedExecutable);
                 });
             }
-            // Canary remains tied to the source commit while the executable reports
-            // the source's stable version. Remove resources to exercise reconciliation.
+            // Canary reports the source version with its channel and commit hash.
+            // Remove resources to exercise reconciliation.
             await git('rm', '-r', 'assets');
             await git('commit', '-qm', 'Optional resource sets');
             const canary = {
@@ -295,7 +295,7 @@ try {
                 expect(await run(project, probe, [])).toContain('no instructions');
                 expect(
                     await run(project, next.selectedExecutable, ['--no-color', '--version']),
-                ).toBe(`Coderail version ${version}`);
+                ).toBe(`Coderail version ${version}-canary+sha.${canary.commit.slice(0, 7)}`);
                 await expect(
                     Deno.stat(join(installation, 'instructions/skills/code/SKILL.md')),
                 ).rejects.toThrow();
@@ -310,7 +310,7 @@ try {
                 const first = await activateDistribution(emptyInstallation, stage);
                 expect(
                     await run(project, first.selectedExecutable, ['--no-color', '--version']),
-                ).toBe(`Coderail version ${version}`);
+                ).toBe(`Coderail version ${version}-canary+sha.${canary.commit.slice(0, 7)}`);
             });
             console.log(
                 `Native runtime smoke passed: ${native}. Other targets require matching downstream runners.`,

@@ -65,12 +65,15 @@ deno run -A tools/package.ts --help
 ```
 
 All four options are required. The commit must be the full lowercase 40-character HEAD
-SHA. Stable versions use canonical X.Y.Z and must match `src/cli/version.ts`; use
-`--version canary` for canaries, whose metadata identifies the exact commit while the
-executable continues to report the source version. Tracked inputs must be clean.
-Compilation uses a disposable checkout of that commit, excluding untracked and ignored
-files. Existing output names are rejected. Git and the pinned Deno compiler must be on
-the builder; Deno downloads target runtimes on first use.
+SHA. The source version in `src/cli/version.ts` must be canonical X.Y.Z for both
+channels; stable package versions must match it. Use `--version canary` for canaries:
+`cr --version` reports `X.Y.Z-canary+sha.<short-sha>`, using the first seven characters
+of the commit. Canary metadata retains version `canary` and the full commit SHA.
+Tracked inputs must be clean. Compilation uses a disposable checkout of that commit,
+excluding untracked and ignored files. Canary version injection changes only this
+temporary checkout, leaving the source checkout unchanged. Existing output names are
+rejected. Git and the pinned Deno compiler must be on the builder; Deno downloads
+target runtimes on first use.
 
 Supported targets are `x86_64` and `aarch64` for `unknown-linux-gnu`, `apple-darwin`,
 and `pc-windows-msvc`. Each invocation writes `coderail-<target>.zip` and
@@ -195,8 +198,9 @@ that exact full SHA using Deno 2.9.8 and package version `canary`. Compilation,
 archive/checksum validation through the upgrade consumer, and native executable,
 resource lookup, first-install and upgrade smoke checks must all succeed. There is
 no application-test gate or manual approval: a canary can be functionally broken
-even when these required checks pass. The executable reports its source version;
-`build.json` and `libexec/cr-canary-<full-sha>` distinguish canary source revisions.
+even when these required checks pass. The executable reports
+`X.Y.Z-canary+sha.<short-sha>`; `build.json` and `libexec/cr-canary-<full-sha>`
+identify the full source commit (with an `.exe` suffix on Windows executables).
 
 Only publication holds the repository's `canary-publication` concurrency group,
 with `cancel-in-progress: false`. Builds can finish in any order; pending publishers

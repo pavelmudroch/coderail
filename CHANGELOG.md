@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   runtime tests and production coverage workarounds for type-only modules.
 - Upgrade summaries report completed write, removal, and skipped-file counts and
   manifest status on stderr, with file paths shown under `--verbose`.
+- Canary executables report `X.Y.Z-canary+sha.<short-sha>` in `cr --version`,
+  identifying the channel and first seven characters of the source commit.
 
 ### Fixed
 

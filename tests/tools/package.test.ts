@@ -155,6 +155,64 @@ Deno.test(
     },
 );
 
+Deno.test('canary packaging rejects noncanonical source versions before compiling', async () => {
+    await fixture(async (root, base) => {
+        for (const version of ['01.2.3', '1.2', '1.2.3-canary+sha.abcdef0']) {
+            await Deno.writeTextFile(
+                join(root, 'src/cli/version.ts'),
+                `export const CODERAIL_VERSION = '${version}';\n`,
+            );
+            await git(root, 'add', '.');
+            await git(
+                root,
+                '-c',
+                'user.name=Test',
+                '-c',
+                'user.email=test@example.com',
+                'commit',
+                '-qm',
+                'Invalid source version',
+            );
+            await expect(
+                packageRelease(
+                    { ...base, version: 'canary', commit: await git(root, 'rev-parse', 'HEAD') },
+                    root,
+                    () => {
+                        throw new Error('unexpected compile');
+                    },
+                ),
+            ).rejects.toThrow('source version');
+        }
+    });
+});
+
+Deno.test(
+    'packaging injects canary versions only in temporary snapshots and preserves stable versions',
+    async () => {
+        await fixture(async (root, base) => {
+            const path = join(root, 'src/cli/version.ts');
+            const original = await Deno.readTextFile(path);
+            for (const version of ['0.1.0', 'canary']) {
+                let snapshotPath = '';
+                const options = { ...base, version, output: join(root, `out-${version}`) };
+                await packageRelease(options, root, async (snapshot, identity, executable) => {
+                    snapshotPath = snapshot;
+                    expect(snapshot).not.toBe(root);
+                    expect(await Deno.readTextFile(join(snapshot, 'src/cli/version.ts'))).toBe(
+                        version === 'canary'
+                            ? `export const CODERAIL_VERSION = '0.1.0-canary+sha.${base.commit.slice(0, 7)}';\n`
+                            : original,
+                    );
+                    await compile(snapshot, identity, executable);
+                });
+                expect(await Deno.readTextFile(path)).toBe(original);
+                expect(await git(root, 'status', '--porcelain', '--untracked-files=no')).toBe('');
+                await expect(Deno.stat(snapshotPath)).rejects.toThrow();
+            }
+        });
+    },
+);
+
 Deno.test(
     'package produces exact stable/canary identity and stages all six executable formats',
     async () => {

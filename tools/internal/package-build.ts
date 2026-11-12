@@ -45,9 +45,10 @@ export async function verifySource(root: string, options: PackageOptions): Promi
     const matches = [...source.matchAll(/export const CODERAIL_VERSION = '([^']+)';/g)];
     if (
         matches.length !== 1 ||
+        !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(matches[0]?.[1] ?? '') ||
         (options.version !== 'canary' && matches[0]?.[1] !== options.version)
     ) {
-        throw new Error('Stable package version must match source version');
+        throw new Error('Package source version must be canonical X.Y.Z and match stable version');
     }
 }
 
@@ -205,7 +206,7 @@ export async function packageRelease(
         step = 'source snapshot';
         temporary = await Deno.makeTempDir({ prefix: 'coderail-package-' });
         const snapshot = join(temporary, 'source');
-        // Compile committed files only; untracked/ignored files cannot alter identity.
+        // Start from committed files only; untracked/ignored files cannot alter identity.
         await command(root, 'git', [
             'clone',
             '--quiet',
@@ -215,6 +216,18 @@ export async function packageRelease(
             snapshot,
         ]);
         await command(snapshot, 'git', ['checkout', '--quiet', '--detach', options.commit]);
+        if (options.version === 'canary') {
+            step = 'canary version injection';
+            const path = join(snapshot, 'src/cli/version.ts');
+            const source = await Deno.readTextFile(path);
+            await Deno.writeTextFile(
+                path,
+                source.replace(
+                    /export const CODERAIL_VERSION = '([^']+)';/,
+                    `export const CODERAIL_VERSION = '$1-canary+sha.${options.commit.slice(0, 7)}';`,
+                ),
+            );
+        }
         step = 'resource collection';
         const files = await resources(snapshot);
         const executable = join(temporary, options.target.includes('windows') ? 'cr.exe' : 'cr');
