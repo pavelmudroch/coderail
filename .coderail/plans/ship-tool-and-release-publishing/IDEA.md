@@ -1,6 +1,6 @@
 ---
 title: "Ship tool and release publishing"
-status: "ready"
+status: "archived"
 ---
 
 ## Intended outcome

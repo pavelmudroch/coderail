@@ -1,6 +1,6 @@
 ---
 title: "Codex harness connector"
-status: "ready"
+status: "archived"
 ---
 
 ## Outcome

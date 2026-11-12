@@ -2,13 +2,13 @@
 
 ## Agreed changes
 
-- [ ] Stop the harness session's process tree on cancellation, async disposal,
+- [x] Stop the harness session's process tree on cancellation, async disposal,
   early iterator exit, and execution/logging failure. Update
   `src/harness/runner/runner.ts` so descendant tool processes cannot continue
   work or hold inherited output pipes open indefinitely after the harness is
   stopped. Add regression coverage with a harness that spawns a child; assert
   descendant termination, settled runner cleanup, and rejected completion.
-- [ ] Restore the agreed lifecycle output layout in
+- [x] Restore the agreed lifecycle output layout in
   `src/commands/loop/run-loop.ts`: `Preflight:` and validation details, an overall
   `Preflight complete [ ok | fail ]` line, ticket iteration headings, indented
   `Implement/Review/Stage/Commit complete [ ok | fail ]` lines with readable

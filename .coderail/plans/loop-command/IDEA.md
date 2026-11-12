@@ -1,6 +1,6 @@
 ---
 title: "Loop command"
-status: "ready"
+status: "archived"
 ---
 
 ## Outcome

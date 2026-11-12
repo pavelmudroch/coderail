@@ -1,6 +1,6 @@
 ---
 title: "Upgrade command"
-status: "ready"
+status: "archived"
 ---
 
 Explore implementation of `src/commands/upgrade.ts`.

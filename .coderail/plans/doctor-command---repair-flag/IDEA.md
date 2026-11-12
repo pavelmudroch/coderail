@@ -1,6 +1,6 @@
 ---
 title: "Doctor command --repair flag"
-status: "ready"
+status: "archived"
 ---
 
 Implement automatic remediation through `cr doctor --repair` and extend doctor

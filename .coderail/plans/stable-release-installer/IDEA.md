@@ -1,6 +1,6 @@
 ---
 title: "Stable release installer"
-status: "ready"
+status: "archived"
 ---
 
 Create `install.sh` to bootstrap the latest stable GitHub release for the host platform, excluding canary.

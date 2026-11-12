@@ -1,6 +1,6 @@
 ---
 title: "Local harness instruction installation"
-status: "ready"
+status: "archived"
 ---
 
 ## Outcome

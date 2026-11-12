@@ -1,6 +1,6 @@
 ---
 title: "Doctor command"
-status: "ready"
+status: "archived"
 ---
 
 Explore implementation of `cr doctor` (`src/commands/doctor.ts`).

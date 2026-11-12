@@ -1,6 +1,6 @@
 ---
 title: "Claude harness connector"
-status: "ready"
+status: "archived"
 ---
 
 ## Outcome
