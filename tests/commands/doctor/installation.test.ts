@@ -685,3 +685,160 @@ function isolateHarnessHomes(): Disposable {
         },
     };
 }
+
+Deno.test(
+    'owned global and local Markdown allows customization without changing ownership baselines',
+    async () => {
+        using _homes = isolateHarnessHomes();
+        const { Harness } = await import('@harness');
+        const root = await Deno.makeTempDir();
+        const signal = new AbortController().signal;
+        try {
+            for (const target of [
+                { scope: 'global' as const },
+                { scope: 'local' as const, projectRoot: root },
+            ]) {
+                const manifests = new Map<string, Uint8Array>();
+                for (const name of Harness.names) {
+                    using connector = Harness.get(name, target);
+                    if (!connector) {
+                        throw new Error('missing connector');
+                    }
+                    const home = connector.home;
+                    const prefix = name === 'codex' && target.scope === 'local' ? '.codex/' : '';
+                    const paths = [
+                        'skills/custom/SKILL.md',
+                        'agents/worker.md',
+                        'agents/codex.toml',
+                        'skills/custom/reference.md',
+                    ].map((path) => prefix + path);
+                    for (const path of paths) {
+                        await Deno.mkdir(join(home, path, '..'), { recursive: true });
+                        await Deno.writeTextFile(join(home, path), 'baseline');
+                    }
+                    const manifest = join(home, '.coderail-install');
+                    await InstallManifest.save(
+                        manifest,
+                        await InstallManifest.capture(home, paths),
+                    );
+                    manifests.set(manifest, await Deno.readFile(manifest));
+                    await Deno.writeTextFile(
+                        join(home, prefix + 'skills/custom/SKILL.md'),
+                        '---\nname: custom\ndescription: My customized skill\n---\nCustom body',
+                    );
+                    await Deno.writeTextFile(
+                        join(home, prefix + 'agents/worker.md'),
+                        'description: My customized worker\n---\nWorker body',
+                    );
+                    await Deno.writeTextFile(
+                        join(home, prefix + 'agents/unowned.md'),
+                        'unowned invalid content',
+                    );
+                }
+                const report = await Installation.checkInstructions(target, signal);
+                expect(report.failures).toHaveLength(Harness.names.length);
+                for (const failure of report.failures) {
+                    await failure.repair?.apply(signal);
+                }
+                expect((await Installation.checkInstructions(target, signal)).failures).toEqual([]);
+                for (const [path, bytes] of manifests) {
+                    expect(await Deno.readFile(path)).toEqual(bytes);
+                }
+                using connector = Harness.get('codex', target);
+                if (!connector) {
+                    throw new Error('missing connector');
+                }
+                const prefix = target.scope === 'local' ? '.codex/' : '';
+                await Deno.writeTextFile(
+                    join(connector.home, prefix + 'agents/codex.toml'),
+                    'changed',
+                );
+                await Deno.writeTextFile(
+                    join(connector.home, prefix + 'skills/custom/reference.md'),
+                    'changed',
+                );
+                const strict = await Installation.checkInstructions(target, signal);
+                expect(strict.failures).toHaveLength(2);
+                expect(strict.failures.every((finding) => !finding.repairable)).toBe(true);
+                await Deno.remove(join(connector.home, prefix + 'skills/custom/SKILL.md'));
+                expect(
+                    (await Installation.checkInstructions(target, signal)).failures,
+                ).toHaveLength(3);
+            }
+        } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'source and compiled instruction assets validate content while other distribution entries retain strict integrity',
+    async () => {
+        using _homes = isolateHarnessHomes();
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const signal = new AbortController().signal;
+        try {
+            for (const standalone of [false, true]) {
+                const install = join(root, String(standalone));
+                const resources = standalone ? install : join(install, 'assets');
+                const entryPath = join(install, standalone ? 'libexec/cr-1' : 'src/main.ts');
+                await Deno.mkdir(join(entryPath, '..'), { recursive: true });
+                await Deno.writeTextFile(entryPath, 'binary', { mode: 0o755 });
+                await Deno.mkdir(join(install, 'bin'));
+                await Deno.symlink(entryPath, join(install, 'bin/cr'));
+                const skill = join(resources, 'instructions/skills/custom/SKILL.md');
+                const agent = join(resources, 'instructions/agents/worker.md');
+                for (const path of [skill, agent]) {
+                    await Deno.mkdir(join(path, '..'), { recursive: true });
+                    await Deno.writeTextFile(path, 'baseline');
+                }
+                await Deno.mkdir(join(resources, 'templates'));
+                await Deno.writeTextFile(join(resources, 'templates/sample'), 'template');
+                const manifestPath = join(install, DISTRIBUTION_MANIFEST);
+                if (standalone) {
+                    await InstallManifest.save(
+                        manifestPath,
+                        await InstallManifest.capture(install, [
+                            'libexec/cr-1',
+                            'instructions/skills/custom/SKILL.md',
+                            'instructions/agents/worker.md',
+                            'templates/sample',
+                        ]),
+                    );
+                }
+                const baseline = standalone ? await Deno.readFile(manifestPath) : undefined;
+                await Deno.writeTextFile(
+                    skill,
+                    '---\nname: custom\ndescription: Customized skill\n---\nCustom body',
+                );
+                await Deno.writeTextFile(
+                    agent,
+                    '---\nname: wrong\ndescription: Customized worker\n---\nWorker body',
+                );
+                const settings = {
+                    standalone,
+                    entryPath,
+                    windows: false,
+                    path: join(install, 'bin'),
+                };
+                const report = await Installation.check(signal, settings);
+                expect(report.failures).toHaveLength(1);
+                await report.failures[0]?.repair?.apply(signal);
+                expect((await Installation.check(signal, settings)).failures).toEqual([]);
+                if (standalone) {
+                    expect(await Deno.readFile(manifestPath)).toEqual(baseline);
+                    await Deno.writeTextFile(entryPath, 'changed binary');
+                    await Deno.writeTextFile(
+                        join(resources, 'templates/sample'),
+                        'changed template',
+                    );
+                    expect((await Installation.check(signal, settings)).failures).toHaveLength(2);
+                    await Deno.remove(agent);
+                    expect((await Installation.check(signal, settings)).failures).toHaveLength(3);
+                }
+            }
+        } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);

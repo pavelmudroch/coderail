@@ -153,6 +153,17 @@ Doctor checks:
   its settings apply only when it is the selected project.
 - Installed Codex and Claude instruction manifests and owned files, both globally
   and in the selected project. A missing instruction manifest is allowed.
+- Bundled and manifest-owned Markdown skills and subagents: frontmatter must have
+  the name expected from the skill directory or agent filename and a nonblank
+  string description. Valid customized metadata and bodies are allowed without
+  matching the recorded checksum. Other owned instruction formats, including
+  Codex TOML agents, references, and general instructions, retain integrity checks.
+- Ticket files directly under `.coderail/tickets/open`, `active`, and `closed`:
+  metadata, title/slug consistency, filenames, placement, duplicate IDs,
+  dependencies, and duplicate references. Missing directories are skipped.
+  Frontmatter determines identity and placement. Self-references, cycles, missing
+  or ambiguous targets, and required chains blocked by dismissed or unusable
+  tickets are failures; ordinary pending dependencies are allowed.
 - The configured default harness executable on PATH, including execute access on
   Unix and extension lookup through PATHEXT on Windows. Doctor does not launch the
   harness or check authentication, model access, or network connectivity.
@@ -170,5 +181,32 @@ otherwise; skipped checks alone do not fail the command.
 Use `--verbose` to show progress and diagnostic paths on stderr from the start.
 Verbosity from valid configuration takes effect after configuration validation.
 
-Doctor does not modify files. Follow the reported manual repair steps and rerun
-the checks. `cr doctor --repair` is accepted but remains unimplemented.
+Plain `cr doctor` does not modify files. Findings marked `[repairable]` have an
+automatic repair available:
+
+```sh
+cr doctor --repair
+cr --cwd /path/to/project doctor --repair
+```
+
+`--repair` applies supported repairs without confirmation prompts:
+
+- Create a missing `.coderail/config` and create or complete `.coderail/.gitignore`
+  in the discovered project, preserving existing configuration and custom ignore
+  content. It does not initialize a project when no `.coderail` directory exists.
+- Restore an instruction's missing opening frontmatter delimiter or correct its
+  `name` to match its path, preserving other metadata and body content. This
+  requires parseable metadata, a closing delimiter, and a nonblank description.
+  Missing files, ambiguous metadata, and invalid descriptions need manual repair.
+- Move a misplaced or misnamed ticket to the filename and status directory given
+  by its valid frontmatter, preserving its bytes. This requires a complete identity
+  inventory, a unique ID, and an unoccupied destination. Metadata defects,
+  duplicate IDs, dependency problems, and destination conflicts need manual repair.
+
+Repairs recheck their collected inputs before writing and reject changed inputs
+or unsupported file types. Doctor continues independent repairs after an action
+fails, then reruns diagnostics once and prints `Repaired` or `Unresolved` results
+before the remaining findings. Exit status reflects the final diagnostics.
+Review manual guidance for issues outside these repairs, including invalid
+configuration, installation integrity, PATH, and harness availability. Repairs
+are not rolled back if a later action fails.

@@ -10,6 +10,7 @@ import { dirname, fromFileUrl, join } from '@std/path';
 import { validate } from '../../install-manifest/validate.ts';
 import { launcherTarget } from '../upgrade/activation.ts';
 import { DISTRIBUTION_MANIFEST, ownedPath } from '../upgrade/assets.ts';
+import { instructionName, Instructions } from './instructions.ts';
 import { createDoctorReport, type DoctorReport } from './types.ts';
 
 type InstallationSettings = {
@@ -100,6 +101,8 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
             `Restore readable repository or distribution resources at "${path}".`,
         );
     }
+    const instructions = await Instructions.checkAssets(resourceRoot, signal);
+    report.failures.push(...instructions.failures);
     if (!resolved.standalone) {
         report.skipped.push(
             'Distribution manifest: source development mode.',
@@ -126,6 +129,20 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
     });
     if (manifest) {
         for (const file of manifest.files) {
+            // Asset Markdown is checked above; still diagnose missing manifest-owned candidates.
+            const expected = file.path.startsWith('instructions/')
+                ? instructionName(file.path)
+                : undefined;
+            if (expected !== undefined) {
+                const path = join(installationRoot, file.path);
+                const result = await Instructions.checkFile(path, expected, signal);
+                for (const failure of result.failures) {
+                    if (!report.failures.some((existing) => existing.message === failure.message)) {
+                        report.failures.push(failure);
+                    }
+                }
+                continue;
+            }
             await attempt(`Owned file ${file.path}`, async () => {
                 Log.notice(
                     `Inspecting installation owned file "${join(installationRoot, file.path)}".`,
@@ -230,11 +247,22 @@ async function checkInstructions(
                 signal.throwIfAborted();
                 Log.notice(`Inspecting ${label} owned file "${join(connector.home, file.path)}".`);
                 try {
+                    // Inspect first to retain manifest path/type and ancestor validation.
                     const results = await InstallManifest.inspect(connector.home, {
                         version: 1,
                         files: [file],
                     });
                     signal.throwIfAborted();
+                    const expected = instructionName(file.path);
+                    if (expected !== undefined) {
+                        const result = await Instructions.checkFile(
+                            join(connector.home, file.path),
+                            expected,
+                            signal,
+                        );
+                        report.failures.push(...result.failures);
+                        continue;
+                    }
                     for (const result of results) {
                         if (result.status !== 'unchanged') {
                             throw new Error(result.status);

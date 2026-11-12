@@ -2,11 +2,12 @@
 id: "0044"
 slug: "diagnose-ticket-metadata-and-authoritative-file-placement"
 title: "Diagnose ticket metadata and authoritative file placement"
-status: "open"
+status: "closed"
 created_at: "2026-11-12T10:20:46.343Z"
-updated_at: "2026-11-12T10:20:46.343Z"
+updated_at: "2026-11-12T10:59:52.650Z"
 dependencies:
   - "0042"
+reason: "done"
 ---
 
 # Diagnose ticket metadata and authoritative file placement
@@ -15,9 +16,9 @@ Add tolerant ticket health diagnostics to project doctor checks, deriving identi
 
 ## Tasks
 
-1. [ ] Add tolerant ticket inventory and metadata regression fixtures
-2. [ ] Implement frontmatter-based inventory and metadata checks
-3. [ ] Integrate ticket findings into project diagnostics and verify
+1. [x] Add tolerant ticket inventory and metadata regression fixtures
+2. [x] Implement frontmatter-based inventory and metadata checks
+3. [x] Integrate ticket findings into project diagnostics and verify
 
 ## Task details
 

@@ -153,9 +153,14 @@ diagnostics to instruction metadata and ticket health.
 - Distribution recovery, shell PATH edits, and harness executable installation
   are outside this version.
 - Repair actions are idempotent and revalidate their input before writing.
-  If content changed since collection or a destination became occupied, report
-  an action failure rather than overwrite newer work. Cancellation propagates,
-  stops further actions, and leaves completed repairs in place, without rollback.
+  If revalidation detects content changed since collection or an occupied
+  destination, report an action failure. Retain exclusive destination creation
+  for missing initialization files and ticket moves. Concurrent external edits
+  or path replacements during mutation are the user's responsibility; repairs
+  do not guarantee isolation from other processes. No additional filesystem
+  abstraction is required solely to close those race windows. Cancellation
+  propagates, stops further actions, and leaves completed repairs in place,
+  without rollback.
 - Doctor never updates ownership checksums or manifests to absorb edits or
   repairs, in either installed harness instructions or distribution assets.
   Existing installer/uninstaller ownership semantics are unchanged.
@@ -213,7 +218,8 @@ No shared Command or harness connector API changes are needed.
 - If metadata says id 0042, slug fix-parser, status closed, its expected location
   is `.coderail/tickets/closed/0042-fix-parser.md`. Move/rename from a different
   location only if metadata is valid, identity unique, destination unoccupied,
-  and input unchanged. Preserve the ticket bytes, including timestamps.
+  and input unchanged at revalidation. Preserve the ticket bytes, including
+  timestamps, subject to the concurrent-edit boundary above.
 - For an unfinished `0042 -> 0038 -> 0031 (dismissed)` chain, report the blocker
   and affected tickets with causal context. An ordinary pending chain without
   a blocker does not fail merely for waiting. Do not edit the dependency graph.
@@ -228,6 +234,8 @@ No shared Command or harness connector API changes are needed.
   partial failure, cancellation, and idempotence.
 - Cover actions deduplicated by key, changed inputs, newly occupied destinations,
   no prompts in non-interactive mode, and no writes during plain diagnostics.
+  Changed-input checks cover revalidation and existing exclusive-creation
+  behavior; full isolation from concurrent external mutations is not required.
 - Verify init and doctor share defaults/ignore rules without changing established
   init behavior. Cover nested cwd and absence of a project.
 - Cover asset and owned global/local instruction selection; exclude unowned

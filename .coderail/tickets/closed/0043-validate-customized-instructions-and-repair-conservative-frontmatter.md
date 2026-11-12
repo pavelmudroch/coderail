@@ -2,11 +2,12 @@
 id: "0043"
 slug: "validate-customized-instructions-and-repair-conservative-frontmatter"
 title: "Validate customized instructions and repair conservative frontmatter"
-status: "open"
+status: "closed"
 created_at: "2026-11-12T10:20:46.179Z"
-updated_at: "2026-11-12T10:20:46.179Z"
+updated_at: "2026-11-12T10:54:31.689Z"
 dependencies:
   - "0042"
+reason: "done"
 ---
 
 # Validate customized instructions and repair conservative frontmatter
@@ -15,10 +16,11 @@ Allow customized instruction Markdown to pass content validation and narrowly re
 
 ## Tasks
 
-1. [ ] Add instruction selection, customization and preservation tests
-2. [ ] Implement instruction frontmatter diagnostics and narrow edits
-3. [ ] Integrate asset and owned-instruction checks with integrity policy
-4. [ ] Verify instruction repairs through doctor
+1. [x] Add instruction selection, customization and preservation tests
+2. [x] Implement instruction frontmatter diagnostics and narrow edits
+3. [x] Integrate asset and owned-instruction checks with integrity policy
+4. [x] Verify instruction repairs through doctor
+5. [x] Align closing-delimiter recognition with the Markdown parser
 
 ## Task details
 
@@ -58,6 +60,39 @@ Scope: command-level integration tests using 0042's action runner.
 Expected outcome: supported defects are repaired without prompts; unsupported findings retain manual guidance, independent actions survive partial failure, and final results/exit status follow post-repair diagnostics.
 
 Validation: task 1 suites and command integration pass; run per-file `cr verify` for every modified/new src and tests file, fixing failures until each passes.
+
+### 5. Align closing-delimiter recognition with the Markdown parser
+
+Blocking review finding: `src/commands/doctor/instructions.ts:44` uses a multiline
+`$` anchor, which also matches before a bare carriage return. Consequently,
+`---\nname: worker\ndescription: custom\n---\rbody` passes `Instructions.checkFile`
+with no findings, although `Md.parse` rejects it with `Unclosed frontmatter at
+line 1`. With a wrong name or missing opener, doctor instead offers a repair
+that still leaves the file unparseable. This violates the requirement to leave
+missing closing delimiters as manual findings.
+
+Scope: add regression cases in `tests/commands/doctor/instructions.test.ts`, then
+correct delimiter detection in `src/commands/doctor/instructions.ts` without
+changing the shared parser.
+
+Expected outcome: recognize only standalone delimiter lines separated by LF or
+CRLF, or a delimiter at the actual end of the file, consistent with `Md.parse`.
+Do not treat the multiline anchor's other line terminators as valid boundaries.
+Files with `---\rbody` must produce a manual finding and no action, whether the
+name is correct, wrong, or the opening delimiter is missing; preserve all bytes.
+
+Validation: demonstrate the regression cases fail before the correction and pass
+afterwards. Retain valid LF/CRLF and delimiter-at-EOF behavior. Run the affected
+doctor suites and per-file `cr verify` after implementation changes.
+
+Review validation: all 32 instruction, installation and command tests passed;
+read-only `bun lint` on the five affected source/test files and `git diff --check`
+passed. A separate temporary-file reproduction confirmed the parser disagreement.
+
+Task 5 validation: the new delimiter regression failed before the correction and
+passed afterwards. All 33 instruction, installation and command tests passed.
+Separate `cr verify` invocations for the changed instruction source and test file,
+the final aggregate `cr verify -s` for both files, and `git diff --check` passed.
 
 ## References
 

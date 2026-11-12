@@ -2,12 +2,13 @@
 id: "0046"
 slug: "repair-ticket-placement-from-authoritative-frontmatter"
 title: "Repair ticket placement from authoritative frontmatter"
-status: "open"
+status: "closed"
 created_at: "2026-11-12T10:20:51.534Z"
-updated_at: "2026-11-12T10:20:51.534Z"
+updated_at: "2026-11-12T11:30:23.991Z"
 dependencies:
   - "0042"
   - "0045"
+reason: "done"
 ---
 
 # Repair ticket placement from authoritative frontmatter
@@ -16,9 +17,10 @@ Offer byte-preserving ticket moves/renames when authoritative metadata is valid,
 
 ## Tasks
 
-1. [ ] Add guarded relocation and repair integration tests
-2. [ ] Attach safe metadata-driven ticket move actions
-3. [ ] Verify complete doctor repair behavior and convergence
+1. [x] Add guarded relocation and repair integration tests
+2. [x] Attach safe metadata-driven ticket move actions
+3. [x] Verify complete doctor repair behavior and convergence
+4. [x] Reject edits made during relocation eligibility revalidation
 
 ## Task details
 
@@ -45,6 +47,16 @@ Scope: command integration fixtures spanning initialization and ticket actions, 
 Expected outcome: mixed supported/manual findings produce repaired and unresolved results; action failure does not prevent independent repairs; cancellation leaves completed work without rollback. Recheck runs all phases once, never recursively repairs new findings, and final diagnostics alone determine exit status. Repeated invocations converge without rewriting healthy files or ownership baselines. --non-interactive requires no prompts.
 
 Validation: task 1 and relevant doctor suites pass; Run per-file `cr verify` for every modified/new src or tests file, fixing failures until each passes.
+
+### 4. Reject edits made during relocation eligibility revalidation
+
+Scope: `src/commands/doctor/tickets.ts:260-281` and relocation regression tests.
+
+Blocking review finding: the byte comparison runs before the asynchronous full inventory rescan. That rescan only checks for the same source-path repair key, so changed content and a changed authoritative destination can still pass. A deterministic reproduction reads the original source for the action's initial comparison, then writes valid closed/done metadata before the fresh inventory reads it. The action succeeds and moves the edited ticket into the previously collected open destination; final diagnostics report incorrect placement. This violates the changed-input failure and authoritative-destination requirements.
+
+Expected outcome: after eligibility revalidation and directory preparation, validate the source against the originally collected bytes before linking; reject changed inputs rather than executing the stale move. Ensure eligibility remains tied to the collected identity and destination. Preserve the edited source and leave the old destination absent on failure.
+
+Validation: add a deterministic test injecting an edit during the rescan, including a valid status/destination change and a body-only edit. Both must fail without relocating the source. Run the relevant doctor tests and per-file `cr verify` for modified source/test files.
 
 ## References
 

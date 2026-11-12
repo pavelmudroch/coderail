@@ -1,6 +1,13 @@
+export type DoctorRepair = {
+    key: string;
+    description: string;
+    apply(signal: AbortSignal): Promise<void>;
+};
+
 export type DoctorFailure = {
     message: string;
     repairable: boolean;
+    repair?: DoctorRepair;
     manualRepair: string[];
 };
 

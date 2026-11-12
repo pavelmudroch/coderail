@@ -7,7 +7,7 @@ import { Doctor } from '../../src/commands/doctor.ts';
 import { Installation } from '../../src/commands/doctor/installation.ts';
 import { captureOutput } from '../log/helpers.ts';
 
-Deno.test('doctor parses help and repair and rejects unexpected arguments', async () => {
+Deno.test('doctor parses help and repair and rejects unexpected arguments', () => {
     const doctor = new Doctor();
     expect(doctor.requiresInit).toBe(false);
     expect(doctor.getSubcommand()).toBeUndefined();
@@ -24,13 +24,7 @@ Deno.test('doctor parses help and repair and rejects unexpected arguments', asyn
             expect(Cli.isUsageError(error)).toBe(true);
         }
     }
-    await expect(
-        doctor.run({
-            parsedArguments: doctor.parseArguments(['--repair']),
-            globalArguments: Commands.cr().parseArguments([]).args,
-            signal: new AbortController().signal,
-        }),
-    ).rejects.toThrow(/^not implemented$/);
+    expect(doctor.parseArguments(['--repair']).args.repair).toBe(true);
 });
 
 Deno.test(
@@ -46,7 +40,14 @@ Deno.test(
             };
             for (const failures of [
                 [],
-                [{ message: 'broken', repairable: true, manualRepair: ['Fix it manually'] }],
+                [
+                    {
+                        message: 'broken',
+                        repairable: true,
+                        repair: { key: 'broken', description: 'Fix broken', apply: async () => {} },
+                        manualRepair: ['Fix it manually'],
+                    },
+                ],
                 [{ message: 'broken', repairable: false, manualRepair: ['Fix it manually'] }],
             ]) {
                 output.length = 0;
@@ -570,7 +571,7 @@ Deno.test(
             expect(
                 output.filter((line) => line.includes('Manual repair:')).length,
             ).toBeGreaterThanOrEqual(6);
-            expect(output.join('\n')).not.toContain('[repairable]');
+            expect(output.join('\n')).toContain('[repairable]');
             expect(output.join('\n')).toContain('Harness executable: no harness configured');
             await run(outside);
             expect(Deno.exitCode).toBe(1);
@@ -805,6 +806,7 @@ Deno.test(
                         config,
                         join(root, 'config'),
                         join(project, '.coderail', '.gitignore'),
+                        join(project, '.coderail', 'tickets', 'open'),
                         join(root, 'codex', Path.INSTALL_MANIFEST_NAME),
                         join(project, 'owned'),
                     ];
@@ -881,6 +883,471 @@ Deno.test(
                     Deno.env.set(name, value);
                 }
             });
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'doctor deduplicates repairs, rechecks once in phase order and reports attempted errors',
+    async () => {
+        const { Project } = await import('../../src/commands/doctor/project.ts');
+        const { Conf } = await import('@conf');
+        const original = {
+            check: Installation.check,
+            discover: Project.discover,
+            project: Project.check,
+            executable: Project.checkExecutable,
+            diagnose: Conf.diagnoseConfiguration,
+            output: Log.output,
+            exit: Deno.exitCode,
+        };
+        const signal = new AbortController().signal;
+        const doctor = new Doctor();
+        const output: string[] = [];
+        const events: string[] = [];
+        let applied = 0;
+        let failAction = false;
+        const repair = {
+            key: 'shared',
+            description: 'Repair /shared',
+            apply: async () => {
+                await Promise.resolve();
+                applied++;
+                events.push('repair');
+                if (failAction) {
+                    throw new Error('/shared action failed');
+                }
+            },
+        };
+        try {
+            for (const scenario of [
+                { remains: false, fail: false },
+                { remains: true, fail: false },
+                { remains: false, fail: true },
+                { remains: true, fail: true },
+            ]) {
+                const remains = scenario.remains;
+                failAction = scenario.fail;
+                output.length = 0;
+                events.length = 0;
+                applied = 0;
+                let pass = 0;
+                Installation.check = async () => {
+                    await Promise.resolve();
+                    events.push('installation');
+                    pass++;
+                    return { failures: [], skipped: [] };
+                };
+                Project.discover = async () => {
+                    await Promise.resolve();
+                    events.push('discover');
+                    return { repositoryRoot: '/project', failures: [], skipped: [] };
+                };
+                Project.check = async () => {
+                    await Promise.resolve();
+                    events.push('project');
+                    return {
+                        failures:
+                            pass === 1
+                                ? [1, 2].map(() => ({
+                                      message: 'broken',
+                                      repairable: true,
+                                      repair,
+                                      manualRepair: [],
+                                  }))
+                                : remains
+                                  ? [
+                                        {
+                                            message: 'new finding',
+                                            repairable: true,
+                                            repair: {
+                                                ...repair,
+                                                key: failAction ? 'new' : 'shared',
+                                            },
+                                            manualRepair: [],
+                                        },
+                                    ]
+                                  : [],
+                        skipped: [],
+                    };
+                };
+                Conf.diagnoseConfiguration = () =>
+                    Promise.resolve({
+                        configuration: Conf.createConfiguration(
+                            Commands.cr().parseArguments([]).args,
+                        ),
+                        errors: [],
+                    });
+                Project.checkExecutable = () => Promise.resolve({ failures: [], skipped: [] });
+                Log.output = (...messages) => {
+                    output.push(messages.join(' '));
+                };
+                await doctor.run({
+                    parsedArguments: doctor.parseArguments(['--repair']),
+                    globalArguments: Commands.cr().parseArguments(['--non-interactive']).args,
+                    signal,
+                });
+                expect(applied).toBe(1);
+                expect(events).toEqual([
+                    'installation',
+                    'discover',
+                    'project',
+                    'repair',
+                    'installation',
+                    'discover',
+                    'project',
+                ]);
+                expect(output.join('\n')).toContain('Repair /shared');
+                expect(output.join('\n').includes('Repair error: /shared action failed')).toBe(
+                    failAction,
+                );
+                expect(output.join('\n')).toContain(
+                    remains || failAction ? 'Unresolved:' : 'Repaired:',
+                );
+                expect(Deno.exitCode).toBe(remains ? 1 : 0);
+            }
+        } finally {
+            Installation.check = original.check;
+            Project.discover = original.discover;
+            Project.check = original.project;
+            Project.checkExecutable = original.executable;
+            Conf.diagnoseConfiguration = original.diagnose;
+            Log.output = original.output;
+            Deno.exitCode = original.exit;
+        }
+    },
+);
+
+Deno.test(
+    'doctor repairs discovered projects from nested cwd while preserving invalid config and healthy files',
+    async () => {
+        const { join } = await import('@std/path');
+        const { Project } = await import('../../src/commands/doctor/project.ts');
+        const root = await Deno.makeTempDir();
+        const original = {
+            check: Installation.check,
+            executable: Project.checkExecutable,
+            output: Log.output,
+            exit: Deno.exitCode,
+            level: Log.level,
+            color: Log.noColor,
+            interactive: Log.nonInteractive,
+        };
+        const doctor = new Doctor();
+        const signal = new AbortController().signal;
+        const output: string[] = [];
+        const marker = join(root, '.coderail');
+        const child = join(root, 'child');
+        try {
+            Installation.check = () => Promise.resolve({ failures: [], skipped: [] });
+            Project.checkExecutable = () => Promise.resolve({ failures: [], skipped: [] });
+            Log.output = (...messages) => {
+                output.push(messages.join(' '));
+            };
+            await Deno.mkdir(child);
+            const run = async (): Promise<void> => {
+                output.length = 0;
+                await doctor.run({
+                    parsedArguments: doctor.parseArguments(['--repair']),
+                    globalArguments: Commands.cr().parseArguments([
+                        '--cwd',
+                        child,
+                        '--non-interactive',
+                    ]).args,
+                    signal,
+                });
+            };
+            await run();
+            await expect(Deno.stat(marker)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+            await Deno.mkdir(marker);
+            await run();
+            expect(await Deno.readTextFile(join(marker, 'config'))).toContain(
+                '# Coderail configuration file',
+            );
+            expect(output.join('\n')).toContain('Repaired:');
+            const configInfo = await Deno.stat(join(marker, 'config'));
+            const ignoreInfo = await Deno.stat(join(marker, '.gitignore'));
+            await run();
+            expect(await Deno.stat(join(marker, 'config'))).toEqual(configInfo);
+            expect(await Deno.stat(join(marker, '.gitignore'))).toEqual(ignoreInfo);
+            expect(output.join('\n')).not.toContain('Repaired:');
+            await Deno.writeTextFile(join(marker, 'config'), 'invalid = [');
+            await Deno.writeTextFile(join(marker, '.gitignore'), '# custom\n');
+            await run();
+            expect(await Deno.readTextFile(join(marker, 'config'))).toBe('invalid = [');
+            expect(await Deno.readTextFile(join(marker, '.gitignore'))).toContain('# custom\n');
+            expect(output.join('\n')).toContain('Invalid configuration');
+            expect(output.join('\n')).toContain('Repaired:');
+            expect(Deno.exitCode).toBe(1);
+            const ticket = join(marker, 'tickets', 'closed', '9999-wrong.md');
+            await Deno.mkdir(join(marker, 'tickets', 'closed'), { recursive: true });
+            const ticketText =
+                '---\nid: "0027"\nslug: custom\ntitle: Custom\nstatus: open\ncreated_at: now\nupdated_at: now\ndependencies: ["9998"]\n---\nKeep ticket bytes  \r\n';
+            await Deno.writeTextFile(ticket, ticketText);
+            for (const args of [[], ['--repair']]) {
+                output.length = 0;
+                await doctor.run({
+                    parsedArguments: doctor.parseArguments(args),
+                    globalArguments: Commands.cr().parseArguments([
+                        '--cwd',
+                        child,
+                        '--non-interactive',
+                    ]).args,
+                    signal,
+                });
+                expect(output.join('\n')).toContain(ticket);
+                expect(output.join('\n')).toContain('Blocked progression:');
+                expect(output.join('\n')).toContain('Missing target "9998"');
+                expect(output.join('\n')).toContain(
+                    join(marker, 'tickets', 'open', '0027-custom.md'),
+                );
+                expect(output.join('\n')).toContain('Invalid configuration');
+                expect(output.join('\n')).toContain('Manual repair:');
+                const destination = join(marker, 'tickets', 'open', '0027-custom.md');
+                if (args.length === 0) {
+                    expect(output.join('\n')).toContain('[repairable]');
+                    expect(await Deno.readTextFile(ticket)).toBe(ticketText);
+                    await expect(Deno.stat(destination)).rejects.toBeInstanceOf(
+                        Deno.errors.NotFound,
+                    );
+                } else {
+                    expect(output.join('\n')).toContain('Repaired:');
+                    expect(output.join('\n')).not.toContain('[repairable]');
+                    expect(await Deno.readTextFile(destination)).toBe(ticketText);
+                    await expect(Deno.stat(ticket)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+                }
+                expect(Deno.exitCode).toBe(1);
+            }
+        } finally {
+            Installation.check = original.check;
+            Project.checkExecutable = original.executable;
+            Log.output = original.output;
+            Deno.exitCode = original.exit;
+            Log.level = original.level;
+            Log.noColor = original.color;
+            Log.nonInteractive = original.interactive;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'doctor repairs instruction assets without prompts, rechecks partial failures and preserves manual findings',
+    async () => {
+        const { join } = await import('@std/path');
+        const { Instructions } = await import('../../src/commands/doctor/instructions.ts');
+        const { Project } = await import('../../src/commands/doctor/project.ts');
+        const { Conf } = await import('@conf');
+        const root = await Deno.makeTempDir();
+        const signal = new AbortController().signal;
+        const original = {
+            check: Installation.check,
+            discover: Project.discover,
+            executable: Project.checkExecutable,
+            diagnose: Conf.diagnoseConfiguration,
+            output: Log.output,
+            exit: Deno.exitCode,
+            level: Log.level,
+            noColor: Log.noColor,
+            nonInteractive: Log.nonInteractive,
+        };
+        const output: string[] = [];
+        const doctor = new Doctor();
+        let fail = false;
+        try {
+            await Deno.mkdir(join(root, 'instructions/agents'), { recursive: true });
+            const first = join(root, 'instructions/agents/first.md');
+            const second = join(root, 'instructions/agents/second.md');
+            const manual = join(root, 'instructions/agents/manual.md');
+            const body =
+                '---\nname: wrong\ndescription: Custom description\n---\nCustom body  \r\n';
+            await Deno.writeTextFile(first, body);
+            await Deno.writeTextFile(second, body);
+            await Deno.writeTextFile(manual, '---\nname: manual\n---\nKeep this body');
+            Installation.check = async (received) => {
+                expect(received).toBe(signal);
+                const report = await Instructions.checkAssets(root, received);
+                if (fail) {
+                    const repair = report.failures.find((finding) =>
+                        finding.message.includes(first),
+                    )?.repair;
+                    if (repair) {
+                        repair.apply = () => Promise.reject(new Error('instruction write denied'));
+                    }
+                }
+                return report;
+            };
+            Project.discover = () => Promise.resolve({ failures: [], skipped: [] });
+            Project.checkExecutable = () => Promise.resolve({ failures: [], skipped: [] });
+            Conf.diagnoseConfiguration = () =>
+                Promise.resolve({
+                    configuration: Conf.createConfiguration(Commands.cr().parseArguments([]).args),
+                    errors: [],
+                });
+            Log.output = (...messages) => {
+                output.push(messages.join(' '));
+            };
+            const run = async (args: string[]): Promise<void> => {
+                output.length = 0;
+                await doctor.run({
+                    parsedArguments: doctor.parseArguments(args),
+                    globalArguments: Commands.cr().parseArguments(['--non-interactive']).args,
+                    signal,
+                });
+            };
+            await run([]);
+            expect(await Deno.readTextFile(first)).toBe(body);
+            expect(await Deno.readTextFile(second)).toBe(body);
+            expect(Deno.exitCode).toBe(1);
+            expect(output.join('\n')).toContain('[repairable]');
+            fail = true;
+            await run(['--repair']);
+            expect(await Deno.readTextFile(first)).toBe(body);
+            expect(await Deno.readTextFile(second)).toContain('name: "second"');
+            expect(output.join('\n')).toContain('Repair error: instruction write denied');
+            expect(output.join('\n')).toContain('Repaired:');
+            expect(output.join('\n')).toContain('Manual repair:');
+            expect(Deno.exitCode).toBe(1);
+            fail = false;
+            await run(['--repair']);
+            expect(await Deno.readTextFile(first)).toContain('name: "first"');
+            expect(await Deno.readTextFile(manual)).toBe('---\nname: manual\n---\nKeep this body');
+            expect(Deno.exitCode).toBe(1);
+            await Deno.writeTextFile(
+                manual,
+                '---\nname: manual\ndescription: custom\n---\nKeep this body',
+            );
+            await run(['--repair']);
+            expect(Deno.exitCode).toBe(0);
+            expect(output.join('\n')).toContain('Doctor checks passed.');
+            expect(output.join('\n')).not.toContain('Repaired:');
+        } finally {
+            Installation.check = original.check;
+            Project.discover = original.discover;
+            Project.checkExecutable = original.executable;
+            Conf.diagnoseConfiguration = original.diagnose;
+            Log.output = original.output;
+            Deno.exitCode = original.exit;
+            Log.level = original.level;
+            Log.noColor = original.noColor;
+            Log.nonInteractive = original.nonInteractive;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'doctor ticket moves converge with initialization, manual defects, failures and cancellation',
+    async () => {
+        const { join } = await import('@std/path');
+        const { Project } = await import('../../src/commands/doctor/project.ts');
+        const root = await Deno.makeTempDir();
+        const original = {
+            check: Installation.check,
+            executable: Project.checkExecutable,
+            output: Log.output,
+            exit: Deno.exitCode,
+            level: Log.level,
+            noColor: Log.noColor,
+            nonInteractive: Log.nonInteractive,
+            link: Deno.link,
+        };
+        const output: string[] = [];
+        const doctor = new Doctor();
+        let collections = 0;
+        const body = (id: string, dependencies = '[]'): string =>
+            `---\nid: "${id}"\nslug: fix-parser\ntitle: Fix parser\nstatus: closed\nreason: done\ncreated_at: original-created\nupdated_at: original-updated\ndependencies: ${dependencies}\n---\nCustom body  \r\n`;
+        const source = (id: string): string =>
+            join(root, '.coderail/tickets/active', `${id}-wrong.md`);
+        const destination = (id: string): string =>
+            join(root, '.coderail/tickets/closed', `${id}-fix-parser.md`);
+        const run = async (
+            repair: boolean,
+            signal = new AbortController().signal,
+        ): Promise<void> => {
+            output.length = 0;
+            collections = 0;
+            await doctor.run({
+                parsedArguments: doctor.parseArguments(repair ? ['--repair'] : []),
+                globalArguments: Commands.cr().parseArguments(['--cwd', root, '--non-interactive'])
+                    .args,
+                signal,
+            });
+        };
+        try {
+            Installation.check = () => {
+                collections++;
+                return Promise.resolve({ failures: [], skipped: [] });
+            };
+            Project.checkExecutable = () => Promise.resolve({ failures: [], skipped: [] });
+            Log.output = (...messages) => {
+                output.push(messages.join(' '));
+            };
+            await Deno.mkdir(join(root, '.coderail/tickets/active'), { recursive: true });
+            await Deno.writeTextFile(source('0042'), body('0042', '["9999"]'));
+            await Deno.writeTextFile(source('0043'), body('0043'));
+            await run(false);
+            expect(collections).toBe(1);
+            expect(await Deno.readTextFile(source('0042'))).toBe(body('0042', '["9999"]'));
+            expect(await Deno.readTextFile(source('0043'))).toBe(body('0043'));
+            await expect(Deno.stat(join(root, '.coderail/config'))).rejects.toBeInstanceOf(
+                Deno.errors.NotFound,
+            );
+            Deno.link = (from, to) =>
+                String(from) === source('0042')
+                    ? Promise.reject(new Error('ticket move denied'))
+                    : original.link(from, to);
+            await run(true);
+            expect(collections).toBe(2);
+            expect(output.join('\n')).toContain('Repair error: ticket move denied');
+            expect(output.join('\n')).toContain('Repaired:');
+            expect(output.join('\n')).toContain('Missing target "9999"');
+            expect(Deno.exitCode).toBe(1);
+            expect(await Deno.readTextFile(destination('0043'))).toBe(body('0043'));
+            await expect(Deno.stat(source('0043'))).rejects.toBeInstanceOf(Deno.errors.NotFound);
+            const configInfo = await Deno.stat(join(root, '.coderail/config'));
+            const healthyInfo = await Deno.stat(destination('0043'));
+            await Deno.writeTextFile(source('0044'), body('0044'));
+            const controller = new AbortController();
+            let completedSource = '';
+            Deno.link = async (from, to) => {
+                await original.link(from, to);
+                completedSource = String(from);
+                controller.abort(new Error('cancelled after move'));
+            };
+            await expect(run(true, controller.signal)).rejects.toThrow('cancelled after move');
+            expect(collections).toBe(1);
+            await expect(Deno.stat(completedSource)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+            const completedId = completedSource.includes('0042') ? '0042' : '0044';
+            expect(await Deno.readTextFile(destination(completedId))).toBe(
+                body(completedId, completedId === '0042' ? '["9999"]' : '[]'),
+            );
+            const pendingId = completedId === '0042' ? '0044' : '0042';
+            expect(await Deno.readTextFile(source(pendingId))).toContain('Custom body');
+            Deno.link = original.link;
+            await run(true);
+            expect(collections).toBe(2);
+            expect(output.join('\n')).toContain('Missing target "9999"');
+            expect(output.join('\n')).toContain('Manual repair:');
+            expect(output.join('\n')).not.toContain('[repairable]');
+            expect(Deno.exitCode).toBe(1);
+            await Deno.writeTextFile(destination('9999'), body('9999'));
+            await run(true);
+            expect(collections).toBe(2);
+            expect(Deno.exitCode).toBe(0);
+            expect(output.join('\n')).not.toContain('Repaired:');
+            expect(await Deno.stat(join(root, '.coderail/config'))).toEqual(configInfo);
+            expect(await Deno.stat(destination('0043'))).toEqual(healthyInfo);
+        } finally {
+            Installation.check = original.check;
+            Project.checkExecutable = original.executable;
+            Log.output = original.output;
+            Deno.exitCode = original.exit;
+            Log.level = original.level;
+            Log.noColor = original.noColor;
+            Log.nonInteractive = original.nonInteractive;
+            Deno.link = original.link;
             await Deno.remove(root, { recursive: true });
         }
     },

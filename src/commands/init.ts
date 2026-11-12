@@ -4,7 +4,7 @@ import { Fs } from '@fs';
 import { Log } from '@log';
 import { join } from '@std/path';
 
-import { projectIgnoreLines } from '../runtime/context.ts';
+import { ProjectInitialization } from '../project-initialization.ts';
 import type { RunContext } from './helpers/command.ts';
 
 type InitArguments = {
@@ -66,48 +66,18 @@ export class Init implements Command<InitArguments> {
         return undefined;
     }
 
-    async run({ context: context, parsedArguments }: RunContext<InitArguments>): Promise<void> {
+    async run({
+        context: context,
+        parsedArguments,
+        signal,
+    }: RunContext<InitArguments>): Promise<void> {
         Log.notice(`Ensuring directory ".coderail" exists.`);
         const directoryPath = join(context.currentWorkingDirectory, '.coderail');
         await Fs.makeDirectory(directoryPath);
 
         using spinner = Log.spinner('Creating base structure...');
-        const filePath = join(directoryPath, 'config');
-        try {
-            const fileInfo = await Deno.lstat(filePath);
-            if (!fileInfo.isFile && !fileInfo.isSymlink) {
-                throw new Error(`Expected "${filePath}" to be a file or a symlink.`);
-            }
-            Log.notice(`Found existing configuration file at "${filePath}".`);
-        } catch (error) {
-            if (!(error instanceof Deno.errors.NotFound)) {
-                throw error;
-            }
-            await Fs.write(filePath, defaultConfigContent());
-            Log.notice(`Created new configuration file at "${filePath}".`);
-        }
-        const ignorePath = join(directoryPath, '.gitignore');
-        let original = '';
-        try {
-            original = await Deno.readTextFile(ignorePath);
-        } catch (error) {
-            if (!(error instanceof Deno.errors.NotFound)) {
-                throw error;
-            }
-        }
-        const lines = original.split(/\r?\n/);
-        let repaired = lines[0] === '*' ? original : '*\n' + original;
-        for (const line of projectIgnoreLines.slice(1)) {
-            if (!lines.includes(line)) {
-                if (!repaired.endsWith('\n')) {
-                    repaired += '\n';
-                }
-                repaired += line + '\n';
-            }
-        }
-        if (repaired !== original) {
-            await Fs.write(ignorePath, new Blob([repaired]).stream());
-        }
+        await ProjectInitialization.ensureConfig(context.currentWorkingDirectory, signal);
+        await ProjectInitialization.ensureIgnoreRules(context.currentWorkingDirectory, signal);
         spinner.setMessage('Installing templates...');
         for (const template of parsedArguments.args.templates) {
             spinner.addStep(`template "${template}".`);
@@ -115,36 +85,6 @@ export class Init implements Command<InitArguments> {
         }
         Log.output(`Current working directory "${context.currentWorkingDirectory}" initialized.`);
     }
-}
-
-function defaultConfigContent(): ReadableStream<Uint8Array> {
-    const configContentLines = [
-        '# Coderail configuration file, lines starting with "#" are comments.',
-        '# Example:',
-        '# default_harness = codex',
-        '',
-        '# Add your verification configuration here.',
-        '# Example:',
-        '# Optional global actions (place before rule entries):',
-        '# [verify]',
-        '# pre = [["mkdir", "-p", "coverage"]]',
-        '# post = [["rm", "-rf", ".mutation-tmp"]]',
-        '#',
-        '# [[verify.rules]]',
-        '# pattern = src/${path:**}/${file:*}.ts',
-        '# commands = [',
-        '#   ["command", "argument_1", "argument_2"]',
-        '# ]',
-    ];
-    const encoder = new TextEncoder();
-    return new ReadableStream({
-        start(controller): void {
-            for (const line of configContentLines) {
-                controller.enqueue(encoder.encode(line + '\n'));
-            }
-            controller.close();
-        },
-    });
 }
 
 async function installTemplate(template: string): Promise<void> {

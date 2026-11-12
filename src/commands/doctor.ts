@@ -6,6 +6,8 @@ import { dirname, fromFileUrl, resolve } from '@std/path';
 
 import { Installation } from './doctor/installation.ts';
 import { Project } from './doctor/project.ts';
+import { runRepairs } from './doctor/repairs.ts';
+import type { DoctorReport } from './doctor/types.ts';
 import type { RunContext } from './helpers/command.ts';
 
 export type BootstrapRunContext = {
@@ -59,9 +61,6 @@ export class Doctor implements Command {
 
     async run(input: BootstrapRunContext | RunContext): Promise<void> {
         input.signal.throwIfAborted();
-        if (input.parsedArguments.args.repair) {
-            throw new Error('not implemented');
-        }
         const global: GlobalArguments =
             'globalArguments' in input
                 ? input.globalArguments
@@ -79,68 +78,99 @@ export class Doctor implements Command {
         Log.noColor = bootstrap.noColor;
         Log.nonInteractive = bootstrap.nonInteractive;
         const cwd = resolve(Deno.cwd(), global.cwd ?? '.');
-        Log.notice(`Checking installation before project diagnostics (cwd "${cwd}").`);
-        const report = await Installation.check(input.signal);
-        input.signal.throwIfAborted();
-        Log.notice('Resolving installation and configuration paths.');
-        let installRoot: string | undefined;
-        try {
-            const entry = Deno.build.standalone ? Deno.execPath() : fromFileUrl(Deno.mainModule);
-            Log.notice(`Resolving configuration installation root from "${entry}".`);
-            installRoot = dirname(dirname(await Deno.realPath(entry)));
-            Log.notice(`Using installation root "${installRoot}" for configuration diagnostics.`);
-        } catch {
+        const collect = async (): Promise<DoctorReport> => {
+            Log.level = bootstrap.logLevel;
+            Log.noColor = bootstrap.noColor;
+            Log.nonInteractive = bootstrap.nonInteractive;
+            Log.notice(`Checking installation before project diagnostics (cwd "${cwd}").`);
+            const report = await Installation.check(input.signal);
             input.signal.throwIfAborted();
-            report.skipped.push(
-                'Global and source repository configuration: installation paths unavailable.',
+            Log.notice('Resolving installation and configuration paths.');
+            let installRoot: string | undefined;
+            try {
+                const entry = Deno.build.standalone
+                    ? Deno.execPath()
+                    : fromFileUrl(Deno.mainModule);
+                Log.notice(`Resolving configuration installation root from "${entry}".`);
+                installRoot = dirname(dirname(await Deno.realPath(entry)));
+                Log.notice(
+                    `Using installation root "${installRoot}" for configuration diagnostics.`,
+                );
+            } catch {
+                input.signal.throwIfAborted();
+                report.skipped.push(
+                    'Global and source repository configuration: installation paths unavailable.',
+                );
+            }
+            const repositoryRoots: string[] = [];
+            const validationRoots: string[] = [];
+            if (!Deno.build.standalone && installRoot !== undefined) {
+                validationRoots.push(installRoot);
+            }
+            Log.notice(`Discovering project from cwd "${cwd}".`);
+            const discovery = await Project.discover(cwd, input.signal);
+            report.failures.push(...discovery.failures);
+            report.skipped.push(...discovery.skipped);
+            if (discovery.repositoryRoot !== undefined) {
+                repositoryRoots.push(discovery.repositoryRoot);
+                Log.notice(`Checking project "${discovery.repositoryRoot}".`);
+                const project = await Project.check(discovery.repositoryRoot, input.signal);
+                report.failures.push(...project.failures);
+                report.skipped.push(...project.skipped);
+            }
+            Log.notice(`Diagnosing configuration for cwd "${cwd}".`);
+            const { configuration, errors } = await Conf.diagnoseConfiguration(
+                { installRoot, repositoryRoots, validationRoots },
+                global,
+                input.signal,
             );
-        }
-        const repositoryRoots: string[] = [];
-        const validationRoots: string[] = [];
-        if (!Deno.build.standalone && installRoot !== undefined) {
-            validationRoots.push(installRoot);
-        }
-        Log.notice(`Discovering project from cwd "${cwd}".`);
-        const discovery = await Project.discover(cwd, input.signal);
-        report.failures.push(...discovery.failures);
-        report.skipped.push(...discovery.skipped);
-        if (discovery.repositoryRoot !== undefined) {
-            repositoryRoots.push(discovery.repositoryRoot);
-            Log.notice(`Checking project "${discovery.repositoryRoot}".`);
-            const project = await Project.check(discovery.repositoryRoot, input.signal);
-            report.failures.push(...project.failures);
-            report.skipped.push(...project.skipped);
-        }
-        Log.notice(`Diagnosing configuration for cwd "${cwd}".`);
-        const { configuration, errors } = await Conf.diagnoseConfiguration(
-            { installRoot, repositoryRoots, validationRoots },
-            global,
-            input.signal,
+            for (const error of errors) {
+                report.failures.push({
+                    message: error.message,
+                    repairable: false,
+                    manualRepair: [
+                        'Correct the configuration source or environment override and rerun "cr doctor".',
+                    ],
+                });
+            }
+            Log.level = configuration.logLevel;
+            Log.noColor = configuration.noColor;
+            Log.nonInteractive = configuration.nonInteractive;
+            Log.notice(
+                `Checking configured harness executable (${configuration.defaultHarness ?? 'no harness configured'}).`,
+            );
+            const executable = await Project.checkExecutable(
+                configuration.defaultHarness,
+                input.signal,
+            );
+            report.failures.push(...executable.failures);
+            report.skipped.push(...executable.skipped);
+            input.signal.throwIfAborted();
+            return report;
+        };
+        let report = await collect();
+        const actions = new Map(
+            report.failures.flatMap((failure) =>
+                failure.repair ? [[failure.repair.key, failure.repair] as const] : [],
+            ),
         );
-        for (const error of errors) {
-            report.failures.push({
-                message: error.message,
-                repairable: false,
-                manualRepair: [
-                    'Correct the configuration source or environment override and rerun "cr doctor".',
-                ],
-            });
+        if (input.parsedArguments.args.repair) {
+            const results = await runRepairs([...actions.values()], input.signal);
+            report = await collect();
+            const unresolved = new Set(
+                report.failures.flatMap((failure) => (failure.repair ? [failure.repair.key] : [])),
+            );
+            for (const result of results) {
+                Log.output(
+                    `${result.error !== undefined || unresolved.has(result.key) ? 'Unresolved' : 'Repaired'}: ${result.description}`,
+                );
+                if (result.error !== undefined) {
+                    Log.output(`  Repair error: ${result.error}`);
+                }
+            }
         }
-        Log.level = configuration.logLevel;
-        Log.noColor = configuration.noColor;
-        Log.nonInteractive = configuration.nonInteractive;
-        Log.notice(
-            `Checking configured harness executable (${configuration.defaultHarness ?? 'no harness configured'}).`,
-        );
-        const executable = await Project.checkExecutable(
-            configuration.defaultHarness,
-            input.signal,
-        );
-        report.failures.push(...executable.failures);
-        report.skipped.push(...executable.skipped);
-        input.signal.throwIfAborted();
         for (const failure of report.failures) {
-            Log.output(`Failure: ${failure.message}${failure.repairable ? ' [repairable]' : ''}`);
+            Log.output(`Failure: ${failure.message}${failure.repair ? ' [repairable]' : ''}`);
             for (const option of failure.manualRepair) {
                 Log.output(`  Manual repair: ${option}`);
             }

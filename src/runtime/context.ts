@@ -2,15 +2,8 @@ import type { Command, GlobalArguments } from '@commands';
 import { Log } from '@log';
 import { dirname, fromFileUrl, join, resolve } from '@std/path';
 
-export const projectIgnoreLines = [
-    '*',
-    '!.gitignore',
-    '!config',
-    '!plans/',
-    '!plans/**',
-    '!tickets/',
-    '!tickets/**',
-] as const;
+import { projectIgnoreLines } from '../project-initialization.ts';
+export { projectIgnoreLines } from '../project-initialization.ts';
 
 export type RuntimeContext = {
     currentWorkingDirectory: string;

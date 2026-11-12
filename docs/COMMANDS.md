@@ -225,4 +225,5 @@ For example, `cr --cwd /path/to/project ticket next` selects another project.
 
 Some commands listed in help are still under development: `template` is a
 placeholder, and template installation through `cr init <template>` is simulated.
-Automatic repair through `cr doctor --repair` is not yet implemented.
+Use `cr doctor --repair` for supported automatic repairs; see
+[diagnostics and repair limits](INSTALLATION.md#diagnosing-setup-problems).

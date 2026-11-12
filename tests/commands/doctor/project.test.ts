@@ -2,6 +2,7 @@ import { expect } from '@std/expect';
 import { dirname, join, parse } from '@std/path';
 
 import { Project } from '../../../src/commands/doctor/project.ts';
+import type { DoctorFailure, DoctorRepair } from '../../../src/commands/doctor/types.ts';
 import { projectIgnoreLines } from '../../../src/runtime/context.ts';
 
 Deno.test(
@@ -146,7 +147,7 @@ Deno.test(
             await Deno.writeTextFile(join(root, '.claude', 'owned'), 'changed');
             const report = await Project.check(root, signal);
             expect(report.failures).toHaveLength(4);
-            expect(report.failures.every((finding) => !finding.repairable)).toBe(true);
+            expect(report.failures.slice(2).every((finding) => !finding.repairable)).toBe(true);
             expect(report.failures.map((finding) => finding.message).join('\n')).toContain(
                 'missing',
             );
@@ -279,6 +280,115 @@ Deno.test(
             Object.defineProperty(Deno, 'build', { configurable: true, value: original.build });
             Deno.env.get = original.get;
             Deno.stat = original.stat;
+        }
+    },
+);
+
+Deno.test('project repairs guard collected inputs and preserve existing content', async () => {
+    const root = await Deno.makeTempDir();
+    const signal = new AbortController().signal;
+    const marker = join(root, '.coderail');
+    try {
+        await Deno.mkdir(marker);
+        const collect = async (): Promise<DoctorFailure[]> =>
+            (await Project.check(root, signal)).failures;
+        const action = (failures: DoctorFailure[], index: number): DoctorRepair => {
+            const repair = failures[index]?.repair;
+            if (!repair) {
+                throw new Error('Expected a repair action');
+            }
+            return repair;
+        };
+        const missing = await collect();
+        expect(missing.every((failure) => failure.repairable && failure.repair)).toBe(true);
+        await Deno.writeTextFile(join(marker, 'config'), 'newer config');
+        await expect(action(missing, 0).apply(signal)).rejects.toThrow('changed');
+        await Deno.remove(join(marker, 'config'));
+        await action(missing, 0).apply(signal);
+        const defaults = await Deno.readTextFile(join(marker, 'config'));
+        expect(defaults).toContain('# Coderail configuration file');
+        await Deno.writeTextFile(join(marker, 'config'), 'newer config');
+        await action(missing, 1).apply(signal);
+        expect(await Deno.readTextFile(join(marker, 'config'))).toBe('newer config');
+        expect(await collect()).toEqual([]);
+        await Deno.writeTextFile(join(marker, '.gitignore'), '# custom\r\n!mine\r\n');
+        const incomplete = await collect();
+        await Deno.writeTextFile(join(marker, '.gitignore'), 'changed');
+        await expect(action(incomplete, 0).apply(signal)).rejects.toThrow('changed');
+        const fresh = await collect();
+        await action(fresh, 0).apply(signal);
+        expect(await Deno.readTextFile(join(marker, '.gitignore'))).toContain('changed');
+        expect(await collect()).toEqual([]);
+    } finally {
+        await Deno.remove(root, { recursive: true });
+    }
+});
+
+Deno.test(
+    'project repair execution preserves destinations changed during output preparation',
+    async () => {
+        const { runRepairs } = await import('../../../src/commands/doctor/repairs.ts');
+        const root = await Deno.makeTempDir();
+        const prepare = Response.prototype.arrayBuffer;
+        const marker = join(root, '.coderail');
+        const signal = new AbortController().signal;
+        try {
+            await Deno.mkdir(marker);
+            for (const name of ['config', '.gitignore']) {
+                for (const original of name === 'config'
+                    ? [undefined]
+                    : [undefined, '# original']) {
+                    const path = join(marker, name);
+                    if (original !== undefined) {
+                        await Deno.writeTextFile(path, original);
+                    }
+                    const repair = (await Project.check(root, signal)).failures.find((failure) =>
+                        failure.repair?.key.endsWith(path),
+                    )?.repair;
+                    if (!repair) {
+                        throw new Error('Expected a repair action');
+                    }
+                    Response.prototype.arrayBuffer = async function () {
+                        const bytes = await prepare.call(this);
+                        await Deno.writeTextFile(path, 'newer user content');
+                        return bytes;
+                    };
+                    const results = await runRepairs([repair], signal);
+                    expect(results[0]?.error).toBeDefined();
+                    expect(await Deno.readTextFile(path)).toBe('newer user content');
+                    Response.prototype.arrayBuffer = prepare;
+                    await Deno.remove(path);
+                }
+            }
+        } finally {
+            Response.prototype.arrayBuffer = prepare;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'project collects ticket metadata findings and skips alongside initialization checks',
+    async () => {
+        const root = await Deno.makeTempDir();
+        const signal = new AbortController().signal;
+        try {
+            const folder = join(root, '.coderail/tickets/closed');
+            await Deno.mkdir(folder, { recursive: true });
+            const path = join(folder, '9999-wrong.md');
+            const text =
+                '---\nid: "0017"\nslug: custom\ntitle: Custom\nstatus: open\ncreated_at: now\nupdated_at: now\n---\nPreserve body';
+            await Deno.writeTextFile(path, text);
+            const report = await Project.check(root, signal);
+            expect(report.failures).toHaveLength(3);
+            expect(report.failures[2]?.message).toContain(path);
+            expect(report.failures[2]?.message).toContain(
+                join(root, '.coderail/tickets/open/0017-custom.md'),
+            );
+            expect(report.skipped.join('\n')).toContain(join(root, '.coderail/tickets/active'));
+            expect(await Deno.readTextFile(path)).toBe(text);
+        } finally {
+            await Deno.remove(root, { recursive: true });
         }
     },
 );

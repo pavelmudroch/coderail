@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `cr doctor --repair` repairs missing project configuration and incomplete ignore
+  rules, conservative instruction frontmatter defects, and unambiguous ticket
+  placement, then reruns diagnostics and reports unresolved issues.
+- Doctor diagnostics for ticket metadata, filenames and status directories,
+  duplicate IDs, dependency and duplicate-reference integrity, cycles, and blocked
+  progression. Markdown skills and subagents are validated by frontmatter,
+  allowing valid customized instructions.
 - Download progress indicators for upgrade release archives and checksums.
 - Windows PowerShell installer for x86_64 and ARM64, with checksum verification,
   a configurable installation directory, and support for reinstalling or repairing

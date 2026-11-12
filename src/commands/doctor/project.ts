@@ -5,8 +5,9 @@ import { Harness } from '@harness';
 import { Log } from '@log';
 import { dirname, join } from '@std/path';
 
-import { projectIgnoreLines } from '../../runtime/context.ts';
+import { projectIgnoreLines, ProjectInitialization } from '../../project-initialization.ts';
 import { Installation } from './installation.ts';
+import { Tickets } from './tickets.ts';
 import { createDoctorReport, type DoctorReport } from './types.ts';
 
 /** Discovery deliberately accepts incomplete initialization as a project marker. */
@@ -67,6 +68,8 @@ async function check(root: string, signal: AbortSignal): Promise<DoctorReport> {
         signal.throwIfAborted();
         const path = join(root, '.coderail', name);
         Log.notice(`Checking project initialization "${path}".`);
+        let original: string | undefined;
+        let incomplete = false;
         try {
             if (name === 'config') {
                 await Deno.stat(path);
@@ -76,8 +79,10 @@ async function check(root: string, signal: AbortSignal): Promise<DoctorReport> {
                 if (!info.isFile) {
                     throw new Error('Unsupported ignore file type: expected a regular file');
                 }
-                const lines = (await Deno.readTextFile(path, { signal })).split(/\r?\n/);
+                original = await Deno.readTextFile(path, { signal });
+                const lines = original.split(/\r?\n/);
                 if (lines[0] !== '*' || !projectIgnoreLines.every((line) => lines.includes(line))) {
+                    incomplete = true;
                     throw new Error('Incomplete ignore rules');
                 }
             }
@@ -88,9 +93,56 @@ async function check(root: string, signal: AbortSignal): Promise<DoctorReport> {
             if (name === 'config' && !(error instanceof Deno.errors.NotFound)) {
                 continue;
             }
+            // Never offer repairs for symlinks, unsupported types or access failures.
+            let supported = false;
+            if (incomplete || error instanceof Deno.errors.NotFound) {
+                try {
+                    const info = await Deno.lstat(path);
+                    supported = incomplete && info.isFile;
+                } catch (inspectionError) {
+                    signal.throwIfAborted();
+                    supported = inspectionError instanceof Deno.errors.NotFound;
+                }
+            }
+            const repair = supported
+                ? {
+                      key: `project-initialization:${path}`,
+                      description: `Repair project initialization "${path}"`,
+                      async apply(actionSignal: AbortSignal): Promise<void> {
+                          actionSignal.throwIfAborted();
+                          let current: string | undefined;
+                          try {
+                              const info = await Deno.lstat(path);
+                              if (!info.isFile || original === undefined) {
+                                  throw new Error(`Collected input changed at "${path}"`);
+                              }
+                              current = await Deno.readTextFile(path, { signal: actionSignal });
+                          } catch (readError) {
+                              actionSignal.throwIfAborted();
+                              if (!(readError instanceof Deno.errors.NotFound)) {
+                                  throw readError;
+                              }
+                          }
+                          if (current !== original) {
+                              throw new Error(`Collected input changed at "${path}"`);
+                          }
+                          actionSignal.throwIfAborted();
+                          if (name === 'config') {
+                              await ProjectInitialization.ensureConfig(root, actionSignal, {
+                                  original,
+                              });
+                          } else {
+                              await ProjectInitialization.ensureIgnoreRules(root, actionSignal, {
+                                  original,
+                              });
+                          }
+                      },
+                  }
+                : undefined;
             report.failures.push({
                 message: `Project initialization "${path}": ${String(error)}`,
-                repairable: false,
+                repairable: repair !== undefined,
+                repair,
                 manualRepair: [`Run "cr init" from "${root}"; check file access permissions.`],
             });
         }
@@ -101,6 +153,9 @@ async function check(root: string, signal: AbortSignal): Promise<DoctorReport> {
     );
     report.failures.push(...instructions.failures);
     report.skipped.push(...instructions.skipped);
+    const tickets = await Tickets.check(root, signal);
+    report.failures.push(...tickets.failures);
+    report.skipped.push(...tickets.skipped);
     return report;
 }
 
