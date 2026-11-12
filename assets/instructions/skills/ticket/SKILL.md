@@ -18,9 +18,9 @@ Decompose available implementation context into small, actionable tickets.
 ## Boundary
 
 - Follow [ticket shape](references/ticket-shape.md).
-- Create tickets using `cr ticket create <title>`.
+- Create tickets using `cr ticket --json create <title>`.
 - Declare dependencies using repeated `-d <ticket-id>` options.
-- Edit only ticket files returned by `cr ticket create`.
+- Edit only ticket files returned by `cr ticket --json create`.
 - Preserve CLI-generated front matter.
 
 ## Completion
