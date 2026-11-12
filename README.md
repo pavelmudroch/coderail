@@ -33,11 +33,38 @@ to write it yourself.
 
 ## Installation
 
-On Linux or macOS, copy and run:
+<details>
+<summary>Mac OS / Linux (shell)</summary>
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | sh
 ```
+
+or
+
+```sh
+wget -qO- https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.sh | sh
+```
+
+</details>
+
+<details>
+<summary>Windows (powershell)</summary>
+
+```powershell
+irm https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.ps1 | iex
+```
+
+</details>
+
+<details>
+<summary>Windows (command line)</summary>
+
+```cmd
+curl.exe -fsSL https://raw.githubusercontent.com/pavelmudroch/coderail/main/install.cmd -o install.cmd && install.cmd
+```
+
+</details>
 
 Accept the installer's PATH setup prompt, then open a new shell and run `cr --version`.
 See the [installation guide](docs/INSTALLATION.md#installation) for prerequisites,
