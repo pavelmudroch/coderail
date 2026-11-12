@@ -8,17 +8,17 @@ import {
     type InstallationTarget,
 } from '@harness';
 import {
+    descendantPath,
     type Inspection,
     InstallManifest,
     type Manifest,
     type ManifestFile,
+    validatePath,
 } from '@install-manifest';
 import { Log } from '@log';
 import { Path } from '@path';
 import { dirname, join, resolve } from '@std/path';
 
-import { descendantPath } from '../install-manifest/capture.ts';
-import { validatePath } from '../install-manifest/validate.ts';
 import type { RunContext } from './helpers/command.ts';
 import { getInstructionFiles, type InstructionFiles } from './helpers/get-instruction-files.ts';
 

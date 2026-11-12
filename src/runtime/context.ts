@@ -1,9 +1,8 @@
 import type { Command, GlobalArguments } from '@commands';
 import { Log } from '@log';
+import { projectIgnoreLines } from '@project';
 import { dirname, fromFileUrl, join, resolve } from '@std/path';
-
-import { projectIgnoreLines } from '../project-initialization.ts';
-export { projectIgnoreLines } from '../project-initialization.ts';
+export { projectIgnoreLines } from '@project';
 
 export type RuntimeContext = {
     currentWorkingDirectory: string;

@@ -1,18 +1,15 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
-import {
-    activateDistribution,
-    withInstallationLock,
-} from '../../../src/commands/upgrade/activation.ts';
-import { planAssets } from '../../../src/commands/upgrade/assets.ts';
+import { InstallManifest } from '../../src/install-manifest.ts';
+import { activateDistribution, withInstallationLock } from '../../src/installation/activation.ts';
+import { planAssets } from '../../src/installation/assets.ts';
 import {
     cleanupStaleExecutables,
     deferredCleanupScript,
     retireExecutables,
-} from '../../../src/commands/upgrade/cleanup.ts';
-import { targetTriple } from '../../../src/commands/upgrade/distribution.ts';
-import { InstallManifest } from '../../../src/install-manifest.ts';
+} from '../../src/installation/cleanup.ts';
+import { targetTriple } from '../../src/installation/distribution.ts';
 
 async function fixture(
     run: (root: string, selected: string, old: string) => Promise<void>,

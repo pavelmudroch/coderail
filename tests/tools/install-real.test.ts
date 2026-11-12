@@ -1,7 +1,7 @@
 import { expect } from '@std/expect';
 import { fromFileUrl, join } from '@std/path';
 
-import { targetTriple } from '../../src/commands/upgrade/distribution.ts';
+import { targetTriple } from '../../src/installation/distribution.ts';
 import { fixture, installer } from './install-fixture.ts';
 
 const decoder = new TextDecoder();

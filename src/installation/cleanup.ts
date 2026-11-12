@@ -1,7 +1,6 @@
+import { fingerprint, InstallManifest, regularFile } from '@install-manifest';
 import { join } from '@std/path';
 
-import { InstallManifest } from '../../install-manifest.ts';
-import { fingerprint, regularFile } from '../../install-manifest/capture.ts';
 import { type ActivationResult, launcherTarget, withInstallationLock } from './activation.ts';
 import { DISTRIBUTION_MANIFEST } from './assets.ts';
 

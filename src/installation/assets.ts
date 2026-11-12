@@ -1,9 +1,14 @@
+import type { Manifest, ManifestFile } from '@install-manifest';
+import {
+    canonicalRoot,
+    fingerprint,
+    InstallManifest,
+    regularFile,
+    validate,
+    validatePath,
+} from '@install-manifest';
 import { dirname, join } from '@std/path';
 
-import type { Manifest, ManifestFile } from '../../install-manifest.ts';
-import { InstallManifest } from '../../install-manifest.ts';
-import { canonicalRoot, fingerprint, regularFile } from '../../install-manifest/capture.ts';
-import { validate, validatePath } from '../../install-manifest/validate.ts';
 import type { StagedDistribution } from './distribution.ts';
 
 /** Separate from harness ownership. Schema 1 uses the shared checksum/size schema.

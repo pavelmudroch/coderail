@@ -452,7 +452,7 @@ Deno.test(
                     ],
                 });
                 const { resolveRelease, withStagedDistribution } =
-                    await import('../../src/commands/upgrade/distribution.ts');
+                    await import('../../src/installation/distribution.ts');
                 const resolved = await resolveRelease(
                     { version: '0.1.0' },
                     options.target,
@@ -483,7 +483,7 @@ Deno.test(
     'staging accepts omitted and explicitly empty archive resource roots independently',
     async () => {
         const { resolveRelease, withStagedDistribution } =
-            await import('../../src/commands/upgrade/distribution.ts');
+            await import('../../src/installation/distribution.ts');
         for (const directories of [
             [],
             ['instructions'],

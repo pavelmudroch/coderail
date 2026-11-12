@@ -1,8 +1,7 @@
 import { Fs } from '@fs';
 import { Log } from '@log';
 import { join, resolve } from '@std/path';
-
-import { type ApplyOptions, type TemplateReport, Templates } from './templates.ts';
+import { type ApplyOptions, type TemplateReport, Templates } from '@templates';
 
 export const projectIgnoreLines = [
     '*',

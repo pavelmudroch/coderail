@@ -427,7 +427,7 @@ Deno.test(
         const { join, toFileUrl } = await import('@std/path');
         const { Project } = await import('../../src/commands/doctor/project.ts');
         const { projectIgnoreLines } = await import('../../src/runtime/context.ts');
-        const { DISTRIBUTION_MANIFEST } = await import('../../src/commands/upgrade/assets.ts');
+        const { DISTRIBUTION_MANIFEST } = await import('../../src/installation/assets.ts');
         const root = await Deno.realPath(await Deno.makeTempDir());
         const project = join(root, 'project');
         const outside = join(root, 'outside');
@@ -669,7 +669,7 @@ Deno.test(
             await Deno.symlink(entry, join(root, 'bin', 'cr'));
             await Deno.writeTextFile(join(root, 'instructions', 'owned'), 'instruction');
             await Deno.writeTextFile(join(root, 'assets', 'templates', 'sample'), 'template');
-            const { DISTRIBUTION_MANIFEST } = await import('../../src/commands/upgrade/assets.ts');
+            const { DISTRIBUTION_MANIFEST } = await import('../../src/installation/assets.ts');
             await InstallManifest.save(
                 join(root, DISTRIBUTION_MANIFEST),
                 await InstallManifest.capture(root, ['instructions/owned']),

@@ -29,3 +29,5 @@ export interface Md {
 }
 
 export const Md: Md = { parse, toStream, create };
+
+export { parseFrontmatter } from './md/helpers/frontmatter.ts';

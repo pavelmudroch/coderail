@@ -3,9 +3,9 @@ import { access } from 'node:fs/promises';
 
 import { Harness } from '@harness';
 import { Log } from '@log';
+import { projectIgnoreLines, ProjectInitialization } from '@project';
 import { dirname, join } from '@std/path';
 
-import { projectIgnoreLines, ProjectInitialization } from '../../project-initialization.ts';
 import { Installation } from './installation.ts';
 import { Tickets } from './tickets.ts';
 import { createDoctorReport, type DoctorReport } from './types.ts';

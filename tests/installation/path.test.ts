@@ -1,7 +1,7 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
-import { setupPath, terminalConfirm } from '../../../src/commands/upgrade/path.ts';
+import { setupPath, terminalConfirm } from '../../src/installation/path.ts';
 
 Deno.test('PATH setup preserves shell files, quotes paths and is idempotent', async () => {
     for (const shell of ['bash', 'zsh', 'fish']) {

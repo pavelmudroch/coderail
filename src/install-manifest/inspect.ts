@@ -1,6 +1,6 @@
+import type { Inspection, Manifest, ManifestFile } from '@install-manifest';
 import { resolve } from '@std/path';
 
-import type { Inspection, Manifest, ManifestFile } from '../install-manifest.ts';
 import { canonicalRoot, descendantPath, fingerprint } from './capture.ts';
 import { validate } from './validate.ts';
 

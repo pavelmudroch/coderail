@@ -1,17 +1,14 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
+import { InstallManifest } from '../../src/install-manifest.ts';
 import {
     activateDistribution,
     ActivationError,
     windowsLauncher,
     withInstallationLock,
-} from '../../../src/commands/upgrade/activation.ts';
-import {
-    type StagedDistribution,
-    targetTriple,
-} from '../../../src/commands/upgrade/distribution.ts';
-import { InstallManifest } from '../../../src/install-manifest.ts';
+} from '../../src/installation/activation.ts';
+import { type StagedDistribution, targetTriple } from '../../src/installation/distribution.ts';
 
 async function fixture(
     run: (root: string, stage: StagedDistribution) => Promise<void>,

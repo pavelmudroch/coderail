@@ -3,13 +3,11 @@ import { access } from 'node:fs/promises';
 
 import { Harness, type InstallationTarget } from '@harness';
 import { InstallManifest, type Manifest } from '@install-manifest';
+import { DISTRIBUTION_MANIFEST, launcherTarget, ownedPath } from '@installation';
 import { Log } from '@log';
 import { Path } from '@path';
 import { dirname, fromFileUrl, join } from '@std/path';
 
-import { validate } from '../../install-manifest/validate.ts';
-import { launcherTarget } from '../upgrade/activation.ts';
-import { DISTRIBUTION_MANIFEST, ownedPath } from '../upgrade/assets.ts';
 import { instructionName, Instructions } from './instructions.ts';
 import { createDoctorReport, type DoctorReport } from './types.ts';
 
@@ -121,7 +119,7 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
             throw new Error('Distribution manifest must be a regular file');
         }
         const loaded: unknown = JSON.parse(await Deno.readTextFile(path, { signal }));
-        validate(loaded);
+        InstallManifest.validate(loaded);
         for (const file of loaded.files) {
             ownedPath(file.path);
         }

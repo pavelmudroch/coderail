@@ -1,20 +1,24 @@
 import { Cli } from '@cli';
 import type { Command, ParsedArguments } from '@commands';
+import {
+    activateDistribution,
+    ActivationError,
+    AssetApplyError,
+    type AssetPlan,
+    type AssetProgress,
+    cleanupStaleExecutablesWithinLock,
+    listStableReleases,
+    resolveRelease,
+    retireExecutables,
+    setupPath,
+    targetTriple,
+    terminalConfirm,
+    withStagedDistribution,
+} from '@installation';
 import { Log } from '@log';
 import { join } from '@std/path';
 
-import { CODERAIL_VERSION } from '../cli/version.ts';
 import type { RunContext } from './helpers/command.ts';
-import { activateDistribution, ActivationError } from './upgrade/activation.ts';
-import { AssetApplyError, type AssetPlan, type AssetProgress } from './upgrade/assets.ts';
-import { cleanupStaleExecutablesWithinLock, retireExecutables } from './upgrade/cleanup.ts';
-import {
-    listStableReleases,
-    resolveRelease,
-    targetTriple,
-    withStagedDistribution,
-} from './upgrade/distribution.ts';
-import { setupPath, terminalConfirm } from './upgrade/path.ts';
 
 type UpgradeArguments = {
     help: boolean;
@@ -215,7 +219,7 @@ export class Upgrade implements Command<UpgradeArguments> {
                 const formattedVersionOutputs: string[] = [];
                 for (const version of versions) {
                     const isLatest = version === latest;
-                    const isCurrent = version === (this.options.currentVersion ?? CODERAIL_VERSION);
+                    const isCurrent = version === (this.options.currentVersion ?? Cli.version);
                     const markers: string[] = [];
                     if (isLatest) {
                         markers.push('latest');

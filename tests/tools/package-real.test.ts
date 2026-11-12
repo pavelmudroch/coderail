@@ -1,8 +1,8 @@
 import { expect } from '@std/expect';
 import { fromFileUrl, join } from '@std/path';
 
-import { activateDistribution } from '../../src/commands/upgrade/activation.ts';
-import { targetTriple } from '../../src/commands/upgrade/distribution.ts';
+import { activateDistribution } from '../../src/installation/activation.ts';
+import { targetTriple } from '../../src/installation/distribution.ts';
 import { checkPackage } from '../../tools/check-package.ts';
 import { packageRelease } from '../../tools/internal/package-build.ts';
 import { targets } from '../../tools/internal/package-options.ts';

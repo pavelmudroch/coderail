@@ -2,8 +2,7 @@ import { Fs } from '@fs';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
-
-import { resolveTicket, TICKET_STATUS } from './helpers/resolve-ticket.ts';
+import { resolveTicket, TICKET_STATUS } from '@tickets';
 
 export type TicketStatus = 'open' | 'active' | 'closed';
 export type ClosedReason = 'done' | 'dismissed' | 'duplicate';

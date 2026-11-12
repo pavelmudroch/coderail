@@ -4,17 +4,13 @@ import { Log } from '@log';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
-import {
-    applyAssets,
-    DISTRIBUTION_MANIFEST,
-    planAssets,
-} from '../../../src/commands/upgrade/assets.ts';
+import { InstallManifest } from '../../src/install-manifest.ts';
+import { applyAssets, DISTRIBUTION_MANIFEST, planAssets } from '../../src/installation/assets.ts';
 import {
     resolveRelease,
     targetTriple,
     withStagedDistribution,
-} from '../../../src/commands/upgrade/distribution.ts';
-import { InstallManifest } from '../../../src/install-manifest.ts';
+} from '../../src/installation/distribution.ts';
 
 const commit = 'a'.repeat(40);
 const target = 'x86_64-unknown-linux-gnu';
@@ -962,7 +958,7 @@ Deno.test('stable listing sorts normalized releases and uses designated latest',
             ),
         );
     };
-    const { listStableReleases } = await import('../../../src/commands/upgrade/distribution.ts');
+    const { listStableReleases } = await import('../../src/installation/distribution.ts');
     expect(await listStableReleases(fetcher)).toEqual({
         versions: ['1.5.0', '1.4.3', '1.4.2'],
         latest: '1.4.3',
@@ -970,7 +966,7 @@ Deno.test('stable listing sorts normalized releases and uses designated latest',
 });
 
 Deno.test('stable listing handles pages and metadata errors', async () => {
-    const { listStableReleases } = await import('../../../src/commands/upgrade/distribution.ts');
+    const { listStableReleases } = await import('../../src/installation/distribution.ts');
     const publication = (
         tag_name: string,
     ): {

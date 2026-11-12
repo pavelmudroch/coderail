@@ -5,12 +5,12 @@ import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
+import { resolveTicket, type Ticket } from '@tickets';
 import { Text } from '@utils';
 
 import { formatTicketId } from './helpers/format-ticket-id.ts';
 import { formatJson, formatText } from './helpers/format.ts';
 import { getLastTicketId } from './helpers/get-last-ticket-id.ts';
-import { resolveTicket, type Ticket } from './helpers/resolve-ticket.ts';
 
 type CreateArguments = {
     help: boolean;

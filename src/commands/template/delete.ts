@@ -1,7 +1,7 @@
 import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Log } from '@log';
+import { Templates } from '@templates';
 
-import { Templates } from '../../templates.ts';
 import { outputTemplates, parseTemplateArguments, type TemplateArguments } from './create.ts';
 
 export class Delete implements Command<TemplateArguments> {

@@ -1,6 +1,6 @@
+import type { Manifest, ManifestFile } from '@install-manifest';
 import { isAbsolute, relative, resolve, SEPARATOR } from '@std/path';
 
-import type { Manifest, ManifestFile } from '../install-manifest.ts';
 import { validatePath } from './validate.ts';
 
 export async function canonicalRoot(root: string): Promise<string> {

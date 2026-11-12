@@ -4,7 +4,7 @@ import type { Frontmatter } from '@md';
 import { expect } from '@std/expect';
 import { join, relative } from '@std/path';
 
-import { resolveTicket } from '../../../../src/commands/ticket/helpers/resolve-ticket.ts';
+import { resolveTicket } from '../../src/tickets/resolve-ticket.ts';
 
 async function withWorkspace(run: (cwd: string, tickets: string) => Promise<void>): Promise<void> {
     const cwd = await Deno.makeTempDir();

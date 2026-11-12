@@ -1,9 +1,9 @@
 import { Cli } from '@cli';
 import type { Command, ParsedArguments } from '@commands';
 import { Log } from '@log';
+import { ProjectInitialization } from '@project';
 import { resolve } from '@std/path';
 
-import { ProjectInitialization } from '../project-initialization.ts';
 import type { RunContext } from './helpers/command.ts';
 
 type InitArguments = {

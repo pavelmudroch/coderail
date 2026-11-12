@@ -1,6 +1,6 @@
 import { Fs } from '@fs';
+import type { Manifest } from '@install-manifest';
 
-import type { Manifest } from '../install-manifest.ts';
 import { validate } from './validate.ts';
 
 export async function load(path: string): Promise<Manifest | null> {

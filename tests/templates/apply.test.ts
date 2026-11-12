@@ -3,7 +3,7 @@ import { Fs } from '@fs';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
-import { ProjectInitialization } from '../../src/project-initialization.ts';
+import { ProjectInitialization } from '../../src/project/initialization.ts';
 import { type ApplyOptions, Templates } from '../../src/templates.ts';
 
 async function fixture(): Promise<{ root: string; options: ApplyOptions; path: string }> {

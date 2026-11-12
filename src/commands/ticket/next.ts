@@ -1,9 +1,9 @@
 import { Cli } from '@cli';
 import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Log } from '@log';
+import { getReadyTickets } from '@tickets';
 
 import { formatJson, formatText } from './helpers/format.ts';
-import { getReadyTickets } from './helpers/get-ready-tickets.ts';
 
 type NextArguments = {
     help: boolean;

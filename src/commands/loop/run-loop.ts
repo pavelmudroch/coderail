@@ -1,9 +1,8 @@
 import type { HarnessConnector, RunRequest } from '@harness';
 import { Log } from '@log';
 import { join } from '@std/path';
+import { getReadyTickets, resolveTicket, type Ticket } from '@tickets';
 
-import { getReadyTickets } from '../ticket/helpers/get-ready-tickets.ts';
-import { resolveTicket, type Ticket } from '../ticket/helpers/resolve-ticket.ts';
 import {
     assertCleanProject,
     assertCommittedProject,

@@ -5,7 +5,7 @@ import {
     resolveRelease,
     type StagedDistribution,
     withStagedDistribution,
-} from '../src/commands/upgrade/distribution.ts';
+} from '../src/installation/distribution.ts';
 import { type PackageOptions, parsePackageArguments } from './internal/package-options.ts';
 
 export async function sha256(bytes: Uint8Array): Promise<string> {

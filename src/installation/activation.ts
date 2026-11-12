@@ -1,7 +1,7 @@
+import type { ManifestFile } from '@install-manifest';
+import { canonicalRoot, fingerprint, regularFile } from '@install-manifest';
 import { basename, join, resolve } from '@std/path';
 
-import type { ManifestFile } from '../../install-manifest.ts';
-import { canonicalRoot, fingerprint, regularFile } from '../../install-manifest/capture.ts';
 import {
     applyAssets,
     type AssetIO,

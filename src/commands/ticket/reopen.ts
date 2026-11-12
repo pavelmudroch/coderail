@@ -5,9 +5,9 @@ import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
+import { resolveTicket, TICKET_STATUS } from '@tickets';
 
 import { formatJson, formatText } from './helpers/format.ts';
-import { resolveTicket, TICKET_STATUS } from './helpers/resolve-ticket.ts';
 
 type ReopenArguments = {
     help: boolean;

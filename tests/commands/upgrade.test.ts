@@ -4,10 +4,10 @@ import { expect } from '@std/expect';
 import { join } from '@std/path';
 
 import { Upgrade } from '../../src/commands/upgrade.ts';
-import { launcherTarget, withInstallationLock } from '../../src/commands/upgrade/activation.ts';
-import { DISTRIBUTION_MANIFEST } from '../../src/commands/upgrade/assets.ts';
-import { targetTriple } from '../../src/commands/upgrade/distribution.ts';
 import { InstallManifest } from '../../src/install-manifest.ts';
+import { launcherTarget, withInstallationLock } from '../../src/installation/activation.ts';
+import { DISTRIBUTION_MANIFEST } from '../../src/installation/assets.ts';
+import { targetTriple } from '../../src/installation/distribution.ts';
 import { entries, fixture } from './upgrade/release-fixture.ts';
 
 const rejectedArguments: { flags: string[]; message: string }[] = [
@@ -587,7 +587,9 @@ Deno.test(
                     expect(output).toContain(
                         failure === 'manifest' ? 'Manifest saved: no' : 'Manifest saved: yes',
                     );
-                    expect(output).not.toContain('unknown');
+                    expect(output).not.toContain('Manifest saved: unknown');
+                    expect(output).not.toContain('Completed writes: unknown');
+                    expect(output).not.toContain('Completed removals: unknown');
                 }
             });
         }

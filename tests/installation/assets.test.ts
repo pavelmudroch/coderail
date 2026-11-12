@@ -1,15 +1,15 @@
 import { expect } from '@std/expect';
 import { dirname, join } from '@std/path';
 
+import { InstallManifest, type Manifest } from '../../src/install-manifest.ts';
 import {
     applyAssets,
     AssetApplyError,
     type AssetIO,
     DISTRIBUTION_MANIFEST,
     planAssets,
-} from '../../../src/commands/upgrade/assets.ts';
-import type { StagedDistribution } from '../../../src/commands/upgrade/distribution.ts';
-import { InstallManifest, type Manifest } from '../../../src/install-manifest.ts';
+} from '../../src/installation/assets.ts';
+import type { StagedDistribution } from '../../src/installation/distribution.ts';
 
 async function put(root: string, path: string, value = 'release'): Promise<void> {
     await Deno.mkdir(dirname(join(root, path)), { recursive: true });

@@ -3,8 +3,8 @@ import { expect } from '@std/expect';
 import { join } from '@std/path';
 
 import { Installation } from '../../../src/commands/doctor/installation.ts';
-import { windowsLauncher } from '../../../src/commands/upgrade/activation.ts';
-import { DISTRIBUTION_MANIFEST } from '../../../src/commands/upgrade/assets.ts';
+import { windowsLauncher } from '../../../src/installation/activation.ts';
+import { DISTRIBUTION_MANIFEST } from '../../../src/installation/assets.ts';
 
 Deno.test({
     name: 'installation rejects FIFO resources without opening them and continues independent checks',

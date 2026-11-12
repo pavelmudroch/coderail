@@ -1,8 +1,7 @@
 import { Cli } from '@cli';
 import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Log } from '@log';
-
-import { type TemplateInfo, Templates } from '../../templates.ts';
+import { type TemplateInfo, Templates } from '@templates';
 
 export type TemplateArguments = {
     help: boolean;

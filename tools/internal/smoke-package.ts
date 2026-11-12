@@ -1,7 +1,7 @@
 import { join, toFileUrl } from '@std/path';
 
-import { activateDistribution } from '../../src/commands/upgrade/activation.ts';
-import { targetTriple } from '../../src/commands/upgrade/distribution.ts';
+import { activateDistribution } from '../../src/installation/activation.ts';
+import { targetTriple } from '../../src/installation/distribution.ts';
 import { checkPackage, sha256 } from '../check-package.ts';
 import { packageRelease } from './package-build.ts';
 import { parsePackageArguments } from './package-options.ts';

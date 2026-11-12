@@ -1,6 +1,6 @@
 import type { Command, ParsedArguments } from '@commands';
+import { Templates } from '@templates';
 
-import { Templates } from '../templates.ts';
 import type { RunContext } from './helpers/command.ts';
 import {
     Create,

@@ -1,4 +1,4 @@
-import type { Manifest } from '../install-manifest.ts';
+import type { Manifest } from '@install-manifest';
 
 function hasProperties(value: unknown, properties: string[]): value is Record<string, unknown> {
     if (typeof value !== 'object' || value === null) {

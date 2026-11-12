@@ -1,7 +1,7 @@
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
-import { projectIgnoreLines, ProjectInitialization } from '../src/project-initialization.ts';
+import { projectIgnoreLines, ProjectInitialization } from '../../src/project/initialization.ts';
 
 Deno.test('initialization helpers cancel before I/O and after pending reads', async () => {
     const root = await Deno.makeTempDir();

@@ -4,7 +4,7 @@ import type { Frontmatter } from '@md';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
-import { areDependenciesSatisfied } from '../../../../src/commands/ticket/helpers/are-dependencies-satisfied.ts';
+import { areDependenciesSatisfied } from '../../src/tickets/are-dependencies-satisfied.ts';
 
 async function withWorkspace(run: (cwd: string) => Promise<void>): Promise<void> {
     const cwd = await Deno.makeTempDir();

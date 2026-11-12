@@ -15,7 +15,11 @@
         "@harness": "./src/harness.ts",
         "@utils": "./src/utils.ts",
         "@install-manifest": "./src/install-manifest.ts",
-        "oxc-parser": "npm:oxc-parser@^0.153.0"
+        "@templates": "./src/templates.ts",
+        "oxc-parser": "npm:oxc-parser@^0.153.0",
+        "@project": "./src/project.ts",
+        "@tickets": "./src/tickets.ts",
+        "@installation": "./src/installation.ts"
     },
     "coverage": {
         "thresholds": {

@@ -1,7 +1,7 @@
 import { Log } from '@log';
+import { parseFrontmatter } from '@md';
 import { basename, dirname, join, resolve } from '@std/path';
 
-import { parseFrontmatter } from '../../md/helpers/frontmatter.ts';
 import { createDoctorReport, type DoctorReport } from './types.ts';
 
 /** Only these instruction formats have Markdown frontmatter. References remain opaque. */
