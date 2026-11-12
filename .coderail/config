@@ -35,7 +35,6 @@ commands = [
 ]
 requires = ["src/${path}${file}.ts"]
 
-# Maintainer tool contracts have no corresponding application source file.
 [[verify.rules]]
 pattern = "tests/tools/${file:*}.test.ts"
 commands = [
