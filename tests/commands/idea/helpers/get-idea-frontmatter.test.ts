@@ -14,7 +14,7 @@ async function withIdea(run: (filePath: string) => Promise<void>): Promise<void>
 
 Deno.test('getIdeaFrontmatter reads title and each supported status', async () => {
     await withIdea(async (filePath) => {
-        for (const status of ['open', 'ready', 'split']) {
+        for (const status of ['open', 'ready', 'split', 'archived']) {
             await Deno.writeTextFile(
                 filePath,
                 `---\ntitle: "An idea: title"\nstatus: ${status}\nextra: true\n---\n# Body`,

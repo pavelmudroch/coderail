@@ -172,11 +172,11 @@ Deno.test(
                     expect(output).toEqual([
                         [
                             [
-                                '└── Parent 0 ◉ split [IDEA.md, SPEC.md]',
+                                '└── Parent 0 ⮆ split [IDEA.md, SPEC.md]',
                                 `    ${directory}`,
-                                '    ├── Příliš : "New idea" ◌ open [IDEA.md]',
+                                '    ├── Příliš : "New idea" 🞅 open [IDEA.md]',
                                 `    │   ${join(directory, 'prilis-new-idea')}`,
-                                '    └── Zebra ◌ open [IDEA.md]',
+                                '    └── Zebra 🞅 open [IDEA.md]',
                                 `        ${join(directory, 'zebra')}`,
                             ].join('\n'),
                         ],

@@ -22,6 +22,7 @@ Decompose available implementation context into small, actionable tickets.
 - Declare dependencies using repeated `-d <ticket-id>` options.
 - Edit only ticket files returned by `cr ticket --json create`.
 - Preserve CLI-generated front matter.
+- Context is idea without status 'ready' then report failure.
 
 ## Completion
 
@@ -33,4 +34,4 @@ For each implementation unit:
 4. Specify implementation scope, expected outcome, and validation criteria for each task under `## Task details`.
 5. Reference relevant files, documentation, specifications, and related tickets under `## References`.
 6. Verify that every task is independently actionable and has verifiable outcomes.
-7. Create or update TICKETS.md with ticket references, next to corresponding IDEA.md if applicable.
+7. Create or update TICKETS.md with ticket references, next to corresponding IDEA.md if applicable and mark idea archived `cr idea archive <idea-path>`.

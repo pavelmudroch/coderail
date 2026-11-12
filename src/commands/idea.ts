@@ -3,6 +3,7 @@ import type { Command, ParsedArguments } from '@commands';
 import { Log } from '@log';
 
 import type { RunContext } from './helpers/command.ts';
+import { Archive } from './idea/archive.ts';
 import { Create } from './idea/create.ts';
 import { ensurePlansDir } from './idea/helpers/ensure-plans-dir.ts';
 import { formatJson, formatText } from './idea/helpers/format.ts';
@@ -77,6 +78,7 @@ export class Idea implements Command<IdeaArguments> {
             '  create               Create a new idea.',
             '  split                Split an existing idea into multiple child sub ideas.',
             '  ready                Mark an idea as ready for further processing.',
+            '  archive              Archive a ready idea after creating tickets.',
             '  reopen               Reopen an existing idea. Not applicable to a split idea.',
         ];
         return usageLines.join('\n');
@@ -84,6 +86,8 @@ export class Idea implements Command<IdeaArguments> {
 
     getSubcommand(parsedArguments: ParsedArguments<IdeaArguments>): Command | undefined {
         switch (parsedArguments.args.command) {
+            case 'archive':
+                return new Archive();
             case 'create':
                 return new Create();
             case 'split':

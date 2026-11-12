@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `cr idea archive <idea>` archives ready ideas after ticket creation; archived
+  ideas remain listed and can be reopened.
 - `cr doctor --repair` repairs missing project configuration and incomplete ignore
   rules, conservative instruction frontmatter defects, and unambiguous ticket
   placement, then reruns diagnostics and reports unresolved issues.

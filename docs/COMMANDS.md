@@ -92,7 +92,11 @@ cr idea
 
 Use `cr idea ready <idea>` when an idea is ready for further processing,
 `cr idea split <idea> "First part" "Second part"` to divide it, or
-`cr idea reopen <idea>` to reopen it. Use the idea identifier returned by the CLI.
+`cr idea reopen <idea>` to reopen it. After creating tickets from a ready idea,
+use `cr idea archive <idea>` to mark it as archived. Only ready ideas can be
+archived; `--json` returns the updated idea. Archived ideas remain visible with
+their status in `cr idea` and `cr idea --json`, and can be reopened. Use the idea
+identifier returned by the CLI.
 
 Tickets track implementation work. After creating a ticket, use its returned ID
 in subsequent commands. Existing tickets can be identified by a numeric ID with

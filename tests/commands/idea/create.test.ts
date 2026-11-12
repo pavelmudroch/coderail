@@ -189,7 +189,7 @@ Deno.test('Idea create writes an open idea in the supplied working directory', a
     await withWorkspace(async (cwd, plans) => {
         const title = 'Příliš : "New idea"';
         expect(await create(cwd, [title])).toEqual([
-            [[`└── ${title} ◌ open [IDEA.md]`, `    ${join(plans, 'prilis-new-idea')}`].join('\n')],
+            [[`└── ${title} 🞅 open [IDEA.md]`, `    ${join(plans, 'prilis-new-idea')}`].join('\n')],
         ]);
         await expectIdea(join(plans, 'prilis-new-idea'), title);
     });

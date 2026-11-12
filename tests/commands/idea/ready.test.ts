@@ -128,7 +128,7 @@ Deno.test(
                     expect(output).toEqual([
                         [
                             [
-                                '└── Example idea ● ready [IDEA.md, SPEC.md]',
+                                '└── Example idea ▶ ready [IDEA.md, SPEC.md]',
                                 `    ${directory}`,
                             ].join('\n'),
                         ],
@@ -165,7 +165,7 @@ Deno.test('Idea ready rejects non-open and missing ideas without changing files'
     const filePath = join(directory, 'IDEA.md');
     try {
         await Deno.mkdir(directory, { recursive: true });
-        for (const status of ['ready', 'split']) {
+        for (const status of ['ready', 'split', 'archived']) {
             const original = `---\ntitle: Example\nstatus: ${status}\n---\nKeep me\n`;
             await Deno.writeTextFile(filePath, original);
             try {

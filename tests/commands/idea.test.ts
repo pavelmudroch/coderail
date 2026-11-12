@@ -5,6 +5,7 @@ import { join } from '@std/path';
 
 import { UsageError } from '../../src/cli/usage-error.ts';
 import { Idea } from '../../src/commands/idea.ts';
+import { Archive } from '../../src/commands/idea/archive.ts';
 import { Create } from '../../src/commands/idea/create.ts';
 import { Ready } from '../../src/commands/idea/ready.ts';
 import { Reopen } from '../../src/commands/idea/reopen.ts';
@@ -77,6 +78,7 @@ Deno.test('Idea accepts no subcommand and rejects unknown commands and invalid o
 });
 
 for (const [name, Child] of [
+    ['archive', Archive],
     ['create', Create],
     ['split', Split],
     ['ready', Ready],
@@ -136,7 +138,7 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
     try {
         for (const [path, status] of [
             ['parent', 'split'],
-            ['parent/child', 'ready'],
+            ['parent/child', 'archived'],
             ['last', 'open'],
             ['last/child', 'ready'],
         ] as const) {
@@ -153,13 +155,13 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
         expect(output).toEqual([
             [
                 [
-                    '├── Display title ◌ open [IDEA.md]',
+                    '├── Display title 🞅 open [IDEA.md]',
                     `│   ${join(plans, 'last')}`,
-                    '│   └── Display title ● ready [IDEA.md]',
+                    '│   └── Display title ▶ ready [IDEA.md]',
                     `│       ${join(plans, 'last', 'child')}`,
-                    '└── Display title ◉ split [IDEA.md, SPEC.md]',
+                    '└── Display title ⮆ split [IDEA.md, SPEC.md]',
                     `    ${join(plans, 'parent')}`,
-                    '    └── Display title ● ready [IDEA.md]',
+                    '    └── Display title ⏹ archived [IDEA.md]',
                     `        ${join(plans, 'parent', 'child')}`,
                 ].join('\n'),
             ],
@@ -204,7 +206,7 @@ Deno.test('Idea renders nested text and JSON trees', async () => {
                 path: join(plans, 'parent', 'child'),
                 id: 'parent/child',
                 title: 'Display title',
-                status: 'ready',
+                status: 'archived',
                 parent: 'parent',
                 files: ['IDEA.md'],
             },

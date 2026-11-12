@@ -40,11 +40,13 @@ export function formatText(ideaTree: IdeaTree): string {
     function getFormattedStatus(status: IdeaStatus): string {
         switch (status) {
             case 'open':
-                return Log.color.yellow('◌ open');
+                return Log.color.red('🞅 open');
             case 'ready':
-                return Log.color.green('● ready');
+                return Log.color.green('▶ ready');
             case 'split':
-                return Log.color.magenta('◉ split');
+                return Log.color.magenta('⮆ split');
+            case 'archived':
+                return Log.color.yellow('⏹ archived');
         }
     }
 

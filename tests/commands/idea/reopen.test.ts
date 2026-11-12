@@ -122,14 +122,14 @@ Deno.test(
                 await Deno.writeTextFile(
                     filePath,
                     `---\ntitle: Example idea\nstatus: ${
-                        index === 0 ? 'open' : 'ready'
+                        index === 0 ? 'open' : index === 1 ? 'archived' : 'ready'
                     }\ncustom: keep\n---\n# Content\n\nKeep me\n`,
                 );
                 const output = await reopen(cwd, index === 0 ? [reference] : ['--json', reference]);
                 if (index === 0) {
                     expect(output).toEqual([
                         [
-                            ['└── Example idea ◌ open [IDEA.md, SPEC.md]', `    ${directory}`].join(
+                            ['└── Example idea 🞅 open [IDEA.md, SPEC.md]', `    ${directory}`].join(
                                 '\n',
                             ),
                         ],
