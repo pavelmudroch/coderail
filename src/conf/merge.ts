@@ -79,7 +79,20 @@ export function merge(sources: readonly ConfigDocument[]): ConfigDocument {
     for (const source of sources) {
         values = combine(values, source.values);
         for (const [path, lines] of source.comments) {
-            comments.set(path, [...(comments.get(path) ?? []), ...lines]);
+            const existing = comments.get(path) ?? [];
+            if (lines.length === 0) {
+                continue;
+            }
+
+            const included =
+                lines.length === 0 ||
+                existing.some((_, start) =>
+                    lines.every((line, offset) => existing[start + offset] === line),
+                );
+            if (included) {
+                continue;
+            }
+            comments.set(path, [...existing, ...lines]);
         }
     }
     return { values: normalize(values, []) as ParseResult, comments };

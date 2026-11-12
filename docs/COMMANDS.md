@@ -249,7 +249,8 @@ former path and metadata in the selected output format.
 directory selected by `--cwd`, in the order supplied. Nested assets are copied
 into the project and settings are merged into `.coderail/config`: later scalar
 values override earlier values, arrays are appended and deduplicated, and
-property comments are preserved. Existing directories merge and identical files
+property comments are preserved. A comment block already present as an exact,
+contiguous sequence at the same property is not appended again. Existing directories merge and identical files
 are skipped. By default, a differing file or file/directory mismatch fails before
 any of that template's assets or configuration are written. Invalid layout or settings
 also fail before copying. Errors and cancellation stop subsequent templates;

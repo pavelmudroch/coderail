@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reapplying template configuration preserves comments without appending comment
+  blocks already present at the same property.
 - Ticket commands accept IDs, filenames, and paths, including dependency and
   duplicate references, with validation during ticket resolution.
 - Preserve completed asset progress and manifest status in upgrade failure reports

@@ -84,7 +84,7 @@ Deno.test(
         });
         expect(merged.comments.get('loop.codex.model')).toEqual(['first', 'second']);
         expect(merged.comments.get('noColor')).toEqual(['flag']);
-        expect(merge([merged, second]).values).toEqual(merged.values);
+        expect(merge([merged, second])).toEqual(merged);
         expect([first, second]).toEqual(snapshot);
         merged.comments.get('noColor')?.push('changed');
         (merged.values.loop as { codex: { model: string } }).codex.model = 'changed';
@@ -94,6 +94,30 @@ Deno.test(
         expect(merge([])).toEqual({ values: {}, comments: new Map() });
     },
 );
+
+Deno.test('Conf::merge skips only complete contiguous comment blocks at the same path', () => {
+    const document = (lines: string[], path = 'noColor'): ConfigDocument => ({
+        values: {},
+        comments: new Map([[path, lines]]),
+    });
+    const original = document(['before', 'repeat', 'repeat', 'after']);
+    const merged = merge([
+        original,
+        document(['repeat', 'repeat']),
+        document(['before', 'after']),
+        document([' repeat']),
+        document(['repeat', 'repeat'], 'other'),
+        document([]),
+    ]);
+    expect(merged.comments).toEqual(
+        new Map([
+            ['noColor', ['before', 'repeat', 'repeat', 'after', 'before', 'after', ' repeat']],
+            ['other', ['repeat', 'repeat']],
+        ]),
+    );
+    expect(merge([merged, original])).toEqual(merged);
+    expect(original.comments.get('noColor')).toEqual(['before', 'repeat', 'repeat', 'after']);
+});
 
 Deno.test(
     'Conf::merge combines independently parsed documents and retains distinct rule fields',
