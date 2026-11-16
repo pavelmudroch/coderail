@@ -151,7 +151,7 @@ export class Create implements Command<CreateArguments> {
             }
 
             const markdown = Md.create('', { title, status: IDEA_STATUS.OPEN });
-            const ideaDir = await Fs.makeTempDirectory();
+            const ideaDir = await Fs.makeTempDirectory(context.context.repositoryRoot);
             await ideaDir.addFile('IDEA.md', Md.toStream(markdown));
             await Fs.replace(ideaDir.path, ideaDirectory);
             const newIdeaTree: IdeaTree = [

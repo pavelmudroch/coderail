@@ -1,4 +1,4 @@
-import { dirname, join } from '@std/path';
+import { dirname, join, resolve } from '@std/path';
 
 import { registerTempResource } from './temp/register-temp-resource.ts';
 
@@ -20,8 +20,12 @@ export interface TempDirectory {
     addFile(path: string, content: ReadableStream<Uint8Array | string>): Promise<string>;
 }
 
-export async function makeTempDirectory(): Promise<TempDirectory> {
-    const tempDir = await Deno.makeTempDir({ prefix: 'coderail_' });
+export async function makeTempDirectory(projectRoot?: string): Promise<TempDirectory> {
+    const dir = projectRoot === undefined ? undefined : resolve(projectRoot, '.coderail', '.tmp');
+    if (dir !== undefined) {
+        await Deno.mkdir(dir, { recursive: true });
+    }
+    const tempDir = await Deno.makeTempDir({ dir, prefix: 'coderail_' });
     registerTempResource(tempDir);
 
     return {

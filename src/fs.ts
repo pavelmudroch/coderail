@@ -6,7 +6,7 @@ import { cleanupTempResources } from './fs/temp/cleanup-temp-resources.ts';
 import { write } from './fs/write.ts';
 
 export interface Fs {
-    makeTempDirectory(): Promise<TempDirectory>;
+    makeTempDirectory(projectRoot?: string): Promise<TempDirectory>;
     makeDirectory(path: string): Promise<void>;
     replace(source: string, target: string): Promise<void>;
     read(filePath: string, options?: ReadBinaryOptions): Promise<ReadableStream<Uint8Array>>;

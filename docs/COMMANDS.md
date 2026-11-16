@@ -90,6 +90,12 @@ cr idea create "Improve search"
 cr idea
 ```
 
+Idea creation and splitting prepare new idea directories in the project's
+`.coderail/.tmp` before renaming them into place. This directory is created as
+needed and ignored by the project's generated Git ignore rules. Temporary
+resources are cleaned up when the command exits; the shared `.tmp` directory
+remains.
+
 Use `cr idea ready <idea>` when an idea is ready for further processing,
 `cr idea split <idea> "First part" "Second part"` to divide it, or
 `cr idea reopen <idea>` to reopen it. After creating tickets from a ready idea,

@@ -134,7 +134,7 @@ export class Split implements Command<SplitArguments> {
                 const slug = Text.slugify(title);
                 const directory = join(idea.path, slug);
                 const childMarkdown = Md.create('', { title, status: IDEA_STATUS.OPEN });
-                const childDir = await Fs.makeTempDirectory();
+                const childDir = await Fs.makeTempDirectory(context.context.repositoryRoot);
                 await childDir.addFile('IDEA.md', Md.toStream(childMarkdown));
                 await Fs.replace(childDir.path, directory);
                 idea.children.push({

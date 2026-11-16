@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Idea creation and splitting stage temporary directories under the project's
+  `.coderail/.tmp`, avoiding cross-filesystem renames from the system temp
+  directory and keeping temporary writes within project sandbox permissions.
+
 ## [0.4.0] - 2026-11-12
 
 ### Added
