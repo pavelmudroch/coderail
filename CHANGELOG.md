@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `orchestrate` skill delegates ready tickets to implementation and review
   subagents and commits approved changes. The bundled `review` skill validates
   completed tickets and reopens them when corrections are required.
+- `cr verify` streams command output to stderr by default, including preparation
+  and cleanup. Use `cr verify --short` for summary statuses only.
 
 ### Removed
 

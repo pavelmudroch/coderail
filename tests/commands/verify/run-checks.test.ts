@@ -1,7 +1,11 @@
 import { expect } from '@std/expect';
 
 import { compileRules } from '../../../src/commands/verify/compile-rules.ts';
-import { type FileResult, runChecks } from '../../../src/commands/verify/run-checks.ts';
+import {
+    executeCommand,
+    type FileResult,
+    runChecks,
+} from '../../../src/commands/verify/run-checks.ts';
 
 function command(code: string, ...args: string[]): string[] {
     return [Deno.execPath(), 'eval', code, ...args];
@@ -78,6 +82,75 @@ Deno.test('runChecks checks literal dependencies when reached and skips unsafe p
     } finally {
         await Deno.remove(root, { recursive: true });
     }
+});
+
+Deno.test('runChecks streams complete lines from independent pipes once per command', async () => {
+    const check = command(`
+const encode = (text) => new TextEncoder().encode(text);
+const out = encode('out 😀');
+const err = encode('err é');
+await Deno.stdout.write(out.subarray(0, -2));
+await Deno.stderr.write(err.subarray(0, -1));
+await new Promise(resolve => setTimeout(resolve, 30));
+await Deno.stdout.write(out.subarray(-2));
+await Deno.stderr.write(err.subarray(-1));
+await Deno.stdout.write(encode('\\r'));
+await new Promise(resolve => setTimeout(resolve, 30));
+await Deno.stdout.write(encode('\\n\\nout two\\nout tail\\r'));
+await Deno.stderr.write(encode('\\nerr two\\r\\nerr tail'));
+Deno.exit(2);
+`);
+    const reports: FileResult[] = [];
+    const headings: string[][] = [];
+    const lines: string[] = [];
+    expect(
+        await runChecks(
+            '.',
+            ['a', 'b'],
+            compileRules([{ pattern: '*', commands: [check] }]),
+            new AbortController().signal,
+            (result) => reports.push(result),
+            false,
+            {
+                onStart: (argv) => headings.push(argv),
+                onLine: (line) => {
+                    expect(headings).toEqual([check]);
+                    lines.push(line);
+                },
+            },
+        ),
+    ).toEqual({ uniqueCommands: 1, failedFiles: 2 });
+    expect(headings).toEqual([check]);
+    expect(lines.filter((line) => line.startsWith('out') || line === '')).toEqual([
+        'out 😀',
+        '',
+        'out two',
+        'out tail\r',
+    ]);
+    expect(lines.filter((line) => line.startsWith('err'))).toEqual([
+        'err é',
+        'err two',
+        'err tail',
+    ]);
+    expect(lines).toHaveLength(7);
+    expect(reports.map(({ path, status }) => [path, status])).toEqual([
+        ['a', 'fail'],
+        ['b', 'fail'],
+    ]);
+    expect(reports[0]?.commands).toEqual([{ command: check, status: 'fail', output: '' }]);
+    expect(reports[0]?.commands[0]).toBe(reports[1]?.commands[0]);
+});
+
+Deno.test('executeCommand streams a successful command without storing its output', async () => {
+    const check = command("console.log('ok');");
+    const lines: string[] = [];
+    expect(
+        await executeCommand('.', check, new AbortController().signal, false, {
+            onStart: () => {},
+            onLine: (line) => lines.push(line),
+        }),
+    ).toEqual({ command: check, status: 'ok', output: '' });
+    expect(lines).toEqual(['ok']);
 });
 
 Deno.test(
@@ -206,11 +279,41 @@ Deno.test(
 );
 
 Deno.test('executeCommand rejects an empty command', async () => {
-    const { executeCommand } = await import('../../../src/commands/verify/run-checks.ts');
     await expect(executeCommand('.', [], new AbortController().signal)).rejects.toThrow(
         'Cannot execute an empty command',
     );
 });
+
+Deno.test(
+    'executeCommand settles a streaming child after cancellation or a listener error',
+    async () => {
+        const check = command(
+            "console.log('started'); await new Promise(resolve => setTimeout(resolve, 5000));",
+        );
+        const cancelled = new AbortController();
+        const error = new Error('stop streaming');
+        const lines: string[] = [];
+        await expect(
+            executeCommand('.', check, cancelled.signal, false, {
+                onStart: () => {},
+                onLine: (line) => {
+                    lines.push(line);
+                    cancelled.abort(error);
+                },
+            }),
+        ).rejects.toBe(error);
+        expect(lines).toEqual(['started']);
+
+        expect(
+            await executeCommand('.', check, new AbortController().signal, false, {
+                onStart: () => {},
+                onLine: () => {
+                    throw error;
+                },
+            }),
+        ).toEqual({ command: check, status: 'fail', output: String(error) });
+    },
+);
 
 Deno.test(
     'runChecks dry run expands rules, checks required files, and reuses planned commands',
@@ -236,6 +339,14 @@ Deno.test(
                     new AbortController().signal,
                     (result) => reports.push(result),
                     true,
+                    {
+                        onStart: () => {
+                            throw new Error('unexpected dry-run heading');
+                        },
+                        onLine: () => {
+                            throw new Error('unexpected dry-run output');
+                        },
+                    },
                 ),
             ).toEqual({ uniqueCommands: 2, failedFiles: 0 });
             expect(reports).toEqual([

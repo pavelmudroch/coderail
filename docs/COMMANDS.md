@@ -175,6 +175,13 @@ command results are reused. Rules can also declare `requires` paths; a rule is
 skipped when its required files are missing. Optional `[verify]` `pre` and `post`
 command arrays run once around matching work; place that section before rule entries.
 
+By default, `cr verify` shows each command before it starts and streams its
+output line by line to stderr, including preparation and cleanup. Statuses are
+printed to stdout. When files share a command, its live output appears once and
+each file gets its own status. Use `--short` to show file statuses and any
+preparation or cleanup failures. The global `--quiet` flag suppresses command
+output and keeps detailed statuses.
+
 During implementation, prefer one summary invocation with explicit changed source
 and test paths, such as `cr verify -s ./src/main.ts ./tests/main.test.ts`, then use
 `cr verify <failed-file>` for failure details. This reuses shared checks and runs

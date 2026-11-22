@@ -15,6 +15,11 @@ export type FileResult = {
     commands: CommandResult[];
 };
 
+export type CommandNotifications = {
+    onStart: (command: string[]) => void;
+    onLine: (line: string) => void;
+};
+
 async function isRequiredFile(path: string, signal: AbortSignal): Promise<boolean> {
     const root = parse(path).root;
     const parts = path.slice(root.length).split(SEPARATOR).filter(Boolean);
@@ -49,6 +54,7 @@ export async function runChecks(
     signal: AbortSignal,
     report: (result: FileResult) => void,
     dry = false,
+    notifications?: CommandNotifications,
 ): Promise<{ uniqueCommands: number; failedFiles: number }> {
     const cache = new Map<string, CommandResult>();
     let uniqueCommands = 0;
@@ -82,7 +88,7 @@ export async function runChecks(
                 const key = JSON.stringify(command);
                 let outcome = cache.get(key);
                 if (!outcome) {
-                    outcome = await executeCommand(root, command, signal, dry);
+                    outcome = await executeCommand(root, command, signal, dry, notifications);
                     cache.set(key, outcome);
                     uniqueCommands++;
                 }
@@ -110,6 +116,7 @@ export async function executeCommand(
     command: string[],
     signal: AbortSignal,
     dry = false,
+    notifications?: CommandNotifications,
 ): Promise<CommandResult> {
     signal.throwIfAborted();
     const [executable, ...args] = command;
@@ -120,14 +127,35 @@ export async function executeCommand(
         return { command, status: 'planned', output: '' };
     }
     try {
-        const output = await new Deno.Command(executable, {
+        const options = {
             args,
             cwd: root,
-            signal,
             stdin: 'null',
             stdout: 'piped',
             stderr: 'piped',
-        }).output();
+        } as const satisfies Deno.CommandOptions;
+        if (notifications) {
+            const streaming = new AbortController();
+            const childSignal = AbortSignal.any([signal, streaming.signal]);
+            notifications.onStart(command);
+            signal.throwIfAborted();
+            const child = new Deno.Command(executable, { ...options, signal: childSignal }).spawn();
+            const completion = [
+                child.status,
+                streamLines(child.stdout, notifications.onLine, childSignal),
+                streamLines(child.stderr, notifications.onLine, childSignal),
+            ] as const;
+            try {
+                const [status] = await Promise.all(completion);
+                signal.throwIfAborted();
+                return { command, status: status.success ? 'ok' : 'fail', output: '' };
+            } catch (error) {
+                streaming.abort();
+                await Promise.allSettled(completion);
+                throw error;
+            }
+        }
+        const output = await new Deno.Command(executable, { ...options, signal }).output();
         signal.throwIfAborted();
         const decoder = new TextDecoder();
         return {
@@ -139,4 +167,32 @@ export async function executeCommand(
         signal.throwIfAborted();
         return { command, status: 'fail', output: String(error) };
     }
+}
+
+function streamLines(
+    pipe: ReadableStream<Uint8Array>,
+    onLine: CommandNotifications['onLine'],
+    signal: AbortSignal,
+): Promise<void> {
+    let pending = '';
+    return pipe.pipeThrough(new TextDecoderStream()).pipeTo(
+        new WritableStream<string>({
+            write(chunk) {
+                let start = 0;
+                for (let end = chunk.indexOf('\n'); end !== -1; end = chunk.indexOf('\n', start)) {
+                    const line = pending + chunk.slice(start, end);
+                    onLine(line.replace(/\r$/, ''));
+                    pending = '';
+                    start = end + 1;
+                }
+                pending += chunk.slice(start);
+            },
+            close() {
+                if (pending.length > 0) {
+                    onLine(pending);
+                }
+            },
+        }),
+        { signal },
+    );
 }

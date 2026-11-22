@@ -80,9 +80,9 @@ export class Verify implements Command<VerifyArguments> {
             '  deduplicated and so the commands to run, so each file is verified only once',
             '  and duplicate command results are reused for different files.',
             '',
-            '  Normal output includes JSON command/status lines and full command output',
-            '  on stderr. --short shows only file statuses; --quiet suppresses command',
-            '  output while retaining file and command statuses.',
+            '  Commands and their live output appear on stderr. Statuses, including JSON',
+            '  command/status lines, appear on stdout. --short shows summary statuses.',
+            '  --quiet suppresses command output while retaining detailed statuses.',
             '',
             '  Optional verify.pre and verify.post run once around matching work.',
             '',
@@ -121,6 +121,13 @@ export class Verify implements Command<VerifyArguments> {
             context.signal,
         );
         const verify = context.configuration.verify;
+        const notifications =
+            Log.level !== 'quiet' && !args.short && !args.dry
+                ? {
+                      onStart: (command: string[]) => Log.info(JSON.stringify(command)),
+                      onLine: (line: string) => Log.info(line),
+                  }
+                : undefined;
         const hasWork = files.some((file) =>
             rules.some((rule) => rule.match(file)?.commands.some((command) => command.length > 0)),
         );
@@ -130,7 +137,13 @@ export class Verify implements Command<VerifyArguments> {
                 if (command.length === 0) {
                     continue;
                 }
-                const outcome = await executeCommand(root, command, signal, args.dry);
+                const outcome = await executeCommand(
+                    root,
+                    command,
+                    signal,
+                    args.dry,
+                    notifications,
+                );
                 if (!args.short || outcome.status === 'fail') {
                     Log.output(
                         `${phase === 'pre' ? 'Preparation' : 'Cleanup'} ${formatStatus(
@@ -179,6 +192,7 @@ export class Verify implements Command<VerifyArguments> {
                     }
                 },
                 args.dry,
+                notifications,
             );
 
             if (result.uniqueCommands === 0) {

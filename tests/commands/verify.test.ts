@@ -5,6 +5,30 @@ import { expect } from '@std/expect';
 
 import { Verify } from '../../src/commands/verify.ts';
 
+function verifyCli(root: string, args: string[], signal?: AbortSignal): Deno.Command {
+    return new Deno.Command(Deno.execPath(), {
+        args: [
+            'run',
+            '-A',
+            '--config',
+            new URL('../../deno.json', import.meta.url).pathname,
+            new URL('../../src/main.ts', import.meta.url).pathname,
+            '--cwd',
+            root,
+            '--no-color',
+            ...args,
+        ],
+        stdout: 'piped',
+        stderr: 'piped',
+        env: { NO_COLOR: '1', LOG_LEVEL: 'normal' },
+        signal,
+    });
+}
+
+function cliText(text: string): string {
+    return text.replaceAll('\x1b[0K', '');
+}
+
 Deno.test('Verify parses selection, flags, literal paths, and early help', () => {
     const command = new Verify();
     expect(command.requiresInit).toBe(true);
@@ -60,9 +84,11 @@ async function fixture(
     const original = {
         output: Log.output,
         info: Log.info,
+        level: Log.level,
         noColor: Log.noColor,
         exitCode: Deno.exitCode,
     };
+    Log.level = 'normal';
     Log.noColor = false;
     const output: string[] = [];
     const info: string[] = [];
@@ -104,6 +130,7 @@ async function fixture(
     } finally {
         Log.output = original.output;
         Log.info = original.info;
+        Log.level = original.level;
         Log.noColor = original.noColor;
         Deno.exitCode = original.exitCode;
         await Deno.remove(root, { recursive: true });
@@ -111,7 +138,7 @@ async function fixture(
 }
 
 Deno.test(
-    'Verify reports JSON commands and full replayed output, short output, and failures',
+    'Verify reports JSON commands and live output, summarizes short runs, and reports failures',
     async () => {
         await fixture(async (root, run, output, info) => {
             const command = [
@@ -126,12 +153,14 @@ Deno.test(
                 `b ${Log.color.green('ok')}`,
                 `  ${JSON.stringify(command)} ${Log.color.green('ok')}`,
             ]);
-            expect(info).toEqual(['out\nerr\n', 'out\nerr\n']);
+            expect(info[0]).toBe(JSON.stringify(command));
+            expect(info.slice(1).sort()).toEqual(['err', 'out']);
             expect(await Deno.readTextFile(`${root}/marker`)).toBe('x');
             output.length = info.length = 0;
-            await run(['a'], [{ pattern: '*', commands: [[Deno.execPath(), 'eval', '']] }]);
-            expect(info).toEqual([]);
-            output.length = 0;
+            const silent = [Deno.execPath(), 'eval', ''];
+            await run(['a'], [{ pattern: '*', commands: [silent] }]);
+            expect(info).toEqual([JSON.stringify(silent)]);
+            output.length = info.length = 0;
             await run(
                 ['-s', 'a'],
                 [
@@ -214,29 +243,13 @@ Deno.test(
     'Verify runtime supports help outside projects, initialization, cwd, quiet, and changed selection',
     async () => {
         const root = await Deno.realPath(await Deno.makeTempDir());
-        const main = new URL('../../src/main.ts', import.meta.url);
-        const config = new URL('../../deno.json', import.meta.url);
         async function invoke(
             ...args: string[]
         ): Promise<{ code: number; stdout: string; stderr: string }> {
-            const result = await new Deno.Command(Deno.execPath(), {
-                args: [
-                    'run',
-                    '-A',
-                    '--config',
-                    config.pathname,
-                    main.pathname,
-                    '--cwd',
-                    root,
-                    ...args,
-                ],
-                stdout: 'piped',
-                stderr: 'piped',
-                env: { NO_COLOR: '1' },
-            }).output();
+            const result = await verifyCli(root, args).output();
             return {
                 code: result.code,
-                stdout: new TextDecoder().decode(result.stdout).replaceAll('\x1b[0K', ''),
+                stdout: cliText(new TextDecoder().decode(result.stdout)),
                 stderr: new TextDecoder().decode(result.stderr),
             };
         }
@@ -277,29 +290,135 @@ Deno.test(
                 expect(result.code).toBe(0);
                 expect(result.stdout).toBe('No tests found\n');
             }
-            // Exercise the real stderr logger while intercepting only stdout statuses.
-            const script = `import { Verify } from ${JSON.stringify(
-                new URL('../../src/commands/verify.ts', import.meta.url).href,
-            )};
-import { Log } from ${JSON.stringify(new URL('../../src/log.ts', import.meta.url).href)};
-Log.level = Deno.args[0] === 'quiet' ? 'quiet' : 'normal'; Log.noColor = true;
-const command = new Verify();
-await command.run({context:{repositoryRoot:${JSON.stringify(root)},currentWorkingDirectory:${JSON.stringify(
+        } finally {
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'Verify streams both pipes before a default check exits and reports hook and reused statuses',
+    async () => {
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        try {
+            expect((await verifyCli(root, ['init']).output()).code).toBe(0);
+            await Deno.writeTextFile(`${root}/a.txt`, '');
+            await Deno.writeTextFile(`${root}/b.txt`, '');
+            const check = [
+                Deno.execPath(),
+                'eval',
+                `console.log('child out');
+console.error('child err');
+const deadline = Date.now() + 3000;
+while (!(await Deno.stat('release').catch(() => null))) {
+    if (Date.now() >= deadline) Deno.exit(2);
+    await new Promise(resolve => setTimeout(resolve, 10));
+}`,
+                'txt',
+            ];
+            const pre = [Deno.execPath(), 'eval', "console.log('pre output')"];
+            const post = [Deno.execPath(), 'eval', "console.error('post output')"];
+            await Deno.writeTextFile(
+                `${root}/.coderail/config`,
+                `[verify]
+pre = [${JSON.stringify(pre)}]
+post = [${JSON.stringify(post)}]
+[[verify.rules]]
+pattern = "${'${file:*}.${extension:*}'}"
+commands = [${JSON.stringify([...check.slice(0, -1), '${extension}'])}]
+`,
+            );
+            const controller = new AbortController();
+            const child = verifyCli(
                 root,
-            )},installRoot:${JSON.stringify(
-                root,
-            )}}, configuration:{verify:{rules:[{pattern:'a',commands:[[Deno.execPath(),'eval',"console.log('child output')"]]}]}}, parsedArguments:command.parseArguments(['a']), signal:new AbortController().signal});`;
-            for (const level of ['normal', 'quiet']) {
-                const result = await new Deno.Command(Deno.execPath(), {
-                    args: ['eval', '--config', config.pathname, script, level],
-                    stdout: 'piped',
-                    stderr: 'piped',
-                }).output();
+                ['verify', 'a.txt', 'b.txt'],
+                AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]),
+            ).spawn();
+            const stdout = new Response(child.stdout).text();
+            const status = child.status;
+            let released = false;
+            const stderr = (async () => {
+                let text = '';
+                for await (const chunk of child.stderr.pipeThrough(new TextDecoderStream())) {
+                    text += cliText(chunk);
+                    if (
+                        !released &&
+                        text.includes('\nchild out\n') &&
+                        text.includes('\nchild err\n')
+                    ) {
+                        await Deno.writeTextFile(`${root}/release`, '');
+                        released = true;
+                    }
+                }
+                return text;
+            })();
+            try {
+                const [out, err, exit] = await Promise.all([stdout, stderr, status]);
+                if (!exit.success) {
+                    throw new Error(`Verification exited with ${exit.code}:\n${out}\n${err}`);
+                }
+                expect(released).toBe(true);
+                expect(cliText(out).trimEnd().split('\n')).toEqual([
+                    'Preparation ok',
+                    `  ${JSON.stringify(pre)} ok`,
+                    'a.txt ok',
+                    `  ${JSON.stringify(check)} ok`,
+                    'b.txt ok',
+                    `  ${JSON.stringify(check)} ok`,
+                    'Cleanup ok',
+                    `  ${JSON.stringify(post)} ok`,
+                ]);
+                const lines = err.split('\n').filter((line) => line && !line.startsWith('notice:'));
+                expect(lines).toEqual([
+                    JSON.stringify(pre),
+                    'pre output',
+                    JSON.stringify(check),
+                    ...lines.slice(3, 5),
+                    JSON.stringify(post),
+                    'post output',
+                ]);
+                expect(lines.slice(3, 5).sort()).toEqual(['child err', 'child out']);
+            } finally {
+                controller.abort();
+                await Promise.allSettled([stdout, stderr, status]);
+            }
+
+            for (const mode of [
+                { global: ['--quiet'], flags: [], file: 'ok' },
+                { global: [], flags: ['--short'], file: 'ok' },
+                { global: ['--verbose'], flags: ['--short'], file: 'ok' },
+                { global: ['--verbose'], flags: ['--dry'], file: 'planned' },
+            ]) {
+                if (mode.file === 'planned') {
+                    await Deno.remove(`${root}/release`);
+                }
+                const result = await verifyCli(root, [
+                    ...mode.global,
+                    'verify',
+                    ...mode.flags,
+                    'a.txt',
+                    'b.txt',
+                ]).output();
+                const decoder = new TextDecoder();
+                const out = cliText(decoder.decode(result.stdout));
+                const err = cliText(decoder.decode(result.stderr));
                 expect(result.code).toBe(0);
-                expect(new TextDecoder().decode(result.stdout)).toContain('a ok');
-                expect(new TextDecoder().decode(result.stderr).includes('child output')).toBe(
-                    level === 'normal',
-                );
+                expect(out).toContain(`a.txt ${mode.file}\n`);
+                expect(out).toContain(`b.txt ${mode.file}\n`);
+                for (const command of [pre, check, post]) {
+                    expect(err).not.toContain(JSON.stringify(command));
+                }
+                const markers = err
+                    .split('\n')
+                    .filter((line) =>
+                        ['pre output', 'child out', 'child err', 'post output'].includes(line),
+                    );
+                expect(markers).toEqual([]);
+                if (mode.flags.includes('--short')) {
+                    expect(out).toBe('a.txt ok\nb.txt ok\n');
+                } else {
+                    expect(out.match(new RegExp(` ${mode.file}\\n`, 'g'))).toHaveLength(8);
+                }
             }
         } finally {
             await Deno.remove(root, { recursive: true });
@@ -417,6 +536,30 @@ Deno.test(
         });
     },
 );
+
+Deno.test('Verify reports verbose launch failures and still streams cleanup', async () => {
+    await fixture(async (root, run, output, info) => {
+        Log.level = 'verbose';
+        const missing = [`${root}/missing-executable`];
+        const post = [Deno.execPath(), 'eval', "console.log('cleanup')"];
+        await run(['a'], [{ pattern: '*', commands: [missing] }], undefined, root, {
+            post: [post],
+        });
+        expect(Deno.exitCode).toBe(1);
+        expect(output).toEqual([
+            `a ${Log.color.red('fail')}`,
+            `  ${JSON.stringify(missing)} ${Log.color.red('fail')}`,
+            `Cleanup ${Log.color.green('ok')}`,
+            `  ${JSON.stringify(post)} ${Log.color.green('ok')}`,
+        ]);
+        expect(info).toEqual([
+            JSON.stringify(missing),
+            expect.stringContaining('missing-executable'),
+            JSON.stringify(post),
+            'cleanup',
+        ]);
+    });
+});
 
 Deno.test('Verify successful cleanup preserves failures and runs after cancellation', async () => {
     await fixture(async (root, run) => {
