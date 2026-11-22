@@ -27,4 +27,5 @@ Deliver the minimum complete working solution satisfying the request.
 - Do not introduce production behavior solely to satisfy coverage or mutation testing.
 - Preserve useful tests, fix relevant failures, and never weaken coverage thresholds to conceal failures.
 - Follow configured verification rules and file dependencies. Run applicable lint and format checks even without tests; require paired source/test files only for checks that depend on them.
+- Use comments sparingly, prefer none, and only to explain why something is done, not how.
 
