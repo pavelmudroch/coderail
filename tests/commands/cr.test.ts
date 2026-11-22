@@ -6,7 +6,6 @@ import { Doctor } from '../../src/commands/doctor.ts';
 import { Idea } from '../../src/commands/idea.ts';
 import { Init } from '../../src/commands/init.ts';
 import { Install } from '../../src/commands/install.ts';
-import { Loop } from '../../src/commands/loop.ts';
 import { Template } from '../../src/commands/template.ts';
 import { Ticket } from '../../src/commands/ticket.ts';
 import { Uninstall } from '../../src/commands/uninstall.ts';
@@ -39,7 +38,6 @@ for (const [name, Child] of [
     ['idea', Idea],
     ['verify', Verify],
     ['doctor', Doctor],
-    ['loop', Loop],
     ['template', Template],
 ] as const) {
     Deno.test(`Cr resolves the ${name} subcommand`, () => {
@@ -66,6 +64,7 @@ Deno.test('Cr handles global help and exposes root usage', () => {
         expect(command.shouldHandleHelp(command.parseArguments([help]))).toBe(true);
         expect(command.shouldHandleHelp(command.parseArguments(['command', help]))).toBe(false);
     }
+    expect(command.getUsage()).not.toContain('  loop ');
     expect(command.getUsage()).toContain(
         'cr [--help] [--version] [--verbose | --quiet] [--cwd <path>] [--no-color]\n' +
             '     [--non-interactive] <command>',
@@ -77,6 +76,7 @@ Deno.test('Cr rejects missing and unknown root commands', () => {
     for (const [args, message] of [
         [[], 'Required command is missing.'],
         [['unknown'], 'Unknown command "unknown".'],
+        [['loop'], 'Unknown command "loop".'],
     ] as const) {
         try {
             command.getSubcommand(command.parseArguments(args));

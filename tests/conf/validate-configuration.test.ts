@@ -10,16 +10,11 @@ Deno.test(
             ['', {}],
             ['no_color = true', { noColor: true }],
             ['[verify]', { verify: {} }],
-            ['[loop.codex]\nmodel = "native"', { loop: { codex: { model: 'native' } } }],
+            ['[loop.codex]\nmodel = "native"', {}],
         ] as const) {
             expect(validateConfiguration(await parse(new Blob([text]).stream()))).toEqual(expected);
         }
-        for (const text of [
-            'description = "metadata"',
-            'no_color = 2',
-            '[loop.other]',
-            '[[verify.rules]]',
-        ]) {
+        for (const text of ['description = "metadata"', 'no_color = 2', '[[verify.rules]]']) {
             const parsed = await parse(new Blob([text]).stream());
             expect(() => validateConfiguration(parsed)).toThrow('Invalid configuration');
         }
@@ -40,16 +35,6 @@ post = [["cleanup"]]
 pattern = "*.ts"
 commands = [["check"]]
 requires = ["input"]
-[loop.codex]
-model = "native"
-effort = " custom "
-implement_model = "im"
-implement_effort = "ie"
-review_model = "rm"
-review_effort = "re"
-commit_model = "cm"
-commit_effort = "ce"
-[loop.claude]
 `;
         const parsed = await parse(new Blob([valid]).stream());
         expect(validateConfiguration(parsed)).toEqual(parsed.toObject());
@@ -64,13 +49,6 @@ commit_effort = "ce"
             'non_interactive = 0',
             'verify = null',
             'verify = []',
-            'loop = null',
-            'loop = []',
-            '[loop.codex]\nmodel = false',
-            '[loop.codex]\nmodel = "  "',
-            '[loop.codex]\nextra = true',
-            '[loop]\ncodex = null',
-            '[loop]\nclaude = []',
             '[verify]\npre = false',
             '[verify]\npost = [1]',
             '[verify]\npre = [[1]]',

@@ -14,7 +14,8 @@ Implement the specified or next ready ticket, complete all tasks, resolve issues
 - Follow numbered task order by default. Reorder or interleave tasks when justified by dependencies or implementation needs. Preserve explicit prerequisites.
 - Treat tasks as scope and validation checkpoints, not strict test-first execution steps.
 - Preserve unrelated changes.
-- When invoked by `cr loop`, preserve the index: do not stage, unstage, reset, or commit. Let the loop own staging.
+- Leave git index and staging untouched.
+- Report the closed ticket path and all changed paths.
 - Verify only files changed by this implementation; exclude the ticket file.
 - Follow repository-specific verification requirements, including required files and separate invocations.
 - Continue autonomously through recoverable failures. Investigate causes and attempt safe solutions without requesting confirmation.

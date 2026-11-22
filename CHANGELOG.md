@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The `orchestrate` skill delegates ready tickets to implementation and review
+  subagents and commits approved changes. The bundled `review` skill validates
+  completed tickets and reopens them when corrections are required.
+
+### Removed
+
+- The `cr loop` subcommand. Invoke `orchestrate` in your agent session to
+  process the ready ticket queue. CodeRail ignores legacy `[loop]` settings.
+
 ## [0.4.1] - 2026-11-16
 
 ### Fixed

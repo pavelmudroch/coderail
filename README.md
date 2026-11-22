@@ -125,8 +125,8 @@ its validation criteria before completion.
 
 If you want to write the code yourself, invoke `mentor` instead. It explains the
 tasks, reviews your work when you are ready, and guides corrections and verification.
-For unattended ticket processing with optional review and commits, see
-[automated implementation](docs/AUTOMATION.md).
+To delegate implementation, review, and commits across the ready ticket queue,
+use the [orchestrate skill](docs/AUTOMATION.md).
 
 ### 5. Walk through the changes
 

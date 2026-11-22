@@ -1,21 +1,24 @@
 import type { Configuration } from './configuration.ts';
-import type { ParsedConf } from './parse.ts';
+import type { ParsedConf, ParseResult } from './parse.ts';
 
 /** Validates project settings without supplying runtime defaults. */
 export function validateConfiguration(parsed: ParsedConf): Partial<Configuration> {
+    const configuration = parsed.toObject();
+    // Older installations and projects may still have settings for the removed command.
+    delete configuration.loop;
     const errors: Error[] = [];
-    if (!validateConfigurationResult(parsed, errors)) {
+    if (!validateConfigurationResult(parsed, configuration, errors)) {
         throw new Error('Invalid configuration', { cause: errors });
     }
-    return parsed.toObject();
+    return configuration;
 }
 
 function validateConfigurationResult(
     result: ParsedConf,
+    possibleConfiguration: ParseResult,
     accumulatedErrors: Error[],
-): result is ParsedConf<Partial<Configuration>> {
+): possibleConfiguration is Partial<Configuration> {
     const initialErrorCount = accumulatedErrors.length;
-    const possibleConfiguration = result.toObject();
 
     type Path = (string | number)[];
 
@@ -73,49 +76,9 @@ function validateConfigurationResult(
         }
     }
 
-    function loopSettings(value: unknown, path: Path): void {
-        if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-            report(path, 'Expected an object');
-            return;
-        }
-        for (const [key, member] of Object.entries(value)) {
-            const memberPath = [...path, key];
-            switch (key) {
-                case 'model':
-                case 'effort':
-                case 'implementModel':
-                case 'implementEffort':
-                case 'reviewModel':
-                case 'reviewEffort':
-                case 'commitModel':
-                case 'commitEffort':
-                    if (typeof member !== 'string' || member.trim() === '') {
-                        report(memberPath, 'Expected a nonblank string');
-                    }
-                    break;
-                default:
-                    report(memberPath, 'Unknown property', 'key');
-            }
-        }
-    }
-
     for (const [key, value] of Object.entries(possibleConfiguration)) {
         const path = [key];
         switch (key) {
-            case 'loop':
-                if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-                    report(path, 'Expected an object');
-                    break;
-                }
-                for (const [harness, settings] of Object.entries(value)) {
-                    const nested = [...path, harness];
-                    if (harness === 'codex' || harness === 'claude') {
-                        loopSettings(settings, nested);
-                    } else {
-                        report(nested, 'Unknown property', 'key');
-                    }
-                }
-                break;
             case 'defaultHarness':
                 string(value, path);
                 break;

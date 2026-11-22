@@ -199,14 +199,6 @@ function mergeConfiguration(base: Configuration, override: Partial<Configuration
     if (override.nonInteractive !== undefined) {
         base.nonInteractive = override.nonInteractive;
     }
-    if (override.loop !== undefined) {
-        const loop = (base.loop ??= {});
-        for (const harness of ['codex', 'claude'] as const) {
-            if (override.loop[harness] !== undefined) {
-                loop[harness] = { ...loop[harness], ...override.loop[harness] };
-            }
-        }
-    }
     if (override.verify !== undefined) {
         base.verify.rules.push(...(override.verify.rules ?? []));
         for (const phase of ['pre', 'post'] as const) {

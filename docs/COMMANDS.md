@@ -39,12 +39,15 @@ contents and keep them in version control alongside your code.
 
 ## Agent instructions
 
-Install CodeRail's bundled skills and subagents for Codex or Claude:
+Install CodeRail's bundled skills and subagents for Codex or Claude.
 
 ```sh
 cr install codex
 cr install claude
 ```
+
+The `orchestrate` skill delegates ready-ticket implementation, review, and
+commits. See the [automated implementation guide](AUTOMATION.md).
 
 Installation is global by default. Use `--local` from an initialized project to
 install into that project instead:
@@ -133,51 +136,12 @@ support `--json` for scripts.
 ## Configuration
 
 Save project settings in `.coderail/config`, or global defaults in
-`config` under the CodeRail installation directory. Project loop settings
-override global values by harness and individual key; omitted keys retain global
-defaults.
+`config` under the CodeRail installation directory.
 
 When upgrading from a version that uses `coderail.conf`, rename that file to
 `config` in `.coderail/` and in the installation directory, if present. The old
 filename is no longer read. In existing projects, run `cr init` after renaming
 to update `.coderail/.gitignore` so the new file stays tracked.
-
-Loop model and effort preferences use harness-specific sections:
-
-```toml
-[loop.codex]
-model = "gpt-6.1-sol"
-effort = "medium"
-commit_model = "gpt-6.1-terra"
-commit_effort = "low"
-
-[loop.claude]
-model = "opus"
-effort = "high"
-commit_model = "haiku"
-```
-
-Each section accepts `model`, `effort`, `implement_model`, `implement_effort`,
-`review_model`, `review_effort`, `commit_model`, and `commit_effort`. Values must
-be nonblank strings and retain their native harness meaning. Only the selected
-harness's section applies.
-
-`cr loop` accepts overrides such as
-`cr loop codex -o model=gpt-6.1-sol,effort=medium,implement-model=gpt-6.1-terra`.
-Model and effort resolve independently, highest priority first:
-
-1. Stage-specific CLI option, such as `commit-model` or `review-effort`.
-2. Common CLI option, `model` or `effort`.
-3. Stage-specific saved setting.
-4. Common saved setting.
-5. Native harness default, with the setting omitted from the request.
-
-A common CLI model therefore overrides a saved `commit_model`; an explicit
-`commit-model` CLI option supplies an exception. A model override does not change
-effort precedence. Execution preflight checks all enabled stages before
-implementation begins. There is no static compatibility table.
-Effort labels do not imply equal reasoning budgets across providers, and
-preflight does not guarantee detection of silent provider fallback.
 
 ## Verify your changes
 

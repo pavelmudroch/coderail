@@ -4,7 +4,6 @@ import { Md } from '@md';
 import { basename, extname, isAbsolute, join, resolve } from '@std/path';
 
 import { type ConnectorFile, type HarnessConnector, type InstallationTarget } from './connector.ts';
-import { type Runner, type RunRequest, startRunner } from './runner/runner.ts';
 
 export class ClaudeConnector implements HarnessConnector {
     readonly name = 'claude';
@@ -20,42 +19,6 @@ export class ClaudeConnector implements HarnessConnector {
             }
             this.home = resolve(override || join(homedir(), '.claude'));
         }
-    }
-
-    run(request: RunRequest): Promise<Runner> {
-        return Promise.resolve().then(() => {
-            const args = ['--print', '--output-format', 'stream-json', '--verbose'];
-            if (request.model !== undefined) {
-                args.push('--model', request.model);
-            }
-            if (request.effort !== undefined) {
-                args.push('--effort', request.effort);
-            }
-            let answer: string | undefined;
-            let failed = false;
-            return startRunner(
-                'claude',
-                args,
-                request,
-                (event) => {
-                    if (event.type === 'result') {
-                        if (event.subtype !== 'success' || event.is_error !== false) {
-                            failed = true;
-                        } else if (typeof event.result === 'string') {
-                            answer = event.result;
-                        }
-                    }
-                },
-                () => {
-                    if (failed || answer === undefined) {
-                        throw new Error(
-                            'Claude did not complete successfully with a final assistant answer.',
-                        );
-                    }
-                    return answer;
-                },
-            );
-        });
     }
 
     translatePrompt(prompt: string): string {

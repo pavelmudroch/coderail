@@ -6,7 +6,6 @@ import { join, resolve } from '@std/path';
 
 import { CodexConnector } from '../../src/harness/codex.ts';
 import type { ConnectorFile } from '../../src/harness/connector.ts';
-import { executionTests } from './execution.test.ts';
 
 const encoder = new TextEncoder();
 function file(path: string, text: string): ConnectorFile {
@@ -304,11 +303,3 @@ Deno.test('Codex canonicalizes flagged metadata while preserving BOM and body by
     ]);
     expect(source).toEqual(before);
 });
-
-executionTests(
-    'codex',
-    (scope) =>
-        new CodexConnector(
-            scope === 'global' ? { scope } : { scope, projectRoot: '/installation-only' },
-        ),
-);

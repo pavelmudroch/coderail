@@ -11,7 +11,7 @@ disable-model-invocation: true
 - Adapt to the user's current stage and desired involvement; avoid restarting completed steps or requiring the entire workflow for a small, well-defined change.
 - Distinguish guidance from execution. Inspect relevant state to answer questions; perform mutations only within the user's requested scope.
 - Reconstruct progress from persisted artifacts and Git state rather than assuming conversation history is complete.
-- Inspect only what the question requires: CLI version and help, project configuration, idea tree, relevant tickets and artifacts, Git status and diffs, or loop logs.
+- Inspect only what the question requires: CLI version and help, project configuration, idea tree, relevant tickets and artifacts, Git status and diffs, or agent session output.
 - Read `cr --help`, `cr <command> --help`, or `cr <command> <subcommand> --help` for installed syntax. Use `cr idea --json` and `cr ticket next --json` for structured discovery.
 - Prefer installed behavior over remembered syntax. Consult matching project documentation and implementation when available; distinguish implemented behavior from plans and examples.
 - Read the relevant sibling skill's `SKILL.md` before carrying out its workflow. Locate installed skills through the harness when sibling files are unavailable.
@@ -27,7 +27,7 @@ disable-model-invocation: true
 | Agreed design without actionable work | Use `ticket` to create small tickets with dependencies and validation criteria. |
 | Ready ticket for autonomous implementation | Use `implement` with the ticket, or let it select the next ready ticket. |
 | User wants to write the code and learn | Use `mentor` to guide implementation and review each task. |
-| Queue of ready tickets for unattended work | Use `cr loop`, after checking its prerequisites and Git scope. |
+| Queue of ready tickets for delegated work | Use <skill>orchestrate</skill> to implement, review, and commit. |
 | Failing verification or incomplete task | Diagnose and correct the failure before marking the task complete or closing the ticket. |
 | Staged changes needing explanation and discussion | Use `walkthrough` to review them and record agreed follow-up work. |
 | Agreed review findings | Address in-scope corrections; create tickets for independent work; return to `explore` for consequential design changes. |
@@ -110,25 +110,12 @@ Use `code` for implementation and code-review conventions, `question` for focuse
 - Avoid redundant broad reruns without edits, failures, or unresolved concerns.
 - Avoid rerunning verification solely because existing changes are staged, reviewed, or committed; run it after relevant modifications or when needed to investigate a concrete concern.
 
-## Run and recover autonomous loops
+## Orchestrate ready tickets
 
-- Use `cr loop [codex|claude]` to repeat ready-ticket implementation in fresh native CLI sessions. Require an initialized Git project, installed harness instructions, configured verification, and an authenticated native CLI on PATH with permissions suitable for non-interactive execution.
-- Check that the initialized subtree has no staged, unstaged, or untracked work at startup. Preserve outside work; explain that auto-commit also rejects staged changes anywhere outside the subtree.
-- Start with `cr loop codex --limit 1` when the user wants one implementation attempt. Omit the limit to continue until no ready tickets remain.
-- Explain default stages as implement then stage; add `-r`/`--auto-review` for review before staging and `-c`/`--auto-commit` for commit afterward. Combine them as `-rc`; treat the flags independently and without boolean values.
-- Explain built-in loop review separately from interactive `walkthrough`; require no separate review skill. Explain that auto-commit invokes `commit` and never pushes.
-- Configure native model and effort strings in `[loop.codex]` or `[loop.claude]` using `model`, `effort`, and stage-specific `implement_model`, `implement_effort`, `review_model`, `review_effort`, `commit_model`, and `commit_effort`.
-- Override settings with `-o model=<native-model>,effort=<native-effort>` or stage-specific hyphenated keys such as `review-model` and `commit-effort`.
-- Resolve each model and effort independently: stage-specific CLI, common CLI, stage-specific saved setting, common saved setting, then native default. Merge project settings over global settings by harness and key.
-- Explain preflight as a no-work probe requiring exactly `OK` for each distinct enabled model/effort combination. Avoid promising detection of silent native fallback or equal effort budgets across providers.
-- Keep implementation and review from altering the existing index; let the loop stage the initialized subtree after successful sessions.
-- Explain review as inspecting current unstaged and new untracked work with ticket context, preserving prior staged work, recording findings, reopening the original ticket for required in-scope fixes, and creating tickets for necessary independent work. Leave fixes to subsequent implementation attempts.
-- Expect selection to run again after staging and optional commit; explain that reopened tickets or ready follow-ups can run immediately and their dependents must wait.
-- Count limits as implementation attempts, including retries on reopened tickets. Finish enabled review, staging, and commit stages before honoring the attempt limit; do not promise the ticket is finished at that limit.
-- Treat empty and dependency-blocked queues as successful stops; inspect the queue to distinguish completion from unresolved prerequisites.
-- Inspect `.coderail/loop/<UTC-timestamp>-<random-id>/preflight.jsonl` and `<ticket-id>.jsonl` when terminal summaries lack detail. Filter records by `step`, `stream`, and `output`; expect repeated attempts to append to the same ticket log.
-- On failure or cancellation, inspect files, ticket state, Git index, commits, and logs before resuming. Preserve partial results; explain that the loop stops without automatic rollback, retry, amend, or recovery.
-- Resolve partial active tickets and verification failures through the appropriate skill; establish the required clean startup state before restarting a loop. Avoid discarding work to satisfy preflight.
+- Use <skill>orchestrate</skill> from an initialized Git project with configured verification, current CodeRail skills, and an agent session that supports subagents and local Git commits.
+- Expect one implementation subagent per ticket, a separate review, and commits for approved ticket changes. Run independent work in parallel when file scope, verification, and repository state allow it.
+- Use `cr ticket next --json` to inspect the ready queue. Check open dependencies if tickets remain without ready work.
+- After an interruption, inspect ticket state, the working tree, the index, and commits before resuming. Preserve partial and unrelated work.
 
 ## Review, document, and commit
 

@@ -5,7 +5,6 @@ import type { Command, ParsedArguments, RunContext } from './helpers/command.ts'
 import { Idea } from './idea.ts';
 import { Init } from './init.ts';
 import { Install } from './install.ts';
-import { Loop } from './loop.ts';
 import { Template } from './template.ts';
 import { Ticket } from './ticket.ts';
 import { Uninstall } from './uninstall.ts';
@@ -34,7 +33,6 @@ const COMMAND = {
     IDEA: 'idea',
     VERIFY: 'verify',
     DOCTOR: 'doctor',
-    LOOP: 'loop',
     TEMPLATE: 'template',
 };
 
@@ -61,7 +59,7 @@ export class Cr implements Command<GlobalArguments> {
             '  -h, --help           Show this help message and exit.',
             '      --version        Show the version information and exit.',
             '  -v, --verbose        Turn on verbose logging.',
-            '  -q, --quiet          Suppress logs except errors and loop completion lines.',
+            '  -q, --quiet          Suppress logs except errors.',
             '      --cwd <path>     Set the current working directory.',
             '      --no-color       Disable colored output.',
             '      --non-interactive',
@@ -76,7 +74,6 @@ export class Cr implements Command<GlobalArguments> {
             '  idea                 Manage ideas related to the project.',
             '  verify               Verify files by project configuration.',
             '  doctor               Diagnose and fix issues in the project.',
-            '  loop                 Run autonomous ticket implementation.',
             '  template             Template management.',
         ];
         return usageLines.join('\n');
@@ -100,8 +97,6 @@ export class Cr implements Command<GlobalArguments> {
                 return new Verify();
             case COMMAND.DOCTOR:
                 return new Doctor();
-            case COMMAND.LOOP:
-                return new Loop();
             case COMMAND.TEMPLATE:
                 return new Template();
             case undefined:
