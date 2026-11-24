@@ -97,7 +97,7 @@ export async function resolveTicket(cwd: string, identifier: string): Promise<Ti
     return { ...ticket, status, reason, 'duplicate-of': duplicateOf };
 }
 
-function extractId(ticket: string): string {
+export function extractId(ticket: string): string {
     const filename = basename(ticket);
     const id = /^(\d{4,})(-|$)/.exec(filename)?.[1];
     if (id === undefined) {

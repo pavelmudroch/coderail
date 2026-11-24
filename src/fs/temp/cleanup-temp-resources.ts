@@ -6,6 +6,9 @@ export async function cleanupTempResources(): Promise<void> {
     for (const resourcePath of tempContext.registeredResourcePaths) {
         cleanupPromises.push(removeResource(resourcePath));
     }
+    for (const file of tempContext.registeredFiles) {
+        cleanupPromises.push(file.remove());
+    }
     const settledResults = await Promise.allSettled(cleanupPromises);
     for (const result of settledResults) {
         if (result.status === 'rejected') {

@@ -5,7 +5,7 @@ import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
-import { resolveTicket, TICKET_STATUS } from '@tickets';
+import { resolveTicket, TICKET_STATUS, withTicketLock } from '@tickets';
 
 import { formatJson, formatText } from './helpers/format.ts';
 
@@ -110,52 +110,54 @@ export class Reopen implements Command<ReopenArguments> {
         const id = context.parsedArguments.args.ticketId;
         const cwd = context.context.currentWorkingDirectory;
         try {
-            const ticket = await resolveTicket(cwd, id);
-            const dependencies: string[] = [];
-            for (const identifier of context.parsedArguments.args.dependsOn) {
-                const dependency = await resolveTicket(cwd, identifier);
-                if (dependency.id === ticket.id) {
-                    throw new Error('A ticket cannot depend on itself.');
+            const result = await withTicketLock(cwd, id, context.signal, async () => {
+                const ticket = await resolveTicket(cwd, id);
+                const dependencies: string[] = [];
+                for (const identifier of context.parsedArguments.args.dependsOn) {
+                    const dependency = await resolveTicket(cwd, identifier);
+                    if (dependency.id === ticket.id) {
+                        throw new Error('A ticket cannot depend on itself.');
+                    }
+                    dependencies.push(dependency.id);
                 }
-                dependencies.push(dependency.id);
-            }
-            const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'open');
-            const path = join(directory, `${ticket.id}-${ticket.slug}.md`);
-            const moving = ticket.status !== TICKET_STATUS.OPEN;
-            if (moving && (await Fs.exists(path))) {
-                throw new Error(`Ticket with "${path}" already exists.`);
-            }
-            const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
-            let changed =
-                moving ||
-                Object.hasOwn(markdown.frontmatter, 'reason') ||
-                Object.hasOwn(markdown.frontmatter, 'duplicate-of');
-            delete markdown.frontmatter.reason;
-            delete markdown.frontmatter['duplicate-of'];
-            if (dependencies.length > 0) {
-                const merged = [...ticket.dependencies];
-                for (const dependency of dependencies) {
-                    if (!merged.includes(dependency)) {
-                        merged.push(dependency);
-                        changed = true;
+                const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'open');
+                const path = join(directory, `${ticket.id}-${ticket.slug}.md`);
+                const moving = ticket.status !== TICKET_STATUS.OPEN;
+                if (moving && (await Fs.exists(path))) {
+                    throw new Error(`Ticket with "${path}" already exists.`);
+                }
+                const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
+                let changed =
+                    moving ||
+                    Object.hasOwn(markdown.frontmatter, 'reason') ||
+                    Object.hasOwn(markdown.frontmatter, 'duplicate-of');
+                delete markdown.frontmatter.reason;
+                delete markdown.frontmatter['duplicate-of'];
+                if (dependencies.length > 0) {
+                    const merged = [...ticket.dependencies];
+                    for (const dependency of dependencies) {
+                        if (!merged.includes(dependency)) {
+                            merged.push(dependency);
+                            changed = true;
+                        }
+                    }
+                    if (changed) {
+                        markdown.frontmatter.dependencies = merged;
                     }
                 }
                 if (changed) {
-                    markdown.frontmatter.dependencies = merged;
+                    markdown.frontmatter.status = TICKET_STATUS.OPEN;
+                    markdown.frontmatter.updated_at = new Date().toISOString();
+                    await Fs.makeDirectory(directory);
+                    await Fs.write(path, Md.toStream(markdown));
+                    if (moving) {
+                        await Deno.remove(ticket.path);
+                    }
+                } else {
+                    await markdown.content.cancel();
                 }
-            }
-            if (changed) {
-                markdown.frontmatter.status = TICKET_STATUS.OPEN;
-                markdown.frontmatter.updated_at = new Date().toISOString();
-                await Fs.makeDirectory(directory);
-                await Fs.write(path, Md.toStream(markdown));
-                if (moving) {
-                    await Deno.remove(ticket.path);
-                }
-            } else {
-                await markdown.content.cancel();
-            }
-            const result = await resolveTicket(cwd, id);
+                return resolveTicket(cwd, id);
+            });
             if (context.parsedArguments.args.json) {
                 Log.output(formatJson([result]));
                 return;

@@ -5,7 +5,7 @@ import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
-import { resolveTicket, TICKET_STATUS } from '@tickets';
+import { resolveTicket, TICKET_STATUS, withTicketLock } from '@tickets';
 
 import { formatJson, formatText } from './helpers/format.ts';
 
@@ -95,22 +95,24 @@ export class Activate implements Command<ActivateArguments> {
         const id = context.parsedArguments.args.ticketId;
         const cwd = context.context.currentWorkingDirectory;
         try {
-            const ticket = await resolveTicket(cwd, id);
-            if (ticket.status !== TICKET_STATUS.OPEN) {
-                throw new Error(`Ticket "${id}" is not open.`);
-            }
-            const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'active');
-            const path = join(directory, `${ticket.id}-${ticket.slug}.md`);
-            if (await Fs.exists(path)) {
-                throw new Error(`Ticket with "${path}" already exists.`);
-            }
-            await Fs.makeDirectory(directory);
-            const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
-            markdown.frontmatter.status = TICKET_STATUS.ACTIVE;
-            markdown.frontmatter.updated_at = new Date().toISOString();
-            await Fs.write(path, Md.toStream(markdown));
-            await Deno.remove(ticket.path);
-            const result = await resolveTicket(cwd, id);
+            const result = await withTicketLock(cwd, id, context.signal, async () => {
+                const ticket = await resolveTicket(cwd, id);
+                if (ticket.status !== TICKET_STATUS.OPEN) {
+                    throw new Error(`Ticket "${id}" is not open.`);
+                }
+                const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'active');
+                const path = join(directory, `${ticket.id}-${ticket.slug}.md`);
+                if (await Fs.exists(path)) {
+                    throw new Error(`Ticket with "${path}" already exists.`);
+                }
+                await Fs.makeDirectory(directory);
+                const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
+                markdown.frontmatter.status = TICKET_STATUS.ACTIVE;
+                markdown.frontmatter.updated_at = new Date().toISOString();
+                await Fs.write(path, Md.toStream(markdown));
+                await Deno.remove(ticket.path);
+                return resolveTicket(cwd, id);
+            });
             if (context.parsedArguments.args.json) {
                 Log.output(formatJson([result]));
                 return;

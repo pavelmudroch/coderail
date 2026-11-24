@@ -5,7 +5,7 @@ import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
-import { resolveTicket, TICKET_STATUS } from '@tickets';
+import { resolveTicket, TICKET_STATUS, withTicketLock } from '@tickets';
 
 import { formatJson, formatText } from './helpers/format.ts';
 
@@ -143,34 +143,39 @@ export class Close implements Command<CloseArguments> {
         const id = context.parsedArguments.args.ticketId;
         const cwd = context.context.currentWorkingDirectory;
         try {
-            const ticket = await resolveTicket(cwd, id);
-            if (ticket.status !== TICKET_STATUS.OPEN && ticket.status !== TICKET_STATUS.ACTIVE) {
-                throw new Error(`Ticket "${id}" is not open or active.`);
-            }
-            const { reason, duplicateOf } = context.parsedArguments.args;
-            const duplicate =
-                duplicateOf === undefined ? undefined : await resolveTicket(cwd, duplicateOf);
-            if (duplicate?.id === ticket.id) {
-                throw new Error('A ticket cannot be a duplicate of itself.');
-            }
-            const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'closed');
-            const path = join(directory, `${ticket.id}-${ticket.slug}.md`);
-            if (await Fs.exists(path)) {
-                throw new Error(`Ticket with "${path}" already exists.`);
-            }
-            await Fs.makeDirectory(directory);
-            const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
-            markdown.frontmatter.status = TICKET_STATUS.CLOSED;
-            markdown.frontmatter.reason = reason;
-            if (duplicate !== undefined) {
-                markdown.frontmatter['duplicate-of'] = duplicate.id;
-            } else {
-                delete markdown.frontmatter['duplicate-of'];
-            }
-            markdown.frontmatter.updated_at = new Date().toISOString();
-            await Fs.write(path, Md.toStream(markdown));
-            await Deno.remove(ticket.path);
-            const result = await resolveTicket(cwd, id);
+            const result = await withTicketLock(cwd, id, context.signal, async () => {
+                const ticket = await resolveTicket(cwd, id);
+                if (
+                    ticket.status !== TICKET_STATUS.OPEN &&
+                    ticket.status !== TICKET_STATUS.ACTIVE
+                ) {
+                    throw new Error(`Ticket "${id}" is not open or active.`);
+                }
+                const { reason, duplicateOf } = context.parsedArguments.args;
+                const duplicate =
+                    duplicateOf === undefined ? undefined : await resolveTicket(cwd, duplicateOf);
+                if (duplicate?.id === ticket.id) {
+                    throw new Error('A ticket cannot be a duplicate of itself.');
+                }
+                const directory = join(cwd, Path.CODERAIL_DIR, Path.TICKETS_DIR, 'closed');
+                const path = join(directory, `${ticket.id}-${ticket.slug}.md`);
+                if (await Fs.exists(path)) {
+                    throw new Error(`Ticket with "${path}" already exists.`);
+                }
+                await Fs.makeDirectory(directory);
+                const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
+                markdown.frontmatter.status = TICKET_STATUS.CLOSED;
+                markdown.frontmatter.reason = reason;
+                if (duplicate !== undefined) {
+                    markdown.frontmatter['duplicate-of'] = duplicate.id;
+                } else {
+                    delete markdown.frontmatter['duplicate-of'];
+                }
+                markdown.frontmatter.updated_at = new Date().toISOString();
+                await Fs.write(path, Md.toStream(markdown));
+                await Deno.remove(ticket.path);
+                return resolveTicket(cwd, id);
+            });
             if (context.parsedArguments.args.json) {
                 Log.output(formatJson([result]));
                 return;
