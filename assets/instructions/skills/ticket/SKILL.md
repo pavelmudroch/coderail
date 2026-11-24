@@ -1,7 +1,6 @@
 ---
 name: ticket
-description: Decompose implementation context into actionable tickets and tasks.
-disable-model-invocation: true
+description: Invoke this skill only if explicitly asked to create tickets.
 ---
 
 ## Goal

@@ -1,7 +1,6 @@
 ---
 name: commit
-description: Commit staged Git changes into logically coherent commits
-disable-model-invocation: true
+description: Invoke this skill only if explicitly asked to create commits.
 ---
 
 ## Goal

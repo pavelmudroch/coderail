@@ -54,6 +54,10 @@ assigned tickets, `reviewer` for checking completed tickets, and `worker` for
 general delegated tasks. The `research` skill delegates its investigation to
 `worker`.
 
+The `commit` and `ticket` skill descriptions instruct agents to invoke them only
+when explicitly asked to create commits or tickets. This guidance is supplied
+through their descriptions, without a `disable-model-invocation` frontmatter flag.
+
 Installation is global by default. Use `--local` from an initialized project to
 install into that project instead:
 
