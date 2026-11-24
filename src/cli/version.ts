@@ -1,1 +1,1 @@
-export const CODERAIL_VERSION = '0.5.0';
+export const CODERAIL_VERSION = '0.5.1';
