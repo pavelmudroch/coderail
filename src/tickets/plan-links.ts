@@ -31,13 +31,67 @@ type LinkEdit = {
     expectedDestination: string;
 };
 
+type PlanTicketLink = {
+    id: string;
+    slug: string;
+    document: string;
+    destination: string;
+    ticketPath: string;
+};
+
+export function inspectPlanTicketLinks(
+    projectRoot: string,
+    signal: AbortSignal,
+    inspect: (link: PlanTicketLink) => void,
+): Promise<LinkWarning[]> {
+    return inspectPlanDocuments(projectRoot, signal, (content, document, root) => {
+        for (const link of ticketLinkDestinations(content, document, root)) {
+            const match = /^(\d{4,})-([a-z0-9-]+)\.md$/.exec(basename(link.path));
+            if (match) {
+                inspect({
+                    id: match[1] as string,
+                    slug: match[2] as string,
+                    document,
+                    destination: link.destination,
+                    ticketPath: relative(root, link.path),
+                });
+            }
+        }
+    });
+}
+
 export async function scanTicketLinks(
     projectRoot: string,
     target: TicketLinkTarget,
     signal: AbortSignal,
 ): Promise<TicketLinkScan> {
-    signal.throwIfAborted();
     const scan: TicketLinkScan = { files: [], findings: [], warnings: [] };
+    scan.warnings = await inspectPlanDocuments(projectRoot, signal, (content, doc, root) => {
+        const edits = ticketLinkEdits(
+            content,
+            doc,
+            root,
+            canonicalTarget(projectRoot, root, target),
+        );
+        if (edits.length > 0) {
+            scan.files.push(doc);
+        }
+        for (const { destination, expectedDestination } of edits) {
+            if (destination !== expectedDestination) {
+                scan.findings.push({ path: doc, destination, expectedDestination });
+            }
+        }
+    });
+    return scan;
+}
+
+async function inspectPlanDocuments(
+    projectRoot: string,
+    signal: AbortSignal,
+    inspect: (content: string, document: string, root: string) => void,
+): Promise<LinkWarning[]> {
+    signal.throwIfAborted();
+    const warnings: LinkWarning[] = [];
     const root = await Deno.realPath(resolve(projectRoot));
     const plans = join(root, Path.CODERAIL_DIR, Path.PLANS_DIR);
     let directory: string;
@@ -46,31 +100,22 @@ export async function scanTicketLinks(
     } catch (error) {
         signal.throwIfAborted();
         if (!(error instanceof Deno.errors.NotFound)) {
-            scan.warnings.push(warning(plans, 'Cannot inspect plan links', error));
+            warnings.push(warning(plans, 'Cannot inspect plan links', error));
         }
-        return scan;
+        return warnings;
     }
 
-    const destination = canonicalTarget(projectRoot, root, target);
-    for await (const path of planFiles(directory, scan.warnings, signal)) {
+    for await (const path of planFiles(directory, warnings, signal)) {
         try {
             const doc = await planFile(directory, path);
             const content = await readMarkdown(doc);
-            const edits = ticketLinkEdits(content, doc, root, destination);
-            if (edits.length > 0) {
-                scan.files.push(doc);
-            }
-            for (const { destination, expectedDestination } of edits) {
-                if (destination !== expectedDestination) {
-                    scan.findings.push({ path: doc, destination, expectedDestination });
-                }
-            }
+            inspect(content, doc, root);
         } catch (error) {
-            scan.warnings.push(warning(path, 'Cannot inspect plan links', error));
+            warnings.push(warning(path, 'Cannot inspect plan links', error));
         }
     }
     signal.throwIfAborted();
-    return scan;
+    return warnings;
 }
 
 export async function updateTicketLinks(
@@ -175,6 +220,35 @@ function ticketLinkEdits(
     root: string,
     target: TicketLinkTarget,
 ): LinkEdit[] {
+    const filename = `${target.id}-${target.slug}.md`;
+    const expected = relative(dirname(doc), target.path)
+        .split(SEPARATOR)
+        .map((part) => encodeURIComponent(part).replaceAll('(', '%28').replaceAll(')', '%29'))
+        .join('/');
+    const edits: LinkEdit[] = [];
+    for (const { start, end, destination, suffix, path } of ticketLinkDestinations(
+        content,
+        doc,
+        root,
+    )) {
+        if (basename(path) === filename) {
+            edits.push({
+                start,
+                end,
+                destination,
+                expectedDestination:
+                    path === target.path ? destination : expected + destination.slice(suffix),
+            });
+        }
+    }
+    return edits;
+}
+
+function* ticketLinkDestinations(
+    content: string,
+    doc: string,
+    root: string,
+): Generator<{ start: number; end: number; path: string; destination: string; suffix: number }> {
     const bodyStart = markdownBodyStart(content);
     const body = content.slice(bodyStart);
     // The tokenizer excludes a UTF-8 BOM from its offsets.
@@ -185,13 +259,6 @@ function ticketLinkEdits(
             .write(preprocess()(body, undefined, true)),
     );
     const tickets = join(root, Path.CODERAIL_DIR, Path.TICKETS_DIR);
-    const filename = `${target.id}-${target.slug}.md`;
-    const targetPath = target.path;
-    const expected = relative(dirname(doc), targetPath)
-        .split(SEPARATOR)
-        .map((part) => encodeURIComponent(part).replaceAll('(', '%28').replaceAll(')', '%29'))
-        .join('/');
-    const edits: LinkEdit[] = [];
     let images = 0;
     for (const [phase, token] of events) {
         if (token.type === 'image') {
@@ -210,18 +277,10 @@ function ticketLinkEdits(
         const destination = content.slice(start, end);
         const suffix = destinationSuffix(destination);
         const path = localPath(destination.slice(0, suffix), doc);
-        if (path === undefined || basename(path) !== filename || !isDescendant(tickets, path)) {
-            continue;
+        if (path !== undefined && isDescendant(tickets, path)) {
+            yield { start, end, path, destination, suffix };
         }
-        edits.push({
-            start,
-            end,
-            destination,
-            expectedDestination:
-                path === targetPath ? destination : expected + destination.slice(suffix),
-        });
     }
-    return edits;
 }
 
 function markdownBodyStart(content: string): number {

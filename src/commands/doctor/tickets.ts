@@ -1,8 +1,15 @@
 import { Log } from '@log';
 import { type Frontmatter, Md } from '@md';
-import { dirname, join, resolve } from '@std/path';
+import { dirname, join, relative, resolve } from '@std/path';
+import {
+    scanTicketLinks,
+    type TicketLinkTarget,
+    updateTicketLinks,
+    withTicketLock,
+} from '@tickets';
 import { Text } from '@utils';
 
+import { inspectPlanTicketLinks } from '../../tickets/plan-links.ts';
 import { createDoctorReport, type DoctorRepair, type DoctorReport } from './types.ts';
 
 const statuses = ['open', 'active', 'closed'];
@@ -18,12 +25,22 @@ type InventoryItem = {
     path: string;
     original: Uint8Array;
     id?: string;
+    slug?: string;
     expectedPath?: string;
     dependencies?: string[];
     duplicateOf?: string;
     status?: string;
     reason?: string;
     usable: boolean;
+};
+
+type TicketInventory = {
+    report: DoctorReport;
+    inventory: InventoryItem[];
+    inventoryComplete: boolean;
+    byId: Map<string, InventoryItem[]>;
+    directory: string;
+    fail: (path: string, message: string, guidance: string) => void;
 };
 
 /** Reject symlinks in either path before linking or removing ticket files. */
@@ -52,7 +69,7 @@ async function unoccupied(path: string): Promise<boolean> {
     }
 }
 
-async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorReport> {
+async function readInventory(projectRoot: string, signal: AbortSignal): Promise<TicketInventory> {
     const report = createDoctorReport();
     const inventory: InventoryItem[] = [];
     let inventoryComplete = true;
@@ -183,6 +200,7 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
                         invalid('duplicate-of', 'requires closed status and duplicate reason');
                     }
                     if (item.id !== undefined && consistent && statusValid) {
+                        item.slug = fields.slug as string;
                         item.expectedPath = join(
                             directory,
                             fields.status as string,
@@ -230,6 +248,79 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
             byId.set(item.id, matches);
         }
     }
+    return { report, inventory, inventoryComplete, byId, directory, fail };
+}
+
+async function repairTicket(
+    projectRoot: string,
+    item: InventoryItem,
+    collected: TicketLinkTarget,
+    signal: AbortSignal,
+): Promise<void> {
+    await withTicketLock(projectRoot, collected.id, signal, async () => {
+        const fresh = await readInventory(projectRoot, signal);
+        const matches = fresh.byId.get(collected.id);
+        const current = matches?.[0];
+        if (
+            !fresh.inventoryComplete ||
+            matches?.length !== 1 ||
+            !current?.usable ||
+            current.slug !== collected.slug ||
+            current.expectedPath === undefined
+        ) {
+            throw new Error(`Ticket repair is no longer eligible for "${item.path}"`);
+        }
+        const target = { ...collected, path: current.expectedPath };
+        const moving = current.path !== target.path;
+        if (
+            moving &&
+            (item.path === collected.path ||
+                current.path !== item.path ||
+                !(await unoccupied(target.path)))
+        ) {
+            throw new Error(`Ticket relocation is no longer eligible at "${item.path}"`);
+        }
+        const scan = await scanTicketLinks(projectRoot, target, signal);
+        await regularPath(current.path, signal);
+        if (moving) {
+            const destinationDirectory = dirname(target.path);
+            await Deno.mkdir(destinationDirectory, { recursive: true });
+            await regularPath(current.path, signal);
+            if ((await Deno.realPath(destinationDirectory)) !== resolve(destinationDirectory)) {
+                throw new Error(`Ticket destination contains symlinks: "${target.path}"`);
+            }
+        }
+        const original = moving ? item.original : current.original;
+        const bytes = await Deno.readFile(current.path, { signal });
+        if (
+            bytes.length !== original.length ||
+            bytes.some((byte, index) => byte !== original[index])
+        ) {
+            throw new Error(`Collected input changed at "${current.path}"`);
+        }
+        signal.throwIfAborted();
+        if (moving) {
+            // Hard-link creation is exclusive, and the source is removed only after it succeeds.
+            await Deno.link(current.path, target.path);
+            await Deno.remove(current.path);
+        }
+        const warnings = await updateTicketLinks(projectRoot, target, scan, signal);
+        const failures = [...scan.warnings, ...warnings];
+        if (failures.length) {
+            throw new Error(
+                failures.map(({ path, message }) => `"${path}": ${message}`).join('\n'),
+            );
+        }
+    });
+}
+
+async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorReport> {
+    signal.throwIfAborted();
+    const root = await Deno.realPath(resolve(projectRoot));
+    const { report, inventory, inventoryComplete, byId, directory, fail } = await readInventory(
+        root,
+        signal,
+    );
     for (const [id, matches] of byId) {
         if (matches.length > 1) {
             fail(
@@ -239,58 +330,40 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
             );
         }
     }
-    // Attach actions only after the complete identity inventory has ruled out ambiguity.
+    const repairs = new Map<string, DoctorRepair>();
     for (const item of inventory) {
         const destination = item.expectedPath;
+        const { id, slug } = item;
+        const moving = destination !== item.path;
         if (
             !inventoryComplete ||
             !item.usable ||
-            item.id === undefined ||
-            byId.get(item.id)?.length !== 1 ||
+            id === undefined ||
+            byId.get(id)?.length !== 1 ||
+            slug === undefined ||
             destination === undefined ||
-            destination === item.path ||
-            !(await unoccupied(destination))
+            (moving && !(await unoccupied(destination)))
         ) {
             continue;
         }
         const repair: DoctorRepair = {
-            key: `ticket-placement:${resolve(item.path)}`,
-            description: `Move ticket "${item.path}" to "${destination}"`,
-            async apply(actionSignal: AbortSignal): Promise<void> {
-                await regularPath(item.path, actionSignal);
-                const fresh = await check(projectRoot, actionSignal);
-                if (!fresh.failures.some((failure) => failure.repair?.key === repair.key)) {
-                    throw new Error(`Ticket relocation is no longer eligible at "${item.path}"`);
-                }
-                await Deno.mkdir(dirname(destination), { recursive: true });
-                // Validate the destination ancestry too, including newly created directories.
-                await regularPath(item.path, actionSignal);
-                if ((await Deno.realPath(dirname(destination))) !== resolve(dirname(destination))) {
-                    throw new Error(`Ticket destination contains symlinks: "${destination}"`);
-                }
-                // Revalidate after the inventory rescan and directory preparation: unchanged
-                // bytes also bind fresh eligibility to the collected identity and destination.
-                const current = await Deno.readFile(item.path, { signal: actionSignal });
-                if (
-                    current.length !== item.original.length ||
-                    current.some((byte, index) => byte !== item.original[index])
-                ) {
-                    throw new Error(`Collected input changed at "${item.path}"`);
-                }
-                actionSignal.throwIfAborted();
-                // link is an atomic, exclusive destination creation; rename would clobber.
-                // Finish unlinking even if cancelled after the link has completed.
-                await Deno.link(item.path, destination);
-                await Deno.remove(item.path);
-            },
+            key: `ticket:${id}`,
+            description: moving
+                ? `Move ticket "${item.path}" to "${destination}"`
+                : `Update plan links for ticket "${id}"`,
+            apply: (actionSignal) =>
+                repairTicket(root, item, { id, slug, path: destination }, actionSignal),
         };
-        for (const failure of report.failures) {
-            if (
-                failure.message.startsWith(`Ticket "${item.path}":`) &&
-                /Invalid ticket filename|Incorrect placement/.test(failure.message)
-            ) {
-                failure.repairable = true;
-                failure.repair = repair;
+        repairs.set(id, repair);
+        if (moving) {
+            for (const failure of report.failures) {
+                if (
+                    failure.message.startsWith(`Ticket "${item.path}":`) &&
+                    /Invalid ticket filename|Incorrect placement/.test(failure.message)
+                ) {
+                    failure.repairable = true;
+                    failure.repair = repair;
+                }
             }
         }
     }
@@ -308,6 +381,41 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
         const item = matches[0] as InventoryItem;
         return item.usable ? item : `Unusable target "${id}" at "${item.path}"`;
     };
+    const warnings = await inspectPlanTicketLinks(root, signal, (link) => {
+        const resolved = target(link.id);
+        const prefix = `Plan "${link.document}": ticket link "${link.destination}"`;
+        if (typeof resolved === 'string' || resolved.slug !== link.slug) {
+            const issue =
+                typeof resolved === 'string'
+                    ? resolved
+                    : `No target with authoritative slug "${link.slug}" for ticket "${link.id}"`;
+            report.failures.push({
+                message: `${prefix}: ${issue}`,
+                repairable: false,
+                manualRepair: [
+                    'Verify the intended ticket identity and correct the link manually.',
+                ],
+            });
+            return;
+        }
+        const expected = resolved.expectedPath as string;
+        if (link.ticketPath !== relative(root, expected)) {
+            const repair = repairs.get(link.id);
+            report.failures.push({
+                message: `${prefix}: Stale destination; expected ticket at "${expected}"`,
+                repairable: repair !== undefined,
+                repair,
+                manualRepair: ['Confirm the authoritative ticket path, then update the plan link.'],
+            });
+        }
+    });
+    for (const { path, message } of warnings) {
+        report.failures.push({
+            message: `Plan "${path}": ${message}`,
+            repairable: false,
+            manualRepair: ['Restore access to valid UTF-8 Markdown and rerun "cr doctor".'],
+        });
+    }
     const edges = (item: InventoryItem): { kind: string; id: string }[] => [
         ...(item.dependencies ?? []).map((id) => ({ kind: 'dependency', id })),
         ...(item.duplicateOf === undefined ? [] : [{ kind: 'duplicate-of', id: item.duplicateOf }]),

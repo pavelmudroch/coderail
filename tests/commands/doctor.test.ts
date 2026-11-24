@@ -1,5 +1,6 @@
 import { Cli } from '@cli';
 import { Commands } from '@commands';
+import { Fs } from '@fs';
 import { Log } from '@log';
 import { expect } from '@std/expect';
 
@@ -34,6 +35,7 @@ Deno.test(
         const output: string[] = [];
         const doctor = new Doctor();
         const signal = new AbortController().signal;
+        const cwd = await Deno.makeTempDir();
         try {
             Log.output = (...messages) => {
                 output.push(messages.join(' '));
@@ -58,7 +60,7 @@ Deno.test(
                 };
                 await doctor.run({
                     parsedArguments: doctor.parseArguments([]),
-                    globalArguments: Commands.cr().parseArguments([]).args,
+                    globalArguments: Commands.cr().parseArguments(['--cwd', cwd]).args,
                     signal,
                 });
                 expect(Deno.exitCode).toBe(failures.length ? 1 : 0);
@@ -83,6 +85,101 @@ Deno.test(
             Installation.check = original.check;
             Log.output = original.output;
             Deno.exitCode = original.exit;
+            await Deno.remove(cwd, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'doctor rechecks stale plan links once and continues after a document repair fails',
+    async () => {
+        const { join } = await import('@std/path');
+        const { Project } = await import('../../src/commands/doctor/project.ts');
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const original = {
+            check: Installation.check,
+            executable: Project.checkExecutable,
+            output: Log.output,
+            exit: Deno.exitCode,
+            write: Fs.write,
+        };
+        const output: string[] = [];
+        const doctor = new Doctor();
+        const active = join(root, '.coderail/tickets/active');
+        const plans = join(root, '.coderail/plans');
+        const combined = join(plans, 'combined.md');
+        const denied = join(plans, 'denied.md');
+        const independent = join(plans, 'independent.md');
+        const body = (id: string): string =>
+            `---\nid: "${id}"\nslug: fix-parser\ntitle: Fix parser\nstatus: active\ncreated_at: original-created\nupdated_at: original-updated\n---\nBody  \r\n`;
+        const link = (id: string, status = 'open'): string =>
+            `[ticket](../tickets/${status}/${id}-fix-parser.md#here)\n`;
+        let collections = 0;
+        const run = async (repair: boolean): Promise<string> => {
+            output.length = 0;
+            collections = 0;
+            await doctor.run({
+                parsedArguments: doctor.parseArguments(repair ? ['--repair'] : []),
+                globalArguments: Commands.cr().parseArguments(['--cwd', root, '--non-interactive'])
+                    .args,
+                signal: new AbortController().signal,
+            });
+            return output.join('\n');
+        };
+        try {
+            Installation.check = () => {
+                collections++;
+                return Promise.resolve({ failures: [], skipped: [] });
+            };
+            Project.checkExecutable = () => Promise.resolve({ failures: [], skipped: [] });
+            Log.output = (...messages) => output.push(messages.join(' '));
+            await Deno.mkdir(active, { recursive: true });
+            await Deno.mkdir(plans, { recursive: true });
+            await Deno.writeTextFile(join(active, '0042-wrong.md'), body('0042'));
+            await Deno.writeTextFile(join(active, '0043-fix-parser.md'), body('0043'));
+            await Deno.writeTextFile(combined, link('0042'));
+            await Deno.writeTextFile(denied, link('0042'));
+            await Deno.writeTextFile(independent, link('0043'));
+            const readOnly = await run(false);
+            expect(collections).toBe(1);
+            expect(Deno.exitCode).toBe(1);
+            expect(readOnly.match(/Stale destination/g)).toHaveLength(3);
+            expect(await Deno.readTextFile(join(active, '0042-wrong.md'))).toBe(body('0042'));
+            expect(await Deno.readTextFile(combined)).toBe(link('0042'));
+            await expect(Deno.lstat(join(root, '.coderail/.locks'))).rejects.toBeInstanceOf(
+                Deno.errors.NotFound,
+            );
+
+            Fs.write = (path, content) =>
+                path === denied
+                    ? Promise.reject(new Error('document write denied'))
+                    : original.write(path, content);
+            const partial = await run(true);
+            expect(collections).toBe(2);
+            expect(Deno.exitCode).toBe(1);
+            expect(partial.match(/Unresolved: Move ticket/g)).toHaveLength(1);
+            expect(partial).toContain(`"${denied}": Cannot update plan links`);
+            expect(partial).toContain('document write denied');
+            expect(partial).toContain('Repaired: Update plan links for ticket "0043"');
+            expect(partial.match(/Stale destination/g)).toHaveLength(1);
+            expect(await Deno.readTextFile(join(active, '0042-fix-parser.md'))).toBe(body('0042'));
+            expect(await Deno.readTextFile(combined)).toBe(link('0042', 'active'));
+            expect(await Deno.readTextFile(denied)).toBe(link('0042'));
+            expect(await Deno.readTextFile(independent)).toBe(link('0043', 'active'));
+
+            Fs.write = original.write;
+            const repaired = await run(true);
+            expect(collections).toBe(2);
+            expect(Deno.exitCode).toBe(0);
+            expect(repaired).toContain('Repaired: Update plan links for ticket "0042"');
+            expect(await Deno.readTextFile(denied)).toBe(link('0042', 'active'));
+        } finally {
+            Installation.check = original.check;
+            Project.checkExecutable = original.executable;
+            Log.output = original.output;
+            Deno.exitCode = original.exit;
+            Fs.write = original.write;
+            await Deno.remove(root, { recursive: true });
         }
     },
 );

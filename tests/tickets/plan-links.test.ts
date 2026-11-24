@@ -4,6 +4,8 @@ import { expect } from '@std/expect';
 import { dirname, fromFileUrl, join } from '@std/path';
 import { scanTicketLinks, type TicketLinkTarget, updateTicketLinks } from '@tickets';
 
+import { inspectPlanTicketLinks } from '../../src/tickets/plan-links.ts';
+
 const signal = new AbortController().signal;
 
 async function workspace(
@@ -40,6 +42,62 @@ async function documentLock(root: string, filename: string): Promise<string> {
     );
     return join(root, '.coderail', '.locks', 'markdown', `${new Uint8Array(hash).toHex()}.lock`);
 }
+
+Deno.test(
+    'Plan link inspection reports eligible identities in one shared Markdown scan',
+    async () => {
+        await workspace(async (root, target) => {
+            const open = link('open');
+            const unresolved = link('closed', '0063-missing-ticket');
+            const doc = await put(
+                root,
+                'plans/overview.md',
+                [
+                    `[current](${link('closed')}#section)`,
+                    `[stale](${open})`,
+                    '',
+                    `[unresolved]: <${unresolved}>`,
+                    '',
+                    '[malformed](../tickets/open/not-a-ticket.md)',
+                    `![image](${open})`,
+                    `\`[code](${open})\``,
+                    '[other](../../outside/open/0055-update-links.md)',
+                ].join('\n'),
+            );
+            const mentions: unknown[] = [];
+            expect(
+                await inspectPlanTicketLinks(root, signal, (mention) => mentions.push(mention)),
+            ).toEqual([]);
+            expect(mentions).toEqual([
+                {
+                    document: doc,
+                    id: '0055',
+                    slug: 'update-links',
+                    destination: link('closed') + '#section',
+                    ticketPath: join('.coderail', 'tickets', 'closed', '0055-update-links.md'),
+                },
+                {
+                    document: doc,
+                    id: '0055',
+                    slug: 'update-links',
+                    destination: open,
+                    ticketPath: join('.coderail', 'tickets', 'open', '0055-update-links.md'),
+                },
+                {
+                    document: doc,
+                    id: '0063',
+                    slug: 'missing-ticket',
+                    destination: unresolved,
+                    ticketPath: join('.coderail', 'tickets', 'closed', '0063-missing-ticket.md'),
+                },
+            ]);
+            const scan = await scanTicketLinks(root, target, signal);
+            expect(scan.findings).toEqual([
+                { path: doc, destination: open, expectedDestination: link('closed') },
+            ]);
+        });
+    },
+);
 
 Deno.test(
     'Plan scan covers Markdown destinations and preserves all bytes outside edits',

@@ -1,9 +1,13 @@
+import { Conf } from '@conf';
+import { Fs } from '@fs';
+import { Log } from '@log';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
 import { runRepairs } from '../../../src/commands/doctor/repairs.ts';
 import { Tickets } from '../../../src/commands/doctor/tickets.ts';
 import type { DoctorFailure, DoctorRepair } from '../../../src/commands/doctor/types.ts';
+import { Activate } from '../../../src/commands/ticket/activate.ts';
 import { type Frontmatter, stringifyFrontmatter } from '../../../src/md/helpers/frontmatter.ts';
 
 const signal = new AbortController().signal;
@@ -706,6 +710,298 @@ Deno.test('tickets reject symlink destination parents and atomic destination rac
             expect(await Deno.readFile(source)).toEqual(bytes);
         } finally {
             Deno.link = link;
+            await Deno.remove(root, { recursive: true });
+        }
+    }
+});
+
+async function writePlan(root: string, contents: string, name = 'TICKETS.md'): Promise<string> {
+    const plans = join(root, '.coderail/plans');
+    await Deno.mkdir(plans, { recursive: true });
+    const plan = join(plans, name);
+    await Deno.writeTextFile(plan, contents);
+    return plan;
+}
+
+Deno.test(
+    'tickets report unresolved plan links without guessing from physical placement',
+    async () => {
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const readFile = Deno.readFile;
+        try {
+            await write(root, 'open/0012-custom-title.md');
+            const duplicate = await write(root, 'active/0020-custom-title.md', {
+                ...metadata,
+                id: '0020',
+                status: 'active',
+            });
+            await write(root, 'open/0020-custom-title.md', { ...metadata, id: '0020' });
+            await write(root, 'open/0030-custom-title.md', {
+                ...metadata,
+                id: '0030',
+                title: '',
+            });
+            const original = [
+                '[missing](../tickets/closed/9999-custom-title.md)',
+                '[ambiguous](../tickets/open/0020-custom-title.md)',
+                '[invalid](../tickets/active/0030-custom-title.md)',
+                '[wrong slug](../tickets/active/0012-other-title.md)',
+                '[current](./../tickets/open/0012-custom-title.md#x)',
+                '`[not a link](../tickets/open/8888-custom-title.md)`',
+            ].join('\n');
+            const plan = await writePlan(root, original);
+            const denied = await writePlan(root, 'Unreadable', 'denied.md');
+            Deno.readFile = (path, options) =>
+                path === denied
+                    ? Promise.reject(new Deno.errors.PermissionDenied('plan read denied'))
+                    : readFile(path, options);
+            const report = await Tickets.check(root, signal);
+            const mentions = report.failures.filter((failure) =>
+                failure.message.startsWith('Plan '),
+            );
+            expect(mentions.map(({ message }) => message).join('\n')).toContain(
+                `"${plan}": ticket link "../tickets/closed/9999-custom-title.md": Missing target "9999"`,
+            );
+            expect(mentions.map(({ message }) => message).join('\n')).toContain(
+                `Ambiguous target "0020": ${join(root, '.coderail/tickets/open/0020-custom-title.md')}, ${duplicate}`,
+            );
+            expect(mentions.map(({ message }) => message).join('\n')).toContain(
+                'Unusable target "0030"',
+            );
+            expect(mentions.map(({ message }) => message).join('\n')).toContain(
+                'No target with authoritative slug "other-title" for ticket "0012"',
+            );
+            expect(mentions.map(({ message }) => message).join('\n')).toContain(
+                `"${denied}": Cannot inspect plan links`,
+            );
+            expect(mentions.map(({ message }) => message).join('\n')).toContain('plan read denied');
+            expect(mentions).toHaveLength(5);
+            expect(
+                mentions.every(({ repairable, repair }) => !repairable && repair === undefined),
+            ).toBe(true);
+            expect(actions(report)).toEqual([]);
+            expect(await Deno.readTextFile(plan)).toBe(original);
+            await write(root, 'open/corrupt.md', { ...metadata, id: undefined });
+            expect(
+                (await Tickets.check(root, signal)).failures
+                    .map(({ message }) => message)
+                    .join('\n'),
+            ).toContain('Unavailable target "9999" (inventory incomplete)');
+        } finally {
+            Deno.readFile = readFile;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test('tickets keep both collected and newly occupied placement targets manual', async () => {
+    const root = await Deno.realPath(await Deno.makeTempDir());
+    try {
+        const source = await write(root, 'active/0012-custom-title.md');
+        const original = await Deno.readFile(source);
+        const open = join(root, '.coderail/tickets/open/0012-custom-title.md');
+        const content = '[ticket](../tickets/active/0012-custom-title.md)';
+        const plan = await writePlan(root, content);
+        const readOnly = await Tickets.check(root, signal);
+        const [placement, links] = readOnly.failures;
+        expect(placement?.message).toContain('Incorrect placement');
+        expect(links?.message).toContain(`Stale destination; expected ticket at "${open}"`);
+        expect(links?.repair).toBe(placement?.repair);
+        expect(actions(readOnly)).toHaveLength(1);
+        await Deno.mkdir(open, { recursive: true });
+        const blocked = await Tickets.check(root, signal);
+        expect(blocked.failures).toHaveLength(2);
+        expect(actions(blocked)).toEqual([]);
+        await expect(links?.repair?.apply(signal)).rejects.toThrow(
+            'Ticket relocation is no longer eligible',
+        );
+        expect(await Deno.readFile(source)).toEqual(original);
+        expect(await Deno.readTextFile(plan)).toBe(content);
+        expect((await Deno.lstat(open)).isDirectory).toBe(true);
+    } finally {
+        await Deno.remove(root, { recursive: true });
+    }
+});
+
+Deno.test(
+    'ticket link repair waits for the status command and uses the state it publishes',
+    async () => {
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const original = {
+            readFile: Deno.readFile,
+            temp: Fs.makeTempFile,
+            warn: Log.warn,
+            output: Log.output,
+        };
+        const scanStarted = Promise.withResolvers<void>();
+        const resumeScan = Promise.withResolvers<void>();
+        const contention = Promise.withResolvers<void>();
+        let activation: Promise<void> | undefined;
+        let repair: Promise<void> | undefined;
+        try {
+            const open = await write(root, 'open/0012-custom-title.md');
+            const plan = await writePlan(root, '[ticket](../tickets/closed/0012-custom-title.md)');
+            const alias = join(root, 'alias');
+            await Deno.symlink(root, alias, { type: 'dir' });
+            const [action] = actions(await Tickets.check(alias, signal));
+            expect(action?.description).toContain('Update plan links');
+            let attempted = false;
+            Deno.readFile = async (path, options) => {
+                if (path === plan && !attempted) {
+                    attempted = true;
+                    scanStarted.resolve();
+                    await resumeScan.promise;
+                    throw new Error('Status scan denied');
+                }
+                return original.readFile(path, options);
+            };
+            const lock = join(root, '.coderail/.locks/tickets/0012.lock');
+            Fs.makeTempFile = async (path) => {
+                try {
+                    return await original.temp(path);
+                } catch (error) {
+                    if (path === lock && error instanceof Deno.errors.AlreadyExists) {
+                        contention.resolve();
+                    }
+                    throw error;
+                }
+            };
+            const warnings: string[] = [];
+            Log.warn = (...messages) => {
+                warnings.push(messages.join(' '));
+            };
+            Log.output = () => {};
+            const activate = new Activate();
+            activation = activate.run({
+                parsedArguments: activate.parseArguments(['0012-custom-title.md']),
+                context: { currentWorkingDirectory: root, installRoot: root },
+                configuration: Conf.createConfiguration({
+                    verbose: false,
+                    quiet: false,
+                    help: false,
+                    version: false,
+                    noColor: true,
+                    nonInteractive: true,
+                }),
+                signal,
+            });
+            await Promise.race([
+                scanStarted.promise,
+                activation.then(() => {
+                    throw new Error('Status command completed before scanning');
+                }),
+            ]);
+            repair = (action as DoctorRepair).apply(signal);
+            await Promise.race([
+                contention.promise,
+                repair.then(() => {
+                    throw new Error('Doctor completed before contending for the lock');
+                }),
+            ]);
+            expect(await Deno.readTextFile(open)).toContain('status: "open"');
+            resumeScan.resolve();
+            await Promise.all([activation, repair]);
+            expect(warnings.join('\n')).toContain('Status scan denied');
+            await expect(Deno.lstat(open)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+            await expect(Deno.lstat(lock)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+            expect(await Deno.readTextFile(plan)).toBe(
+                '[ticket](../tickets/active/0012-custom-title.md)',
+            );
+            expect((await Tickets.check(root, signal)).failures).toEqual([]);
+        } finally {
+            resumeScan.resolve();
+            await Promise.allSettled([activation, repair]);
+            Deno.readFile = original.readFile;
+            Fs.makeTempFile = original.temp;
+            Log.warn = original.warn;
+            Log.output = original.output;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'ticket repair reports a fresh plan scan failure and still updates another document',
+    async () => {
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const readFile = Deno.readFile;
+        try {
+            const ticket = await write(root, 'open/0012-custom-title.md');
+            const original = '[ticket](../tickets/active/0012-custom-title.md)';
+            const denied = await writePlan(root, original, 'denied.md');
+            const other = await writePlan(root, original, 'other.md');
+            const pending = actions(await Tickets.check(root, signal));
+            expect(pending).toHaveLength(1);
+            const ticketBytes = await readFile(ticket);
+            const mtime = (await Deno.stat(ticket)).mtime;
+            Deno.readFile = (path, options) =>
+                path === denied
+                    ? Promise.reject(new Deno.errors.PermissionDenied('fresh read denied'))
+                    : readFile(path, options);
+            const [result] = await runRepairs(pending, signal);
+            expect(result?.error).toContain(`"${denied}": Cannot inspect plan links`);
+            expect(result?.error).toContain('fresh read denied');
+            expect(await Deno.readTextFile(denied)).toBe(original);
+            expect(await Deno.readTextFile(other)).toBe(original.replace('/active/', '/open/'));
+            expect(await readFile(ticket)).toEqual(ticketBytes);
+            expect((await Deno.stat(ticket)).mtime).toEqual(mtime);
+        } finally {
+            Deno.readFile = readFile;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test(
+    'ticket repair rejects a source changed to a symlink during the fresh plan scan',
+    async () => {
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const readFile = Deno.readFile;
+        try {
+            const source = await write(root, 'open/0012-custom-title.md');
+            const original = await readFile(source);
+            const body = '[ticket](../tickets/active/0012-custom-title.md)';
+            const plan = await writePlan(root, body);
+            const [action] = actions(await Tickets.check(root, signal));
+            const other = join(root, 'outside.md');
+            Deno.readFile = async (path, options) => {
+                if (path === plan) {
+                    await Deno.rename(source, other);
+                    await Deno.symlink(other, source);
+                }
+                return readFile(path, options);
+            };
+            await expect((action as DoctorRepair).apply(signal)).rejects.toThrow(
+                `Expected regular ticket file and directories at "${source}"`,
+            );
+            expect(await readFile(other)).toEqual(original);
+            expect((await Deno.lstat(source)).isSymlink).toBe(true);
+            expect(await Deno.readTextFile(plan)).toBe(body);
+        } finally {
+            Deno.readFile = readFile;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
+
+Deno.test('ticket repair does not move newly misplaced inputs', async () => {
+    for (const status of ['open', 'active']) {
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        try {
+            const filename = '0012-custom-title.md';
+            const source = await write(root, `${status}/${filename}`);
+            const body = '[ticket](../tickets/closed/0012-custom-title.md)';
+            const plan = await writePlan(root, body);
+            const [action] = actions(await Tickets.check(root, signal));
+            const newSource = join(root, '.coderail/tickets/closed', filename);
+            await Deno.mkdir(join(newSource, '..'), { recursive: true });
+            await Deno.rename(source, newSource);
+            await expect((action as DoctorRepair).apply(signal)).rejects.toThrow(
+                'Ticket relocation is no longer eligible',
+            );
+            expect(await Deno.readTextFile(plan)).toBe(body);
+            expect(await Deno.readTextFile(newSource)).toContain('status: "open"');
+        } finally {
             await Deno.remove(root, { recursive: true });
         }
     }
