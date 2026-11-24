@@ -249,3 +249,38 @@ Deno.test('Ticket activate rejects malformed identifiers during resolution', asy
         }
     });
 });
+
+Deno.test('Ticket activate maintains plan links and reports individual failures', async () => {
+    await withWorkspace(async (cwd, tickets) => {
+        await writeTicket(tickets, 'open');
+        const plans = join(cwd, '.coderail', 'plans');
+        await Deno.mkdir(plans);
+        const plan = join(plans, 'plan.md');
+        const blocked = join(plans, 'blocked.md');
+        const invalid = join(plans, 'invalid.md');
+        const content = '[Ticket](../tickets/open/0001-new-ticket.md)';
+        await Deno.writeTextFile(plan, content);
+        await Deno.writeTextFile(blocked, content);
+        await Deno.writeTextFile(join(plans, '.~blocked.md.lock'), 'external lock');
+        await Deno.writeFile(invalid, new Uint8Array([0xff]));
+        const warn = Log.warn;
+        const warnings: unknown[][] = [];
+        Log.warn = (...messages) => {
+            warnings.push(messages);
+        };
+        try {
+            const output = await activate(cwd, ['--json', '0001']);
+            expect(JSON.parse(output[0]?.[0] as string)[0].status).toBe('active');
+        } finally {
+            Log.warn = warn;
+        }
+        expect(await Deno.readTextFile(plan)).toBe(
+            '[Ticket](../tickets/active/0001-new-ticket.md)',
+        );
+        expect(await Deno.readTextFile(blocked)).toBe(content);
+        expect(warnings).toEqual([
+            [invalid, expect.stringContaining('Cannot inspect plan links')],
+            [blocked, expect.stringContaining('Cannot update plan links')],
+        ]);
+    });
+});

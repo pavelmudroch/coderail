@@ -63,7 +63,11 @@ async function withWorkspace(run: (cwd: string, tickets: string) => Promise<void
     }
 }
 
-async function close(cwd: string, args: string[]): Promise<unknown[][]> {
+async function close(
+    cwd: string,
+    args: string[],
+    signal = new AbortController().signal,
+): Promise<unknown[][]> {
     const command = new Close();
     const originalOutput = Log.output;
     const output: unknown[][] = [];
@@ -80,13 +84,48 @@ async function close(cwd: string, args: string[]): Promise<unknown[][]> {
                 verify: { rules: [] },
             },
             parsedArguments: command.parseArguments(args),
-            signal: new AbortController().signal,
+            signal,
         });
         return output;
     } finally {
         Log.output = originalOutput;
     }
 }
+
+Deno.test('Ticket close stops before mutation when plan discovery is interrupted', async () => {
+    await withWorkspace(async (cwd, tickets) => {
+        const source = await writeTicket(tickets, 'open');
+        const original = await Deno.readFile(source);
+        const plans = join(cwd, '.coderail', 'plans');
+        await Deno.mkdir(plans);
+        const plan = join(plans, 'related.md');
+        const destination = join(tickets, 'closed', '0001-new-ticket.md');
+        const content = '[Related](../tickets/open/0001-new-ticket.md)';
+        await Deno.writeTextFile(plan, content);
+        const controller = new AbortController();
+        const failure = new Error('Interrupted during discovery');
+        const readFile = Deno.readFile;
+        Deno.readFile = (path, options) => {
+            if (path === plan) {
+                controller.abort(failure);
+            }
+            return readFile(path, options);
+        };
+        try {
+            await expect(close(cwd, ['--json', '0001'], controller.signal)).rejects.toMatchObject({
+                cause: failure,
+            });
+        } finally {
+            Deno.readFile = readFile;
+        }
+        expect(await Deno.readFile(source)).toEqual(original);
+        expect(await Fs.exists(destination)).toBe(false);
+        expect(await Deno.readTextFile(plan)).toBe(content);
+        expect(await Fs.exists(join(cwd, '.coderail', '.locks', 'tickets', '0001.lock'))).toBe(
+            false,
+        );
+    });
+});
 
 async function writeTicket(tickets: string, status: string, id = '0001'): Promise<string> {
     const directory = join(tickets, status);
@@ -270,7 +309,14 @@ Deno.test('Ticket close records dismissed and duplicate reasons', async () => {
             if (reason === 'duplicate') {
                 args.push('--duplicate-of', '0002');
             }
+            const plans = join(cwd, '.coderail', 'plans');
+            await Deno.mkdir(plans);
+            const plan = join(plans, 'related.md');
+            await Deno.writeTextFile(plan, '[Related](../tickets/open/0001-new-ticket.md)');
             await close(cwd, args);
+            expect(await Deno.readTextFile(plan)).toBe(
+                '[Related](../tickets/closed/0001-new-ticket.md)',
+            );
             const markdown = await Md.parse(
                 await Fs.read(join(tickets, 'closed', '0001-new-ticket.md'), { text: true }),
             );
@@ -344,5 +390,40 @@ Deno.test('Ticket close normalizes duplicate targets and rejects self references
         );
         await markdown.content.cancel();
         expect(markdown.frontmatter['duplicate-of']).toBe('0002');
+    });
+});
+
+Deno.test('Ticket close maintains plan links and reports individual failures', async () => {
+    await withWorkspace(async (cwd, tickets) => {
+        await writeTicket(tickets, 'open');
+        const plans = join(cwd, '.coderail', 'plans');
+        await Deno.mkdir(plans);
+        const plan = join(plans, 'plan.md');
+        const blocked = join(plans, 'blocked.md');
+        const invalid = join(plans, 'invalid.md');
+        const content = '[Ticket](../tickets/open/0001-new-ticket.md)';
+        await Deno.writeTextFile(plan, content);
+        await Deno.writeTextFile(blocked, content);
+        await Deno.writeTextFile(join(plans, '.~blocked.md.lock'), 'external lock');
+        await Deno.writeFile(invalid, new Uint8Array([0xff]));
+        const warn = Log.warn;
+        const warnings: unknown[][] = [];
+        Log.warn = (...messages) => {
+            warnings.push(messages);
+        };
+        try {
+            const output = await close(cwd, ['--json', '0001']);
+            expect(JSON.parse(output[0]?.[0] as string)[0].status).toBe('closed');
+        } finally {
+            Log.warn = warn;
+        }
+        expect(await Deno.readTextFile(plan)).toBe(
+            '[Ticket](../tickets/closed/0001-new-ticket.md)',
+        );
+        expect(await Deno.readTextFile(blocked)).toBe(content);
+        expect(warnings).toEqual([
+            [invalid, expect.stringContaining('Cannot inspect plan links')],
+            [blocked, expect.stringContaining('Cannot update plan links')],
+        ]);
     });
 });

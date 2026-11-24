@@ -5,7 +5,13 @@ import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
-import { resolveTicket, TICKET_STATUS, withTicketLock } from '@tickets';
+import {
+    resolveTicket,
+    scanTicketLinks,
+    TICKET_STATUS,
+    updateTicketLinks,
+    withTicketLock,
+} from '@tickets';
 
 import { formatJson, formatText } from './helpers/format.ts';
 
@@ -126,6 +132,9 @@ export class Reopen implements Command<ReopenArguments> {
                 if (moving && (await Fs.exists(path))) {
                     throw new Error(`Ticket with "${path}" already exists.`);
                 }
+                const target = { id: ticket.id, slug: ticket.slug, path };
+                const scan = await scanTicketLinks(cwd, target, context.signal);
+                context.signal.throwIfAborted();
                 const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
                 let changed =
                     moving ||
@@ -155,6 +164,10 @@ export class Reopen implements Command<ReopenArguments> {
                     }
                 } else {
                     await markdown.content.cancel();
+                }
+                const warnings = await updateTicketLinks(cwd, target, scan, context.signal);
+                for (const warning of [...scan.warnings, ...warnings]) {
+                    Log.warn(warning.path, warning.message);
                 }
                 return resolveTicket(cwd, id);
             });

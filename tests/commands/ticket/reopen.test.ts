@@ -249,12 +249,20 @@ Deno.test('Ticket reopen removes closure fields from every status', async () => 
 Deno.test('Ticket reopen leaves an already open ticket unchanged', async () => {
     await withWorkspace(async (cwd, tickets) => {
         const source = await writeTicket(tickets, 'open');
-        const original = await Deno.readTextFile(source);
+        const timestamp = new Date('2020-01-01T00:00:00.000Z');
+        await Deno.utime(source, timestamp, timestamp);
+        const original = await Deno.readFile(source);
+        const plans = join(cwd, '.coderail', 'plans');
+        await Deno.mkdir(plans);
+        const plan = join(plans, 'stale.md');
+        await Deno.writeTextFile(plan, '[Stale](../tickets/closed/0001-new-ticket.md)');
         await reopen(cwd, ['0001']);
-        expect(await Deno.readTextFile(source)).toBe(original);
+        expect(await Deno.readFile(source)).toEqual(original);
+        expect((await Deno.stat(source)).mtime).toEqual(timestamp);
+        expect(await Deno.readTextFile(plan)).toBe('[Stale](../tickets/open/0001-new-ticket.md)');
         await writeTicket(tickets, 'closed', '0002');
         await reopen(cwd, ['0001', '-d', '0002']);
-        expect(await Deno.readTextFile(source)).toBe(original);
+        expect(await Deno.readFile(source)).toEqual(original);
         const markdown = await Md.parse(await Fs.read(source, { text: true }));
         markdown.frontmatter['duplicate-of'] = '0002';
         await Fs.write(source, Md.toStream(markdown));
@@ -344,5 +352,38 @@ Deno.test('Ticket reopen normalizes dependencies and rejects self references', a
         );
         await markdown.content.cancel();
         expect(markdown.frontmatter.dependencies).toEqual(['0002', '0003']);
+    });
+});
+
+Deno.test('Ticket reopen maintains plan links and reports individual failures', async () => {
+    await withWorkspace(async (cwd, tickets) => {
+        await writeTicket(tickets, 'closed');
+        const plans = join(cwd, '.coderail', 'plans');
+        await Deno.mkdir(plans);
+        const plan = join(plans, 'plan.md');
+        const blocked = join(plans, 'blocked.md');
+        const invalid = join(plans, 'invalid.md');
+        const content = '[Ticket](../tickets/closed/0001-new-ticket.md)';
+        await Deno.writeTextFile(plan, content);
+        await Deno.writeTextFile(blocked, content);
+        await Deno.writeTextFile(join(plans, '.~blocked.md.lock'), 'external lock');
+        await Deno.writeFile(invalid, new Uint8Array([0xff]));
+        const warn = Log.warn;
+        const warnings: unknown[][] = [];
+        Log.warn = (...messages) => {
+            warnings.push(messages);
+        };
+        try {
+            const output = await reopen(cwd, ['--json', '0001']);
+            expect(JSON.parse(output[0]?.[0] as string)[0].status).toBe('open');
+        } finally {
+            Log.warn = warn;
+        }
+        expect(await Deno.readTextFile(plan)).toBe('[Ticket](../tickets/open/0001-new-ticket.md)');
+        expect(await Deno.readTextFile(blocked)).toBe(content);
+        expect(warnings).toEqual([
+            [invalid, expect.stringContaining('Cannot inspect plan links')],
+            [blocked, expect.stringContaining('Cannot update plan links')],
+        ]);
     });
 });

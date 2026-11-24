@@ -17,7 +17,16 @@ export async function withTicketLock<T>(
     const id = extractId(identifier);
     const root = await Deno.realPath(resolve(projectRoot));
     const path = join(root, Path.CODERAIL_DIR, '.locks', Path.TICKETS_DIR, `${id}.lock`);
-    const lock = await acquireLock(path, `ticket ${id}`, signal);
+    return withOperationLock(path, `ticket ${id}`, signal, run);
+}
+
+export async function withOperationLock<T>(
+    path: string,
+    description: string,
+    signal: AbortSignal,
+    run: () => Promise<T>,
+): Promise<T> {
+    const lock = await acquireLock(path, description, signal);
     try {
         signal.throwIfAborted();
         return await run();

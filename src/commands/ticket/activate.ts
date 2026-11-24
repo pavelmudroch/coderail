@@ -5,7 +5,13 @@ import { Log } from '@log';
 import { Md } from '@md';
 import { Path } from '@path';
 import { join } from '@std/path';
-import { resolveTicket, TICKET_STATUS, withTicketLock } from '@tickets';
+import {
+    resolveTicket,
+    scanTicketLinks,
+    TICKET_STATUS,
+    updateTicketLinks,
+    withTicketLock,
+} from '@tickets';
 
 import { formatJson, formatText } from './helpers/format.ts';
 
@@ -105,12 +111,19 @@ export class Activate implements Command<ActivateArguments> {
                 if (await Fs.exists(path)) {
                     throw new Error(`Ticket with "${path}" already exists.`);
                 }
+                const target = { id: ticket.id, slug: ticket.slug, path };
+                const scan = await scanTicketLinks(cwd, target, context.signal);
+                context.signal.throwIfAborted();
                 await Fs.makeDirectory(directory);
                 const markdown = await Md.parse(await Fs.read(ticket.path, { text: true }));
                 markdown.frontmatter.status = TICKET_STATUS.ACTIVE;
                 markdown.frontmatter.updated_at = new Date().toISOString();
                 await Fs.write(path, Md.toStream(markdown));
                 await Deno.remove(ticket.path);
+                const warnings = await updateTicketLinks(cwd, target, scan, context.signal);
+                for (const warning of [...scan.warnings, ...warnings]) {
+                    Log.warn(warning.path, warning.message);
+                }
                 return resolveTicket(cwd, id);
             });
             if (context.parsedArguments.args.json) {

@@ -17,6 +17,8 @@
         "@install-manifest": "./src/install-manifest.ts",
         "@templates": "./src/templates.ts",
         "oxc-parser": "npm:oxc-parser@^0.153.0",
+        "micromark": "npm:micromark@4.0.2",
+        "micromark-util-decode-string": "npm:micromark-util-decode-string@2.0.1",
         "@project": "./src/project.ts",
         "@tickets": "./src/tickets.ts",
         "@installation": "./src/installation.ts"
