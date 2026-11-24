@@ -5,7 +5,7 @@ description: Delegate focused research to a subagent and return concise, evidenc
 
 ## Goal
 
-Delegate context-intensive research to a subagent. Investigate code, dependencies, documentation, standards, APIs, external sources, or alternative approaches.
+Delegate context-intensive research to a subagent `worker`. Investigate code, dependencies, documentation, standards, APIs, external sources, or alternative approaches.
 
 ## Boundary
 

@@ -5,7 +5,7 @@
 ## Start orchestration
 
 Initialize your Git project with `cr init` and configure its verification rules.
-Install or refresh the CodeRail skills with `cr install codex` or
+Install or refresh the CodeRail skills and subagents with `cr install codex` or
 `cr install claude`. Add `--local` to install for the initialized project.
 
 Open an agent session in the project with subagent support enabled. Invoke
@@ -17,10 +17,14 @@ needs permission to run project checks and make local Git commits.
 
 1. The orchestrator uses `cr ticket next --json` to find open tickets whose
    dependencies are satisfied.
-2. It assigns one ticket per implementation subagent and runs independent work
-   in parallel when the changes and verification can run safely together.
-3. A separate review subagent checks each completed ticket. Required in-scope
-   corrections reopen the ticket for another implementation attempt.
+2. It assigns one ticket per `implementer` subagent and runs independent work
+   in parallel when the changes and verification can run safely together. Each
+   implementer activates its ticket, completes its tasks, verifies its changes,
+   and closes the ticket after all tasks and checks pass.
+3. A separate `reviewer` subagent checks each completed ticket using the closed
+   ticket path, implementation baseline, and changed paths. Required in-scope
+   corrections reopen the ticket for another implementation attempt; independent
+   follow-up work is recorded through the `ticket` skill.
 4. The orchestrator stages approved ticket changes and invokes the commit skill.
    It serializes staging and commits that share a Git index and preserves
    unrelated changes. Pushing remains under your control.

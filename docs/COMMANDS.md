@@ -49,6 +49,11 @@ cr install claude
 The `orchestrate` skill delegates ready-ticket implementation, review, and
 commits. See the [automated implementation guide](AUTOMATION.md).
 
+Bundled subagents include `implementer` for implementing, verifying, and closing
+assigned tickets, `reviewer` for checking completed tickets, and `worker` for
+general delegated tasks. The `research` skill delegates its investigation to
+`worker`.
+
 Installation is global by default. Use `--local` from an initialized project to
 install into that project instead:
 

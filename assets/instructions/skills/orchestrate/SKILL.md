@@ -16,9 +16,8 @@ disable-model-invocation: true
 
 - Act as orchestrator. Delegate implementation and review; do not perform them directly.
 - Use `cr ticket next --json` as the source of available tickets.
-- Delegate one ticket per implementation subagent.
-- Instruct implementation subagents to invoke <skill>implement</skill> with the ticket path.
-- Give review subagents the closed ticket path, implementation baseline, and changed paths.
+- Spawn one `implementer` subagent per ticket with the ticket path.
+- Spawn a separate `reviewer` subagent for each completed implementation with the closed ticket path, implementation baseline, and changed paths.
 - Run implementations in parallel only when their changes cannot conflict.
 - Account for shared files, dependencies, verification outputs, and repository state when scheduling parallel work.
 - Avoid delegating the same ticket to multiple active subagents.
@@ -36,9 +35,9 @@ disable-model-invocation: true
 1. Run `cr ticket next --json` to discover available tickets.
 2. Exclude tickets already assigned to active subagents.
 3. Identify tickets safe for parallel implementation.
-4. Record the implementation baseline. Spawn implementation subagents with instructions to invoke <skill>implement</skill> with the ticket path and report the closed ticket path and changed paths.
+4. Record the implementation baseline. Spawn `implementer` subagents with the ticket path and instructions to report the closed ticket path and changed paths.
 5. Monitor active subagents and collect completed results.
-6. For each successfully implemented ticket, spawn a separate review subagent with instructions to invoke <skill>review</skill> with the closed ticket path, baseline, and changed paths.
+6. For each successfully implemented ticket, spawn a separate `reviewer` subagent with the closed ticket path, baseline, and changed paths.
 7. Inspect review results and ticket state.
 8. For approved implementations, stage related changes and invoke <skill>commit</skill>.
 9. For reopened tickets, return them to the available ticket pool.

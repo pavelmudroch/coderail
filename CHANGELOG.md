@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Dedicated `implementer` and `reviewer` subagents for ticket implementation,
+  verification, and review through the `orchestrate` skill.
+
+### Changed
+
+- The `research` skill delegates investigations to the `worker` subagent.
+
 ## [0.5.0] - 2026-11-22
 
 ### Added
