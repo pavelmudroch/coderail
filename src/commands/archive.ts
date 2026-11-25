@@ -2,7 +2,14 @@ import { Cli } from '@cli';
 import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Log } from '@log';
 
+import {
+    listArchiveBatches,
+    listArchivedPlans,
+    listArchivedTickets,
+    readArchivedFile,
+} from '../archive/history.ts';
 import { selectArchive } from '../archive/selection.ts';
+import { writeSync } from '../log/helpers/write-sync.ts';
 
 type ArchiveArguments = {
     help: boolean;
@@ -39,6 +46,10 @@ export class Archive implements Command<ArchiveArguments> {
             '',
             'Commands:',
             '  preview              Show which tickets and plans can be archived.',
+            '  list                 List retained archive batches.',
+            '  plans <batch-id>     List archived plans and their artifacts.',
+            '  tickets <batch-id>   List archived tickets.',
+            '  read <path>          Read an archived file by its batch-relative listing path.',
         ].join('\n');
     }
 
@@ -46,6 +57,11 @@ export class Archive implements Command<ArchiveArguments> {
         switch (args.command) {
             case 'preview':
                 return new Preview();
+            case 'list':
+            case 'plans':
+            case 'tickets':
+            case 'read':
+                return new BrowseArchive(args.command);
             case undefined:
                 Cli.raiseUsageError('Required archive subcommand is missing.', this);
             default:
@@ -56,6 +72,118 @@ export class Archive implements Command<ArchiveArguments> {
     run(): Promise<void> {
         return Promise.resolve();
     }
+}
+
+type BrowseCommand = 'list' | 'plans' | 'tickets' | 'read';
+type BrowseArguments = { help: boolean; json: boolean; target: string };
+const browseUsage = {
+    list: 'cr archive list [--help] [--json]',
+    plans: 'cr archive plans [--help] [--json] <batch-id>',
+    tickets: 'cr archive tickets [--help] [--json] <batch-id>',
+    read: 'cr archive read [--help] <batch-id>/<path-to-file>',
+};
+
+export class BrowseArchive implements Command<BrowseArguments> {
+    readonly requiresInit = false;
+
+    constructor(private readonly command: BrowseCommand) {}
+
+    parseArguments(originalArgs: readonly string[]): ParsedArguments<BrowseArguments> {
+        const args = { help: false, json: false, target: '' };
+        for (const arg of originalArgs) {
+            if (arg === '-h' || arg === '--help') {
+                args.help = true;
+                return { args, rest: [] };
+            }
+            if (arg === '--json') {
+                args.json = true;
+                continue;
+            }
+            if (
+                arg === '' ||
+                arg.startsWith('-') ||
+                this.command === 'list' ||
+                args.target !== ''
+            ) {
+                Cli.raiseUsageError(`Unexpected archive ${this.command} argument "${arg}".`, this);
+            }
+            args.target = arg;
+        }
+        if (this.command !== 'list' && args.target === '') {
+            const required = this.command === 'read' ? 'an archived file path' : 'a batch ID';
+            Cli.raiseUsageError(`Archive ${this.command} requires ${required}.`, this);
+        }
+        return { args, rest: [] };
+    }
+
+    shouldHandleHelp({ args }: ParsedArguments<BrowseArguments>): boolean {
+        return args.help;
+    }
+
+    getUsage(): string {
+        return `Usage:\n  ${browseUsage[this.command]}`;
+    }
+
+    getSubcommand(): undefined {
+        return undefined;
+    }
+
+    async run({ context, parsedArguments, signal }: RunContext<BrowseArguments>): Promise<void> {
+        const root = context.currentWorkingDirectory;
+        const { target, json } = parsedArguments.args;
+        switch (this.command) {
+            case 'list': {
+                const batches = await listArchiveBatches(root, signal);
+                printArchiveListing(batches, json, () => batches, 'No archive batches.');
+                break;
+            }
+            case 'plans': {
+                const plans = await listArchivedPlans(root, target, signal);
+                printArchiveListing(
+                    plans,
+                    json,
+                    () =>
+                        plans.flatMap(({ title, path, parent, artifacts }) => [
+                            `${title}  ${path}`,
+                            ...(parent === null ? [] : [`  Parent: ${parent}`]),
+                            ...artifacts.map((artifact) => `  ${artifact}`),
+                        ]),
+                    `No archived plans in "${target}".`,
+                );
+                break;
+            }
+            case 'tickets': {
+                const tickets = await listArchivedTickets(root, target, signal);
+                printArchiveListing(
+                    tickets,
+                    json,
+                    () => tickets.map(({ id, title, path }) => `${id}  ${title}  ${path}`),
+                    `No archived tickets in "${target}".`,
+                );
+                break;
+            }
+            case 'read':
+                writeSync(Deno.stdout, await readArchivedFile(root, target, signal));
+                break;
+        }
+    }
+}
+
+function printArchiveListing(
+    items: readonly unknown[],
+    json: boolean,
+    lines: () => string[],
+    emptyMessage: string,
+): void {
+    if (json) {
+        writeArchiveJson(items);
+    } else {
+        Log.output(items.length === 0 ? emptyMessage : lines().join('\n'));
+    }
+}
+
+export function writeArchiveJson(value: unknown): void {
+    writeSync(Deno.stdout, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 type PreviewArguments = { help: boolean; json: boolean };
@@ -102,7 +230,7 @@ export class Preview implements Command<PreviewArguments> {
         const { repositoryRoot, currentWorkingDirectory } = context;
         const selection = await selectArchive(repositoryRoot ?? currentWorkingDirectory, signal);
         if (parsedArguments.args.json) {
-            Log.output(JSON.stringify(selection, null, 2));
+            writeArchiveJson(selection);
             return;
         }
         const lines = [

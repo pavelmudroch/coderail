@@ -2,11 +2,12 @@
 id: "0059"
 slug: "browse-retained-archive-batches"
 title: "Browse retained archive batches"
-status: "open"
+status: "closed"
 created_at: "2026-11-25T12:10:51.922Z"
-updated_at: "2026-11-25T12:10:51.922Z"
+updated_at: "2026-11-25T12:44:28.142Z"
 dependencies:
   - "0058"
+reason: "done"
 ---
 
 # Browse retained archive batches
@@ -17,9 +18,9 @@ that the listing and read commands already understand.
 
 ## Tasks
 
-1. [ ] Add browsing tests using committed archive fixtures
-2. [ ] Read the local archive ref and tree
-3. [ ] Expose archive listings and file reads
+1. [x] Add browsing tests using committed archive fixtures
+2. [x] Read the local archive ref and tree
+3. [x] Expose archive listings and file reads
 
 ## Task details
 
@@ -58,6 +59,19 @@ plans, and numeric IDs, titles and paths for tickets. Use the existing
 
 Validation covers both listing formats, reusable paths, and file output free
 of headers and wrappers.
+
+## Review findings
+
+- Archive JSON listings append a terminal clear sequence even with
+  `--no-color`. In a committed fixture, `cr --no-color archive --json list`
+  produces `[\n  "2026-11-25_outer"\n]\x1b[0K\n`, which fails direct JSON
+  parsing. Emit plain JSON and exercise parsing the raw CLI stdout for all three
+  listing commands. The current fixture strips the terminal escape first.
+- Browsing prefers the nearest Coderail project path over the command working
+  directory when invoking Git. From a nested independent Git checkout without
+  its own `.coderail`, the CLI lists the enclosing project's archive instead
+  of the current checkout's empty archive. Let Git discover its repository
+  from the command working directory, and cover nested independent checkouts.
 
 ## References
 

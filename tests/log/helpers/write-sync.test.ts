@@ -33,3 +33,18 @@ Deno.test('writeSync skips empty messages and rejects writes without progress', 
     expect(() => writeSync(stream, 'hello')).toThrow('Unable to write log output');
     expect(calls).toBe(1);
 });
+
+Deno.test('writeSync preserves binary output exactly', () => {
+    const bytes = new Uint8Array([0, 255, 13, 10]);
+    const written: number[] = [];
+    writeSync(
+        {
+            writeSync(buffer): number {
+                written.push(...buffer.subarray(0, 1));
+                return 1;
+            },
+        },
+        bytes,
+    );
+    expect(new Uint8Array(written)).toEqual(bytes);
+});
