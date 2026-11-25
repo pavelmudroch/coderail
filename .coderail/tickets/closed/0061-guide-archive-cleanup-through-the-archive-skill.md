@@ -2,11 +2,12 @@
 id: "0061"
 slug: "guide-archive-cleanup-through-the-archive-skill"
 title: "Guide archive cleanup through the archive skill"
-status: "open"
+status: "closed"
 created_at: "2026-11-25T12:10:57.600Z"
-updated_at: "2026-11-25T12:10:57.600Z"
+updated_at: "2026-11-25T13:05:15.593Z"
 dependencies:
   - "0060"
+reason: "done"
 ---
 
 # Guide archive cleanup through the archive skill
@@ -16,8 +17,8 @@ cleanup after explicit approval in the harness.
 
 ## Tasks
 
-1. [ ] Write the archive skill workflow
-2. [ ] Validate skill discovery and command handoff
+1. [x] Write the archive skill workflow
+2. [x] Validate skill discovery and command handoff
 
 ## Task details
 
