@@ -2,6 +2,7 @@ import { Cli } from '@cli';
 import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Log } from '@log';
 
+import { applyArchive } from '../archive/apply.ts';
 import {
     listArchiveBatches,
     listArchivedPlans,
@@ -46,6 +47,7 @@ export class Archive implements Command<ArchiveArguments> {
             '',
             'Commands:',
             '  preview              Show which tickets and plans can be archived.',
+            '  apply [--yes] <batch-name> <description>  Record and remove eligible files.',
             '  list                 List retained archive batches.',
             '  plans <batch-id>     List archived plans and their artifacts.',
             '  tickets <batch-id>   List archived tickets.',
@@ -57,6 +59,8 @@ export class Archive implements Command<ArchiveArguments> {
         switch (args.command) {
             case 'preview':
                 return new Preview();
+            case 'apply':
+                return new Apply();
             case 'list':
             case 'plans':
             case 'tickets':
@@ -184,6 +188,115 @@ function printArchiveListing(
 
 export function writeArchiveJson(value: unknown): void {
     writeSync(Deno.stdout, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+type ApplyArguments = {
+    help: boolean;
+    json: boolean;
+    yes: boolean;
+    name: string;
+    description: string;
+};
+
+export class Apply implements Command<ApplyArguments> {
+    readonly requiresInit = true;
+
+    parseArguments(originalArgs: readonly string[]): ParsedArguments<ApplyArguments> {
+        const args = { help: false, json: false, yes: false, name: '', description: '' };
+        const positional = [];
+        let options = true;
+        for (const arg of originalArgs) {
+            if (options) {
+                switch (arg) {
+                    case '--':
+                        options = false;
+                        continue;
+                    case '-h':
+                    case '--help':
+                        args.help = true;
+                        return { args, rest: [] };
+                    case '--json':
+                        args.json = true;
+                        continue;
+                    case '--yes':
+                        args.yes = true;
+                        continue;
+                }
+                if (arg.startsWith('-')) {
+                    Cli.raiseUsageError(`Unknown archive apply option "${arg}".`, this);
+                }
+            }
+            positional.push(arg);
+        }
+        if (positional.length !== 2) {
+            Cli.raiseUsageError('Archive apply requires a batch name and a description.', this);
+        }
+        [args.name, args.description] = positional as [string, string];
+        return { args, rest: [] };
+    }
+
+    shouldHandleHelp({ args }: ParsedArguments<ApplyArguments>): boolean {
+        return args.help;
+    }
+
+    getUsage(): string {
+        return 'Usage:\n  cr archive apply [--help] [--json] [--yes] <batch-name> <description>';
+    }
+
+    getSubcommand(): undefined {
+        return undefined;
+    }
+
+    async run({
+        context,
+        configuration,
+        parsedArguments,
+        signal,
+    }: RunContext<ApplyArguments>): Promise<void> {
+        const { repositoryRoot, currentWorkingDirectory } = context;
+        const { name, description, yes, json } = parsedArguments.args;
+        const confirm = (): boolean => {
+            writeSync(
+                Deno.stderr,
+                'Pause source edits and ticket or plan updates until archive apply finishes.\n',
+            );
+            if (yes) {
+                return true;
+            }
+            if (configuration.nonInteractive || Log.nonInteractive) {
+                throw new Error(
+                    'Archive apply requires approval. Run in a terminal or use --yes after approval.',
+                );
+            }
+            return Log.confirm('Record and remove the eligible archive files?', { default: false });
+        };
+        const result = await applyArchive(
+            repositoryRoot ?? currentWorkingDirectory,
+            name,
+            description,
+            confirm,
+            signal,
+            currentWorkingDirectory,
+        ).catch((error: unknown) => {
+            if (signal.aborted) {
+                Log.error(error);
+            }
+            throw error;
+        });
+        if (json) {
+            writeArchiveJson(result);
+        } else if (result.status === 'applied') {
+            Log.output(
+                `Recorded archive batch ${result.batchId} at ${result.archiveCommit}. Removed ${result.paths.length} source files.`,
+            );
+        } else {
+            Log.output(
+                result.status === 'empty'
+                    ? 'No eligible files to archive.'
+                    : 'Archive apply declined.',
+            );
+        }
+    }
 }
 
 type PreviewArguments = { help: boolean; json: boolean };

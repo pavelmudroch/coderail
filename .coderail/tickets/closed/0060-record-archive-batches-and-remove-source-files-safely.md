@@ -2,12 +2,13 @@
 id: "0060"
 slug: "record-archive-batches-and-remove-source-files-safely"
 title: "Record archive batches and remove source files safely"
-status: "open"
+status: "closed"
 created_at: "2026-11-25T12:10:54.932Z"
-updated_at: "2026-11-25T12:10:54.932Z"
+updated_at: "2026-11-25T13:00:23.838Z"
 dependencies:
   - "0058"
   - "0059"
+reason: "done"
 ---
 
 # Record archive batches and remove source files safely
@@ -17,10 +18,10 @@ before Coderail removes its source files from the working tree.
 
 ## Tasks
 
-1. [ ] Add apply, concurrency and rollback tests
-2. [ ] Validate batch inputs and obtain approval
-3. [ ] Package and commit the archive batch
-4. [ ] Remove source files with guarded rollback
+1. [x] Add apply, concurrency and rollback tests
+2. [x] Validate batch inputs and obtain approval
+3. [x] Package and commit the archive batch
+4. [x] Remove source files with guarded rollback
 
 ## Task details
 
