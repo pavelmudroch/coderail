@@ -32,45 +32,55 @@ type LinkEdit = {
     expectedDestination: string;
 };
 
-type PlanTicketLink = {
+type DocumentTicketLink = {
     id: string;
     slug: string;
     document: string;
     destination: string;
     ticketPath: string;
+    requiresDirectory: boolean;
 };
 
-export function inspectPlanTicketLinks(
+export function inspectDocumentTicketLinks(
     projectRoot: string,
+    source: 'plan' | 'ticket',
     signal: AbortSignal,
-    inspect: (link: PlanTicketLink) => void,
+    inspect: (link: DocumentTicketLink) => void,
 ): Promise<LinkWarning[]> {
+    const tickets = source === 'ticket';
     return inspectMarkdownDocuments(
         projectRoot,
-        Path.PLANS_DIR,
+        tickets ? Path.TICKETS_DIR : Path.PLANS_DIR,
         signal,
         (content, document, root) => {
-            for (const link of markdownLinkDestinations(content, document, [
-                join(root, Path.CODERAIL_DIR, Path.TICKETS_DIR),
-            ])) {
+            for (const link of markdownLinkDestinations(
+                content,
+                document,
+                [join(root, Path.CODERAIL_DIR, Path.TICKETS_DIR)],
+                tickets,
+            )) {
                 const match = ticketFilenamePattern.exec(basename(link.path));
                 if (match) {
                     inspect({
                         id: match[1] as string,
                         slug: match[2] as string,
                         document,
-                        destination: isAbsolute(
-                            decodeURIComponent(
-                                decodeString(link.destination.slice(0, link.suffix)),
-                            ),
-                        )
-                            ? planTicketDestination(document, link.path, link.destination)
-                            : link.destination,
+                        destination:
+                            !tickets &&
+                            isAbsolute(
+                                decodeURIComponent(
+                                    decodeString(link.destination.slice(0, link.suffix)),
+                                ),
+                            )
+                                ? planTicketDestination(document, link.path, link.destination)
+                                : link.destination,
                         ticketPath: relative(root, link.path),
+                        requiresDirectory: link.requiresDirectory,
                     });
                 }
             }
         },
+        tickets ? 'Cannot inspect ticket links' : 'Cannot inspect plan links',
     );
 }
 
@@ -131,6 +141,7 @@ async function inspectMarkdownDocuments(
     sourceDirectory: string,
     signal: AbortSignal,
     inspect: (content: string, document: string, root: string) => void,
+    failure = 'Cannot inspect plan links',
 ): Promise<LinkWarning[]> {
     signal.throwIfAborted();
     const warnings: LinkWarning[] = [];
@@ -142,18 +153,18 @@ async function inspectMarkdownDocuments(
     } catch (error) {
         signal.throwIfAborted();
         if (!(error instanceof Deno.errors.NotFound)) {
-            warnings.push(warning(source, 'Cannot inspect plan links', error));
+            warnings.push(warning(source, failure, error));
         }
         return warnings;
     }
 
-    for await (const path of markdownFiles(directory, warnings, signal)) {
+    for await (const path of markdownFiles(directory, warnings, signal, failure)) {
         try {
             const doc = await planFile(directory, path);
             const content = await readMarkdown(doc);
             inspect(content, doc, root);
         } catch (error) {
-            warnings.push(warning(path, 'Cannot inspect plan links', error));
+            warnings.push(warning(path, failure, error));
         }
     }
     signal.throwIfAborted();
@@ -215,20 +226,21 @@ async function* markdownFiles(
     directory: string,
     warnings: LinkWarning[],
     signal: AbortSignal,
+    failure: string,
 ): AsyncGenerator<string> {
     try {
         for await (const entry of Deno.readDir(directory)) {
             signal.throwIfAborted();
             const path = join(directory, entry.name);
             if (entry.isDirectory) {
-                yield* markdownFiles(path, warnings, signal);
+                yield* markdownFiles(path, warnings, signal, failure);
             } else if (entry.isFile && /\.md$/i.test(entry.name)) {
                 yield path;
             }
         }
     } catch (error) {
         signal.throwIfAborted();
-        warnings.push(warning(directory, 'Cannot inspect plan links', error));
+        warnings.push(warning(directory, failure, error));
     }
 }
 
@@ -264,24 +276,37 @@ export function planTicketDestination(document: string, target: string, current:
     return path + current.slice(destinationSuffix(current));
 }
 
+export function rewriteTicketDocumentLinks(
+    content: string,
+    document: string,
+    root: string,
+    target: TicketLinkTarget,
+): string {
+    return applyLinkEdits(content, ticketLinkEdits(content, document, root, target, true));
+}
+
 function ticketLinkEdits(
     content: string,
     doc: string,
     root: string,
     target: TicketLinkTarget,
+    ticketDocument = false,
 ): LinkEdit[] {
     const filename = `${target.id}-${target.slug}.md`;
     const edits: LinkEdit[] = [];
-    for (const { start, end, destination, path } of markdownLinkDestinations(content, doc, [
-        join(root, Path.CODERAIL_DIR, Path.TICKETS_DIR),
-    ])) {
+    for (const { start, end, destination, path, requiresDirectory } of markdownLinkDestinations(
+        content,
+        doc,
+        [join(root, Path.CODERAIL_DIR, Path.TICKETS_DIR)],
+        ticketDocument,
+    )) {
         if (basename(path) === filename) {
             edits.push({
                 start,
                 end,
                 destination,
                 expectedDestination:
-                    path === target.path
+                    path === target.path && !(ticketDocument && requiresDirectory)
                         ? destination
                         : planTicketDestination(doc, target.path, destination),
             });

@@ -2,6 +2,9 @@ import { expect } from '@std/expect';
 import { dirname, join } from '@std/path';
 
 import { selectArchive } from '../../src/archive/selection.ts';
+import { runRepairs } from '../../src/commands/doctor/repairs.ts';
+import { Tickets } from '../../src/commands/doctor/tickets.ts';
+import type { DoctorRepair } from '../../src/commands/doctor/types.ts';
 
 const signal = new AbortController().signal;
 
@@ -219,6 +222,100 @@ Deno.test('preview ignores ordinary documentation under tickets as destinations'
             ]);
         },
     );
+});
+
+Deno.test('doctor repairs stale ticket-to-ticket links that block archive preview', async () => {
+    const source = '.coderail/tickets/closed/0002-ticket-0002.md';
+    const current = '0001-ticket-0001.md';
+    const stale = '../open/0001-ticket-0001.md?view=plain#details';
+    const body = [
+        `[Stale](${stale})`,
+        `![File linked as a directory](${current}/#details)`,
+        '[Missing](9999-missing.md)',
+        '[Wrong slug](0001-wrong.md)',
+        `[Current](${current})`,
+        `\`[Example](${stale})\``,
+    ].join('\r\n');
+    const sourceTicket = ticket('0002', 'closed', '', body);
+    await withProject({ ...ticket('0001', 'closed'), ...sourceTicket }, async (root) => {
+        const repairs = new Map<string, DoctorRepair>();
+        await assertReadOnly(root, async () => {
+            await expect(selectArchive(root, signal)).rejects.toThrow(
+                `Stale archive link in "${source}": "${stale}". Run "cr doctor"`,
+            );
+            const { failures } = await Tickets.check(root, signal);
+            expect(failures).toHaveLength(4);
+            for (const [index, [message, destination, label, value]] of [
+                [
+                    'Stale ticket link · 0001',
+                    stale,
+                    'Expected link',
+                    `${current}?view=plain#details`,
+                ],
+                [
+                    'Stale ticket link · 0001',
+                    `${current}/#details`,
+                    'Expected link',
+                    `${current}#details`,
+                ],
+                [
+                    'Unresolved ticket link · 9999',
+                    '9999-missing.md',
+                    'Target',
+                    'Missing target "9999"',
+                ],
+                [
+                    'Unresolved ticket link · 0001',
+                    '0001-wrong.md',
+                    'Target',
+                    `Ticket has authoritative slug "ticket-0001" at "${join('.coderail', 'tickets', 'closed', current)}"`,
+                ],
+            ].entries()) {
+                expect(failures[index]).toMatchObject({
+                    message,
+                    details: [
+                        { label: 'Ticket', value: join(source) },
+                        { label: 'Current link', value: destination },
+                        { label, value },
+                    ],
+                    repairable: index < 2,
+                });
+                const repair = failures[index]?.repair;
+                if (repair !== undefined) {
+                    repairs.set(repair.key, repair);
+                }
+            }
+        });
+
+        expect(repairs.size).toBe(1);
+        expect(await runRepairs([...repairs.values()], signal)).toEqual([
+            {
+                key: 'ticket-link:0002:0001',
+                description: 'Update links from ticket "0002" to ticket "0001"',
+            },
+        ]);
+        const repaired = await Deno.readTextFile(join(root, source));
+        expect(repaired).toBe(
+            sourceTicket[source]
+                ?.replace(stale, `${current}?view=plain#details`)
+                .replace(`${current}/#details`, `${current}#details`),
+        );
+        expect((await Tickets.check(root, signal)).failures.map(({ message }) => message)).toEqual([
+            'Unresolved ticket link · 9999',
+            'Unresolved ticket link · 0001',
+        ]);
+        await write(
+            root,
+            source,
+            repaired.replace('[Missing](9999-missing.md)\r\n[Wrong slug](0001-wrong.md)\r\n', ''),
+        );
+        await git(root, 'commit', '-qam', 'Correct ticket links', '--no-gpg-sign');
+        expect((await Tickets.check(root, signal)).failures).toEqual([]);
+        expect((await selectArchive(root, signal)).eligible[0]?.tickets).toEqual([
+            '.coderail/tickets/closed/0001-ticket-0001.md',
+            source,
+        ]);
+    });
 });
 
 for (const [label, link] of [

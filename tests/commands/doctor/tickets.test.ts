@@ -3,6 +3,7 @@ import { Fs } from '@fs';
 import { Log } from '@log';
 import { expect } from '@std/expect';
 import { join, relative } from '@std/path';
+import { withTicketLock } from '@tickets';
 
 import { runRepairs } from '../../../src/commands/doctor/repairs.ts';
 import { Tickets } from '../../../src/commands/doctor/tickets.ts';
@@ -841,6 +842,73 @@ Deno.test('tickets keep both collected and newly occupied placement targets manu
         await Deno.remove(root, { recursive: true });
     }
 });
+
+Deno.test(
+    'ticket document repair waits for the source ticket lock and edits its current file',
+    async () => {
+        const root = await Deno.realPath(await Deno.makeTempDir());
+        const original = { temp: Fs.makeTempFile, write: Fs.write };
+        const contended = Promise.withResolvers<void>();
+        const sourceLock = join(root, '.coderail/.locks/tickets/0012.lock');
+        const targetLock = join(root, '.coderail/.locks/tickets/0001.lock');
+        let repair: Promise<void> | undefined;
+        try {
+            const oldSource = await write(root, 'open/0012-custom-title.md');
+            const stale = '[Target](0001-custom-title.md#details)\r\n';
+            await Deno.writeTextFile(oldSource, stale, { append: true });
+            await write(root, 'closed/0001-custom-title.md', {
+                ...metadata,
+                id: '0001',
+                status: 'closed',
+                reason: 'done',
+            });
+            const [action] = actions(await Tickets.check(root, signal));
+            expect(action?.key).toBe('ticket-link:0012:0001');
+            Fs.makeTempFile = async (path) => {
+                try {
+                    return await original.temp(path);
+                } catch (error) {
+                    if (path === sourceLock && error instanceof Deno.errors.AlreadyExists) {
+                        contended.resolve();
+                    }
+                    throw error;
+                }
+            };
+            Fs.write = async (path, content) => {
+                expect((await Deno.lstat(sourceLock)).isFile).toBe(true);
+                expect((await Deno.lstat(targetLock)).isFile).toBe(true);
+                await original.write(path, content);
+            };
+            const updated = await withTicketLock(root, '0012', signal, async () => {
+                repair = (action as DoctorRepair).apply(signal);
+                await Promise.race([
+                    contended.promise,
+                    repair.then(() => {
+                        throw new Error('Doctor completed before contending for the source lock');
+                    }),
+                ]);
+                const active = await write(root, 'active/0012-custom-title.md', {
+                    ...metadata,
+                    status: 'active',
+                });
+                await Deno.writeTextFile(active, `${stale}New text.\r\n`, { append: true });
+                await Deno.remove(oldSource);
+                return active;
+            });
+            await repair;
+            expect(await Deno.readTextFile(updated)).toContain(
+                '[Target](../closed/0001-custom-title.md#details)\r\nNew text.\r\n',
+            );
+            await expect(Deno.lstat(oldSource)).rejects.toBeInstanceOf(Deno.errors.NotFound);
+            expect((await Tickets.check(root, signal)).failures).toEqual([]);
+        } finally {
+            await Promise.allSettled([repair]);
+            Fs.makeTempFile = original.temp;
+            Fs.write = original.write;
+            await Deno.remove(root, { recursive: true });
+        }
+    },
+);
 
 Deno.test(
     'ticket link repair waits for the status command and uses the state it publishes',

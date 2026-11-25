@@ -73,8 +73,8 @@ still produce exit 1 after recheck and guarded placement regressions pass.
 ## References
 
 - [Agreed doctor integration](../../plans/update-ticket-links/IDEA.md)
-- [Ticket 0055](../open/0055-update-plan-links-when-tickets-change-status.md)
-- [Ticket 0054](../open/0054-serialize-status-changes-for-each-ticket.md)
+- [Ticket 0055](0055-update-plan-links-when-tickets-change-status.md)
+- [Ticket 0054](0054-serialize-status-changes-for-each-ticket.md)
 - [Existing placement repair ticket](../closed/0046-repair-ticket-placement-from-authoritative-frontmatter.md)
 - [Doctor ticket checks](../../../src/commands/doctor/tickets.ts)
 - [Doctor command](../../../src/commands/doctor.ts)

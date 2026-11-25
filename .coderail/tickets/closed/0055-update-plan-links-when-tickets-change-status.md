@@ -115,7 +115,7 @@ maintenance after an independent document failure.
 ## References
 
 - [Agreed design and public interfaces](../../plans/update-ticket-links/IDEA.md)
-- [Ticket 0054](../open/0054-serialize-status-changes-for-each-ticket.md)
+- [Ticket 0054](0054-serialize-status-changes-for-each-ticket.md)
 - [Status commands](../../../src/commands/ticket/)
 - [Ticket exports](../../../src/tickets.ts)
 - [Plan path constants](../../../src/path.ts)

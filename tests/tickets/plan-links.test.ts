@@ -4,7 +4,7 @@ import { expect } from '@std/expect';
 import { dirname, fromFileUrl, join } from '@std/path';
 import { scanTicketLinks, type TicketLinkTarget, updateTicketLinks } from '@tickets';
 
-import { inspectMarkdownLinks, inspectPlanTicketLinks } from '../../src/tickets/plan-links.ts';
+import { inspectDocumentTicketLinks, inspectMarkdownLinks } from '../../src/tickets/plan-links.ts';
 
 const signal = new AbortController().signal;
 
@@ -127,7 +127,9 @@ Deno.test(
             );
             const mentions: unknown[] = [];
             expect(
-                await inspectPlanTicketLinks(root, signal, (mention) => mentions.push(mention)),
+                await inspectDocumentTicketLinks(root, 'plan', signal, (mention) =>
+                    mentions.push(mention),
+                ),
             ).toEqual([]);
             expect(mentions).toEqual([
                 {
@@ -135,6 +137,7 @@ Deno.test(
                     id: '0055',
                     slug: 'update-links',
                     destination: link('closed') + '#section',
+                    requiresDirectory: false,
                     ticketPath: join('.coderail', 'tickets', 'closed', '0055-update-links.md'),
                 },
                 {
@@ -142,6 +145,7 @@ Deno.test(
                     id: '0055',
                     slug: 'update-links',
                     destination: open,
+                    requiresDirectory: false,
                     ticketPath: join('.coderail', 'tickets', 'open', '0055-update-links.md'),
                 },
                 {
@@ -149,6 +153,7 @@ Deno.test(
                     id: '0063',
                     slug: 'missing-ticket',
                     destination: unresolved,
+                    requiresDirectory: false,
                     ticketPath: join('.coderail', 'tickets', 'closed', '0063-missing-ticket.md'),
                 },
             ]);
@@ -157,7 +162,7 @@ Deno.test(
                 const original = await Deno.readTextFile(doc);
                 await Deno.writeTextFile(doc, `[absolute](${absolute}?view=plain#section)`);
                 const destinations: string[] = [];
-                await inspectPlanTicketLinks(root, signal, ({ destination }) =>
+                await inspectDocumentTicketLinks(root, 'plan', signal, ({ destination }) =>
                     destinations.push(destination),
                 );
                 expect(destinations).toEqual([`${open}?view=plain#section`]);
