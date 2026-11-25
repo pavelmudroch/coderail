@@ -91,6 +91,17 @@ Deno.test(
                     ticketPath: join('.coderail', 'tickets', 'closed', '0063-missing-ticket.md'),
                 },
             ]);
+            if (Deno.build.os !== 'windows') {
+                const absolute = join(root, '.coderail', 'tickets', 'open', '0055-update-links.md');
+                const original = await Deno.readTextFile(doc);
+                await Deno.writeTextFile(doc, `[absolute](${absolute}?view=plain#section)`);
+                const destinations: string[] = [];
+                await inspectPlanTicketLinks(root, signal, ({ destination }) =>
+                    destinations.push(destination),
+                );
+                expect(destinations).toEqual([`${open}?view=plain#section`]);
+                await Deno.writeTextFile(doc, original);
+            }
             const scan = await scanTicketLinks(root, target, signal);
             expect(scan.findings).toEqual([
                 { path: doc, destination: open, expectedDestination: link('closed') },

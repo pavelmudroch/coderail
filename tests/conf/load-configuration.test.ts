@@ -535,8 +535,10 @@ Deno.test(
                 );
                 expect(result.errors).toHaveLength(4);
                 for (const [index, path] of paths.entries()) {
-                    expect(result.errors[index]?.message).toContain(path);
-                    expect(result.errors[index]?.message).toContain('expected a regular file');
+                    expect(result.errors[index]?.path).toBe(path);
+                    expect(String(result.errors[index]?.error)).toContain(
+                        'expected a regular file',
+                    );
                 }
                 expect(result.configuration.logLevel).toBe('verbose');
             });
@@ -547,8 +549,8 @@ Deno.test(
                         { installRoot: root, repositoryRoots: [] },
                         globalArguments(),
                     )
-                ).errors[0]?.message,
-            ).toContain('stat denied');
+                ).errors[0]?.error,
+            ).toEqual(new Deno.errors.PermissionDenied('stat denied'));
             Deno.stat = stat;
             Deno.open = () => Promise.reject(new Deno.errors.NotFound());
             await withConfigurationEnvironment({}, async () => {

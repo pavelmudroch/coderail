@@ -52,7 +52,11 @@ export function inspectPlanTicketLinks(
                     id: match[1] as string,
                     slug: match[2] as string,
                     document,
-                    destination: link.destination,
+                    destination: isAbsolute(
+                        decodeURIComponent(decodeString(link.destination.slice(0, link.suffix))),
+                    )
+                        ? planTicketDestination(document, link.path, link.destination)
+                        : link.destination,
                     ticketPath: relative(root, link.path),
                 });
             }
@@ -214,6 +218,14 @@ async function readMarkdown(path: string): Promise<string> {
     );
 }
 
+export function planTicketDestination(document: string, target: string, current: string): string {
+    const path = relative(dirname(document), target)
+        .split(SEPARATOR)
+        .map((part) => encodeURIComponent(part).replaceAll('(', '%28').replaceAll(')', '%29'))
+        .join('/');
+    return path + current.slice(destinationSuffix(current));
+}
+
 function ticketLinkEdits(
     content: string,
     doc: string,
@@ -221,23 +233,17 @@ function ticketLinkEdits(
     target: TicketLinkTarget,
 ): LinkEdit[] {
     const filename = `${target.id}-${target.slug}.md`;
-    const expected = relative(dirname(doc), target.path)
-        .split(SEPARATOR)
-        .map((part) => encodeURIComponent(part).replaceAll('(', '%28').replaceAll(')', '%29'))
-        .join('/');
     const edits: LinkEdit[] = [];
-    for (const { start, end, destination, suffix, path } of ticketLinkDestinations(
-        content,
-        doc,
-        root,
-    )) {
+    for (const { start, end, destination, path } of ticketLinkDestinations(content, doc, root)) {
         if (basename(path) === filename) {
             edits.push({
                 start,
                 end,
                 destination,
                 expectedDestination:
-                    path === target.path ? destination : expected + destination.slice(suffix),
+                    path === target.path
+                        ? destination
+                        : planTicketDestination(doc, target.path, destination),
             });
         }
     }

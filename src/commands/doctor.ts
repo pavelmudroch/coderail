@@ -2,7 +2,7 @@ import { Cli } from '@cli';
 import type { Command, GlobalArguments, ParsedArguments } from '@commands';
 import { Conf } from '@conf';
 import { Log } from '@log';
-import { dirname, fromFileUrl, resolve } from '@std/path';
+import { dirname, fromFileUrl, relative, resolve } from '@std/path';
 
 import { Installation } from './doctor/installation.ts';
 import { Project } from './doctor/project.ts';
@@ -15,6 +15,19 @@ export type BootstrapRunContext = {
     globalArguments: GlobalArguments;
     signal: AbortSignal;
 };
+
+function configurationErrorDetails(error: unknown): string[] {
+    if (Array.isArray(error)) {
+        return error.flatMap(configurationErrorDetails);
+    }
+    if (error instanceof Error) {
+        return [
+            error.message,
+            ...(error.cause === undefined ? [] : configurationErrorDetails(error.cause)),
+        ];
+    }
+    return [String(error)];
+}
 
 export class Doctor implements Command {
     readonly requiresInit = false;
@@ -124,9 +137,28 @@ export class Doctor implements Command {
                 global,
                 input.signal,
             );
-            for (const error of errors) {
+            for (const { source, path, error } of errors) {
                 report.failures.push({
-                    message: error.message,
+                    message: 'Invalid configuration',
+                    details: [
+                        { label: 'Source', value: source },
+                        ...(path === undefined
+                            ? []
+                            : [
+                                  {
+                                      label: 'File',
+                                      value:
+                                          source === 'Project configuration' &&
+                                          discovery.repositoryRoot !== undefined
+                                              ? relative(discovery.repositoryRoot, path)
+                                              : path,
+                                  },
+                              ]),
+                        ...configurationErrorDetails(error).map((value) => ({
+                            label: 'Error',
+                            value,
+                        })),
+                    ],
                     repairable: false,
                     manualRepair: [
                         'Correct the configuration source or environment override and rerun "cr doctor".',
@@ -154,33 +186,59 @@ export class Doctor implements Command {
                 failure.repair ? [[failure.repair.key, failure.repair] as const] : [],
             ),
         );
+        const blocks: string[] = [];
         if (input.parsedArguments.args.repair) {
             const results = await runRepairs([...actions.values()], input.signal);
             report = await collect();
             const unresolved = new Set(
-                report.failures.flatMap((failure) => (failure.repair ? [failure.repair.key] : [])),
+                report.failures.map((failure) => failure.repairKey ?? failure.repair?.key),
             );
-            for (const result of results) {
-                Log.output(
-                    `${result.error !== undefined || unresolved.has(result.key) ? 'Unresolved' : 'Repaired'}: ${result.description}`,
-                );
-                if (result.error !== undefined) {
-                    Log.output(`  Repair error: ${result.error}`);
-                }
+            const outcomes = results.map((result) => {
+                const label =
+                    result.error !== undefined || unresolved.has(result.key)
+                        ? Log.color.red('Unresolved:')
+                        : Log.color.green('Repaired:');
+                const heading = `${label} ${result.description}`;
+                return result.error === undefined
+                    ? heading
+                    : `${heading}\n  Repair error: ${result.error.replaceAll('\n', '\n    ')}`;
+            });
+            if (outcomes.length) {
+                blocks.push(outcomes.join('\n'));
             }
         }
         for (const failure of report.failures) {
-            Log.output(`Failure: ${failure.message}${failure.repair ? ' [repairable]' : ''}`);
-            for (const option of failure.manualRepair) {
-                Log.output(`  Manual repair: ${option}`);
-            }
+            const marker = failure.repair ? ` ${Log.color.green('[repairable]')}` : '';
+            blocks.push(
+                [
+                    `${Log.color.red('Failure:')} ${failure.message}${marker}`,
+                    ...(failure.details ?? []).map(
+                        ({ label, value }) => `  ${label}: ${value.replaceAll('\n', '\n    ')}`,
+                    ),
+                    ...failure.manualRepair.map(
+                        (option) => `  ${Log.color.yellow('Manual fix:')} ${option}`,
+                    ),
+                ].join('\n'),
+            );
+        }
+        const summary: string[] = [];
+        if (report.failures.some((failure) => failure.repair !== undefined)) {
+            summary.push('Automatic fix: cr doctor --repair');
         }
         for (const skipped of report.skipped) {
-            Log.output(`Skipped: ${skipped}`);
+            summary.push(
+                typeof skipped === 'string'
+                    ? `Skipped: ${skipped}`
+                    : `Skipped in ${skipped.reason}: ${skipped.checks.join(', ')}`,
+            );
         }
         if (report.failures.length === 0) {
-            Log.output('Doctor checks passed.');
+            summary.push('Doctor checks passed.');
         }
+        if (summary.length) {
+            blocks.push(summary.join('\n'));
+        }
+        Log.output(blocks.join('\n\n'));
         Deno.exitCode = report.failures.length ? 1 : 0;
     }
 }

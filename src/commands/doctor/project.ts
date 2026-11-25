@@ -50,7 +50,11 @@ async function discover(
     } catch (error) {
         signal.throwIfAborted();
         report.failures.push({
-            message: `Project discovery: ${String(error)}`,
+            message: 'Project discovery failed',
+            details: [
+                { label: 'Working directory', value: cwd },
+                { label: 'Error', value: String(error) },
+            ],
             repairable: false,
             manualRepair: [`Check directory access permissions for "${cwd}" and its ancestors.`],
         });
@@ -104,10 +108,16 @@ async function check(root: string, signal: AbortSignal): Promise<DoctorReport> {
                     supported = inspectionError instanceof Deno.errors.NotFound;
                 }
             }
+            const missing = error instanceof Deno.errors.NotFound;
+            const file = join('.coderail', name);
+            const repairKey = `project-initialization:${path}`;
             const repair = supported
                 ? {
-                      key: `project-initialization:${path}`,
-                      description: `Repair project initialization "${path}"`,
+                      key: repairKey,
+                      description:
+                          name === 'config'
+                              ? 'Restore project configuration'
+                              : 'Restore project ignore rules',
                       async apply(actionSignal: AbortSignal): Promise<void> {
                           actionSignal.throwIfAborted();
                           let current: string | undefined;
@@ -140,10 +150,26 @@ async function check(root: string, signal: AbortSignal): Promise<DoctorReport> {
                   }
                 : undefined;
             report.failures.push({
-                message: `Project initialization "${path}": ${String(error)}`,
-                repairable: repair !== undefined,
+                message:
+                    name === 'config'
+                        ? 'Missing project configuration'
+                        : incomplete
+                          ? 'Incomplete project ignore rules'
+                          : missing
+                            ? 'Missing project ignore file'
+                            : 'Project ignore file unavailable',
+                details: [
+                    { label: 'File', value: file },
+                    ...(missing || incomplete ? [] : [{ label: 'Error', value: String(error) }]),
+                ],
+                repairable: supported,
+                repairKey,
                 repair,
-                manualRepair: [`Run "cr init" from "${root}"; check file access permissions.`],
+                manualRepair: [
+                    supported
+                        ? 'Run cr init from the project root.'
+                        : 'Check access and file type, then run cr init from the project root.',
+                ],
             });
         }
     }
@@ -209,7 +235,11 @@ async function checkExecutable(
     } catch (error) {
         signal.throwIfAborted();
         report.failures.push({
-            message: `Harness executable: ${String(error)}`,
+            message: 'Configured harness executable unavailable',
+            details: [
+                { label: 'Executable', value: name },
+                { label: 'Error', value: String(error) },
+            ],
             repairable: false,
             manualRepair: [
                 `Configure a supported defaultHarness (${Harness.names.join(', ')}) and install its executable on PATH with execute permissions.`,

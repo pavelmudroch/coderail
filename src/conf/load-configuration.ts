@@ -10,6 +10,8 @@ import { getLocalConfigurationFile } from './get-local-configuration-file.ts';
 import { parse } from './parse.ts';
 import { validateConfiguration } from './validate-configuration.ts';
 
+type ConfigurationDiagnostic = { source: string; path?: string; error: unknown };
+
 type EnvironmentVariables = { get(key: string): string | undefined };
 
 /** Loads configuration from every supported source in precedence order. */
@@ -63,9 +65,9 @@ export async function diagnoseConfiguration(
     context: { installRoot?: string; repositoryRoots: string[]; validationRoots?: string[] },
     global: GlobalArguments,
     signal?: AbortSignal,
-): Promise<{ configuration: Configuration; errors: Error[] }> {
+): Promise<{ configuration: Configuration; errors: ConfigurationDiagnostic[] }> {
     const configuration = createConfiguration();
-    const errors: Error[] = [];
+    const errors: ConfigurationDiagnostic[] = [];
     async function readConfiguration(path: string): Promise<Partial<Configuration>> {
         Log.notice(`Reading configuration source "${path}".`);
         let info: Deno.FileInfo;
@@ -79,44 +81,48 @@ export async function diagnoseConfiguration(
         }
         signal?.throwIfAborted();
         if (!info.isFile) {
-            throw new Error(
-                `Unsupported configuration file type at "${path}": expected a regular file`,
-            );
+            throw new Error('Unsupported configuration file type: expected a regular file');
         }
         using file = await getFileStream(path);
-        return file === null ? {} : await parseConfigurationFile(file);
+        return file === null ? {} : await readSettings(file);
     }
     async function attempt(
-        label: string,
+        source: string,
         read: () => Promise<Partial<Configuration>>,
+        path?: string,
     ): Promise<void> {
         signal?.throwIfAborted();
-        Log.notice(`Validating ${label}.`);
+        Log.notice(`Validating ${source}${path === undefined ? '' : ` at "${path}"`}.`);
         try {
             mergeConfiguration(configuration, await read());
             signal?.throwIfAborted();
-        } catch (cause) {
+        } catch (error) {
             signal?.throwIfAborted();
-            errors.push(new Error(`${label}: ${String(cause)}`, { cause }));
+            errors.push({ source, path, error });
         }
     }
     const installRoot = context.installRoot;
     if (installRoot !== undefined) {
-        await attempt('Global configuration', () => readConfiguration(join(installRoot, 'config')));
+        const path = join(installRoot, 'config');
+        await attempt('Global configuration', () => readConfiguration(path), path);
     }
     for (const root of new Set(context.validationRoots)) {
         if (context.repositoryRoots.includes(root)) {
             continue;
         }
-        await attempt(`Source repository configuration at "${root}"`, async () => {
-            await readConfiguration(join(root, '.coderail', 'config'));
-            return {};
-        });
+        const path = join(root, '.coderail', 'config');
+        await attempt(
+            'Source repository configuration',
+            async () => {
+                await readConfiguration(path);
+                return {};
+            },
+            path,
+        );
     }
     for (const root of new Set(context.repositoryRoots)) {
-        await attempt(`Project configuration at "${root}"`, () =>
-            readConfiguration(join(root, '.coderail', 'config')),
-        );
+        const path = join(root, '.coderail', 'config');
+        await attempt('Project configuration', () => readConfiguration(path), path);
     }
     await attempt('Environment configuration', () =>
         Promise.resolve(parseEnvironmentVariables(Deno.env)),
@@ -177,10 +183,13 @@ function parseEnvironmentVariables(env: EnvironmentVariables): Partial<Configura
     return result;
 }
 
+async function readSettings(file: ConfFileStream): Promise<Partial<Configuration>> {
+    return validateConfiguration(await parse(file.stream));
+}
+
 async function parseConfigurationFile(file: ConfFileStream): Promise<Partial<Configuration>> {
     try {
-        const parsedResult = await parse(file.stream);
-        return validateConfiguration(parsedResult);
+        return await readSettings(file);
     } catch (cause) {
         throw new Error(`Invalid configuration file "${file.path}"`, { cause });
     }

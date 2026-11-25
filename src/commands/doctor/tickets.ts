@@ -9,8 +9,13 @@ import {
 } from '@tickets';
 import { Text } from '@utils';
 
-import { inspectPlanTicketLinks } from '../../tickets/plan-links.ts';
-import { createDoctorReport, type DoctorRepair, type DoctorReport } from './types.ts';
+import { inspectPlanTicketLinks, planTicketDestination } from '../../tickets/plan-links.ts';
+import {
+    createDoctorReport,
+    type DoctorFailure,
+    type DoctorRepair,
+    type DoctorReport,
+} from './types.ts';
 
 const statuses = ['open', 'active', 'closed'];
 function validId(value: Frontmatter[string]): value is string {
@@ -32,7 +37,11 @@ type InventoryItem = {
     status?: string;
     reason?: string;
     usable: boolean;
+    filenameFinding?: DoctorFailure;
+    placementFinding?: DoctorFailure;
 };
+
+type Details = NonNullable<DoctorFailure['details']>;
 
 type TicketInventory = {
     report: DoctorReport;
@@ -40,7 +49,13 @@ type TicketInventory = {
     inventoryComplete: boolean;
     byId: Map<string, InventoryItem[]>;
     directory: string;
-    fail: (path: string, message: string, guidance: string) => void;
+    fail: (
+        path: string,
+        message: string,
+        guidance: string,
+        details?: Details,
+        pathLabel?: string,
+    ) => DoctorFailure;
 };
 
 /** Reject symlinks in either path before linking or removing ticket files. */
@@ -74,12 +89,22 @@ async function readInventory(projectRoot: string, signal: AbortSignal): Promise<
     const inventory: InventoryItem[] = [];
     let inventoryComplete = true;
     const directory = join(projectRoot, '.coderail', 'tickets');
-    const fail = (path: string, message: string, guidance: string): void => {
-        report.failures.push({
-            message: `Ticket "${path}": ${message}`,
+    const display = (path: string): string => relative(projectRoot, path);
+    const fail: TicketInventory['fail'] = (
+        path,
+        message,
+        guidance,
+        details = [],
+        pathLabel = 'File',
+    ) => {
+        const failure = {
+            message,
+            details: [{ label: pathLabel, value: display(path) }, ...details],
             repairable: false,
             manualRepair: [guidance],
-        });
+        };
+        report.failures.push(failure);
+        return failure;
     };
     for (const status of statuses) {
         signal.throwIfAborted();
@@ -93,8 +118,9 @@ async function readInventory(projectRoot: string, signal: AbortSignal): Promise<
                 }
                 const path = join(folder, entry.name);
                 Log.notice(`Checking ticket metadata and placement "${path}".`);
+                let filenameFinding: DoctorFailure | undefined;
                 if (!/^\d{4,}-[a-z0-9-]+\.md$/.test(entry.name)) {
-                    fail(
+                    filenameFinding = fail(
                         path,
                         'Invalid ticket filename',
                         'Rename the file to <id>-<slug>.md after validating its frontmatter.',
@@ -113,14 +139,24 @@ async function readInventory(projectRoot: string, signal: AbortSignal): Promise<
                     await markdown.content.cancel();
                     signal.throwIfAborted();
                     const fields = markdown.frontmatter;
-                    const item: InventoryItem = { path, original, usable: true };
+                    const item: InventoryItem = { path, original, usable: true, filenameFinding };
                     inventory.push(item);
                     const invalid = (field: string, requirement: string): void => {
                         item.usable = false;
                         fail(
                             path,
-                            `Invalid ${field}: ${requirement}`,
-                            `Correct frontmatter ${field} in "${path}"; ${requirement}. Do not infer metadata from its filename or directory.`,
+                            `Invalid ticket ${field}`,
+                            `Correct frontmatter ${field} after verifying the intended metadata.`,
+                            [
+                                {
+                                    label: 'Current',
+                                    value:
+                                        field === 'title/slug'
+                                            ? JSON.stringify([fields.title, fields.slug])
+                                            : (JSON.stringify(fields[field]) ?? '(missing)'),
+                                },
+                                { label: 'Expected', value: requirement },
+                            ],
                         );
                     };
                     if (validId(fields.id)) {
@@ -207,10 +243,14 @@ async function readInventory(projectRoot: string, signal: AbortSignal): Promise<
                             `${item.id}-${fields.slug}.md`,
                         );
                         if (path !== item.expectedPath) {
-                            fail(
+                            item.placementFinding = fail(
                                 path,
-                                `Incorrect placement; expected "${item.expectedPath}" from frontmatter`,
-                                `After resolving metadata conflicts, move this file to "${item.expectedPath}" without rewriting its metadata.`,
+                                'Incorrect placement',
+                                'Resolve metadata conflicts, then move the file to the expected path without rewriting its metadata.',
+                                [
+                                    { label: 'Ticket', value: item.id },
+                                    { label: 'Expected file', value: display(item.expectedPath) },
+                                ],
                             );
                         }
                     }
@@ -219,24 +259,29 @@ async function readInventory(projectRoot: string, signal: AbortSignal): Promise<
                     inventoryComplete = false;
                     fail(
                         path,
-                        `Metadata unavailable: ${String(error)}`,
-                        `Restore readable, valid Markdown frontmatter in "${path}" and check file access permissions.`,
+                        'Ticket metadata unavailable',
+                        'Restore readable, valid Markdown frontmatter and check file access permissions.',
+                        [{ label: 'Error', value: String(error) }],
                     );
-                    report.skipped.push(`Ticket metadata checks unavailable for "${path}".`);
+                    report.skipped.push(
+                        `Ticket metadata checks unavailable for "${display(path)}".`,
+                    );
                 }
             }
         } catch (error) {
             signal.throwIfAborted();
             if (error instanceof Deno.errors.NotFound) {
-                report.skipped.push(`Ticket directory "${folder}": absent.`);
+                report.skipped.push(`Ticket directory "${display(folder)}": absent.`);
             } else {
                 inventoryComplete = false;
                 fail(
                     folder,
-                    `Inventory unavailable: ${String(error)}`,
-                    `Restore directory access to "${folder}" and rerun "cr doctor".`,
+                    'Ticket inventory unavailable',
+                    'Restore directory access and rerun "cr doctor".',
+                    [{ label: 'Error', value: String(error) }],
+                    'Directory',
                 );
-                report.skipped.push(`Ticket inventory unavailable for "${folder}".`);
+                report.skipped.push(`Ticket inventory unavailable for "${display(folder)}".`);
             }
         }
     }
@@ -321,12 +366,18 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
         root,
         signal,
     );
+    const display = (path: string): string => relative(root, path);
     for (const [id, matches] of byId) {
         if (matches.length > 1) {
             fail(
                 directory,
-                `Duplicate ticket ID "${id}": ${matches.map((item) => `"${item.path}"`).join(', ')}`,
-                'Resolve duplicate frontmatter IDs and their references manually; no file is selected as authoritative.',
+                'Duplicate ticket ID',
+                'Resolve duplicate frontmatter IDs and their references manually.',
+                [
+                    { label: 'Ticket', value: id },
+                    ...matches.map((item) => ({ label: 'Candidate', value: display(item.path) })),
+                ],
+                'Directory',
             );
         }
     }
@@ -335,6 +386,12 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
         const destination = item.expectedPath;
         const { id, slug } = item;
         const moving = destination !== item.path;
+        const repairKey = id === undefined ? undefined : `ticket:${id}`;
+        for (const failure of [item.filenameFinding, item.placementFinding]) {
+            if (failure) {
+                failure.repairKey = repairKey;
+            }
+        }
         if (
             !inventoryComplete ||
             !item.usable ||
@@ -349,21 +406,16 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
         const repair: DoctorRepair = {
             key: `ticket:${id}`,
             description: moving
-                ? `Move ticket "${item.path}" to "${destination}"`
+                ? `Move ticket "${display(item.path)}" to "${display(destination)}"`
                 : `Update plan links for ticket "${id}"`,
             apply: (actionSignal) =>
                 repairTicket(root, item, { id, slug, path: destination }, actionSignal),
         };
         repairs.set(id, repair);
-        if (moving) {
-            for (const failure of report.failures) {
-                if (
-                    failure.message.startsWith(`Ticket "${item.path}":`) &&
-                    /Invalid ticket filename|Incorrect placement/.test(failure.message)
-                ) {
-                    failure.repairable = true;
-                    failure.repair = repair;
-                }
+        for (const failure of [item.filenameFinding, item.placementFinding]) {
+            if (failure) {
+                failure.repairable = true;
+                failure.repair = repair;
             }
         }
     }
@@ -376,21 +428,25 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
                 : `Unavailable target "${id}" (inventory incomplete)`;
         }
         if (matches.length > 1) {
-            return `Ambiguous target "${id}": ${matches.map((item) => item.path).join(', ')}`;
+            return `Ambiguous target "${id}": ${matches.map((item) => display(item.path)).join(', ')}`;
         }
         const item = matches[0] as InventoryItem;
-        return item.usable ? item : `Unusable target "${id}" at "${item.path}"`;
+        return item.usable ? item : `Unusable target "${id}" at "${display(item.path)}"`;
     };
     const warnings = await inspectPlanTicketLinks(root, signal, (link) => {
         const resolved = target(link.id);
-        const prefix = `Plan "${link.document}": ticket link "${link.destination}"`;
+        const context = [
+            { label: 'Plan', value: display(link.document) },
+            { label: 'Current link', value: link.destination },
+        ];
         if (typeof resolved === 'string' || resolved.slug !== link.slug) {
             const issue =
                 typeof resolved === 'string'
                     ? resolved
-                    : `No target with authoritative slug "${link.slug}" for ticket "${link.id}"`;
+                    : `Ticket has authoritative slug "${resolved.slug}" at "${display(resolved.path)}"`;
             report.failures.push({
-                message: `${prefix}: ${issue}`,
+                message: `Unresolved ticket link · ${link.id}`,
+                details: [...context, { label: 'Target', value: issue }],
                 repairable: false,
                 manualRepair: [
                     'Verify the intended ticket identity and correct the link manually.',
@@ -402,16 +458,28 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
         if (link.ticketPath !== relative(root, expected)) {
             const repair = repairs.get(link.id);
             report.failures.push({
-                message: `${prefix}: Stale destination; expected ticket at "${expected}"`,
+                message: `Stale ticket link · ${link.id}`,
+                details: [
+                    ...context,
+                    {
+                        label: 'Expected link',
+                        value: planTicketDestination(link.document, expected, link.destination),
+                    },
+                ],
                 repairable: repair !== undefined,
+                repairKey: `ticket:${link.id}`,
                 repair,
-                manualRepair: ['Confirm the authoritative ticket path, then update the plan link.'],
+                manualRepair: ['Update the link to the expected destination.'],
             });
         }
     });
     for (const { path, message } of warnings) {
         report.failures.push({
-            message: `Plan "${path}": ${message}`,
+            message: 'Plan ticket links unavailable',
+            details: [
+                { label: 'Plan', value: display(path) },
+                { label: 'Error', value: message },
+            ],
             repairable: false,
             manualRepair: ['Restore access to valid UTF-8 Markdown and rerun "cr doctor".'],
         });
@@ -420,17 +488,23 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
         ...(item.dependencies ?? []).map((id) => ({ kind: 'dependency', id })),
         ...(item.duplicateOf === undefined ? [] : [{ kind: 'duplicate-of', id: item.duplicateOf }]),
     ];
-    const label = (item: InventoryItem): string => `"${item.id}" (${item.path})`;
+    const label = (item: InventoryItem): string => `"${item.id}" (${display(item.path)})`;
     const guidance =
         'Correct the referenced ticket metadata and required chain manually; do not remove edges or change closure reasons without reviewing intent.';
     for (const item of inventory) {
         for (const edge of edges(item)) {
             const resolved = target(edge.id);
             if (typeof resolved === 'string') {
-                fail(item.path, `${edge.kind}: ${resolved}`, guidance);
+                fail(item.path, 'Invalid ticket reference', guidance, [
+                    { label: 'Reference', value: edge.kind },
+                    { label: 'Target', value: resolved },
+                ]);
             }
             if (edge.id === item.id) {
-                fail(item.path, `Self-reference via ${edge.kind}: ${label(item)}`, guidance);
+                fail(item.path, 'Ticket self-reference', guidance, [
+                    { label: 'Reference', value: edge.kind },
+                    { label: 'Ticket', value: edge.id },
+                ]);
             }
         }
     }
@@ -440,11 +514,12 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
     const visit = (item: InventoryItem): void => {
         signal.throwIfAborted();
         if (active.includes(item)) {
-            fail(
-                item.path,
-                `Graph cycle: ${[...active.slice(active.indexOf(item)), item].map(label).join(' -> ')}`,
-                guidance,
-            );
+            fail(item.path, 'Ticket graph cycle', guidance, [
+                {
+                    label: 'Chain',
+                    value: [...active.slice(active.indexOf(item)), item].map(label).join(' -> '),
+                },
+            ]);
             return;
         }
         if (visited.has(item)) {
@@ -497,7 +572,9 @@ async function check(projectRoot: string, signal: AbortSignal): Promise<DoctorRe
             target(item.id) === item
         ) {
             for (const cause of blockers(item.id, [])) {
-                fail(item.path, `Blocked progression: ${cause}`, guidance);
+                fail(item.path, 'Blocked progression', guidance, [
+                    { label: 'Chain', value: cause },
+                ]);
             }
         }
     }

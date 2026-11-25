@@ -3,8 +3,13 @@ import { expect } from '@std/expect';
 import { join } from '@std/path';
 
 import { Installation } from '../../../src/commands/doctor/installation.ts';
+import type { DoctorFailure } from '../../../src/commands/doctor/types.ts';
 import { windowsLauncher } from '../../../src/installation/activation.ts';
 import { DISTRIBUTION_MANIFEST } from '../../../src/installation/assets.ts';
+
+function detail(finding: DoctorFailure | undefined, label: string): string | undefined {
+    return finding?.details?.find((field) => field.label === label)?.value;
+}
 
 Deno.test({
     name: 'installation rejects FIFO resources without opening them and continues independent checks',
@@ -51,12 +56,16 @@ Deno.test({
             expect(opened).toEqual([]);
             expect(reads).toContain(readable);
             expect(report.failures).toHaveLength(4);
-            expect(report.failures[0]?.message).toBe(
-                `Resource ${fifo}: Error: Unsupported resource entry type`,
-            );
-            expect(report.failures[1]?.message).toContain('Distribution manifest:');
-            expect(report.failures[2]?.message).toContain('Launcher:');
-            expect(report.failures[3]?.message).toContain('PATH:');
+            expect(report.failures[0]).toMatchObject({
+                message: 'Installation resource unavailable',
+                details: [
+                    { label: 'Path', value: fifo },
+                    { label: 'Error', value: 'Error: Unsupported resource entry type' },
+                ],
+            });
+            expect(report.failures[1]?.message).toContain('Distribution manifest');
+            expect(report.failures[2]?.message).toBe('Installation launcher unavailable');
+            expect(report.failures[3]?.message).toBe('Installation bin missing from PATH');
             expect(report.skipped).toEqual(['Owned files: distribution manifest unavailable.']);
         } finally {
             Deno.open = original.open;
@@ -95,10 +104,18 @@ Deno.test({
             const settings = { entryPath, standalone: true, windows: false, path: '' };
             const report = await Installation.check(controller.signal, settings);
             expect(report.failures.map((failure) => failure.message)).toEqual([
-                'Distribution manifest: Error: Distribution manifest must be a regular file',
-                'Launcher: Error: Missing or broken installation launcher',
-                `PATH: Error: Installation bin "${join(root, 'bin')}" is absent from PATH`,
+                'Distribution manifest unavailable or invalid',
+                'Installation launcher unavailable',
+                'Installation bin missing from PATH',
             ]);
+            expect(report.failures[0]?.details).toEqual([
+                { label: 'File', value: manifestPath },
+                { label: 'Error', value: 'Error: Distribution manifest must be a regular file' },
+            ]);
+            expect(report.failures[2]?.details?.[0]).toEqual({
+                label: 'Expected PATH entry',
+                value: join(root, 'bin'),
+            });
             expect(report.skipped).toEqual(['Owned files: distribution manifest unavailable.']);
             expect((await stat(manifestPath)).isFifo).toBe(true);
             Deno.stat = async (path) => {
@@ -187,7 +204,12 @@ Deno.test(
             });
             const source = await Installation.check(signal, { ...settings, standalone: false });
             expect(source.failures).toEqual([]);
-            expect(source.skipped).toHaveLength(3);
+            expect(source.skipped).toEqual([
+                {
+                    reason: 'source development mode',
+                    checks: ['distribution manifest', 'launcher', 'PATH'],
+                },
+            ]);
             await Deno.mkdir(join(root, 'assets'));
             await Deno.mkdir(join(root, 'assets', 'instructions'));
             await Deno.writeTextFile(join(root, 'assets', 'instructions', 'a'), 'readable');
@@ -213,9 +235,9 @@ Deno.test(
             const other = join(root, 'libexec', 'cr-2.exe');
             await Deno.writeTextFile(other, 'other');
             report = await Installation.check(signal, { ...settings, entryPath: other });
-            expect(report.failures.some((failure) => failure.message.includes('missing'))).toBe(
-                true,
-            );
+            expect(
+                report.failures.some((failure) => detail(failure, 'Error')?.includes('missing')),
+            ).toBe(true);
             await Deno.writeTextFile(join(root, DISTRIBUTION_MANIFEST), '{bad');
             report = await Installation.check(signal, { ...settings, entryPath: other });
             expect(report.skipped).toContain('Owned files: distribution manifest unavailable.');
@@ -223,7 +245,7 @@ Deno.test(
             expect(
                 (await Installation.check(signal, { ...settings, entryPath: other })).failures[0]
                     ?.message,
-            ).toContain('manifest');
+            ).toContain('Distribution manifest');
             report = await Installation.check(signal, settings);
             expect(report.failures).toHaveLength(1);
             expect(report.skipped.length).toBeGreaterThan(0);
@@ -264,7 +286,7 @@ Deno.test(
                 path: '',
             });
             expect(report.failures).toHaveLength(4);
-            expect(report.failures.map((failure) => failure.message).join('\n')).toContain(
+            expect(report.failures.map((failure) => detail(failure, 'Error')).join('\n')).toContain(
                 'denied',
             );
             controller.abort(new Error('cancelled'));
@@ -307,8 +329,8 @@ Deno.test(
             };
             const report = await Installation.check(new AbortController().signal, settings);
             expect(report.failures).toHaveLength(2);
-            expect(report.failures[0]?.message).toContain('resource denied');
-            expect(report.failures[1]?.message).toContain('templates denied');
+            expect(detail(report.failures[0], 'Error')).toContain('resource denied');
+            expect(detail(report.failures[1], 'Error')).toContain('templates denied');
             const controller = new AbortController();
             Deno.readFile = () => {
                 controller.abort(new Error('during read'));
@@ -360,10 +382,10 @@ Deno.test(
                 path: `/other: ${root}/bin/ :/last`,
             });
             expect(padded.failures).toHaveLength(1);
-            expect(padded.failures[0]?.message).toContain('absent from PATH');
+            expect(detail(padded.failures[0], 'Error')).toContain('absent from PATH');
             await Deno.chmod(entryPath, 0o644);
             expect((await Installation.check(signal, settings)).failures[0]?.message).toContain(
-                'Launcher:',
+                'Installation launcher unavailable',
             );
             await Deno.remove(launcher);
             await Deno.symlink('../libexec', launcher);
@@ -371,9 +393,9 @@ Deno.test(
             await Deno.remove(launcher);
             await Deno.symlink('../libexec/directory', launcher);
             await Deno.mkdir(join(root, 'libexec', 'directory'));
-            expect((await Installation.check(signal, settings)).failures[0]?.message).toContain(
-                'not executable',
-            );
+            expect(
+                detail((await Installation.check(signal, settings)).failures[0], 'Error'),
+            ).toContain('not executable');
         } finally {
             await Deno.remove(root, { recursive: true });
         }
@@ -406,7 +428,7 @@ Deno.test({
             const signal = new AbortController().signal;
             const report = await Installation.check(signal, settings);
             expect(report.failures).toHaveLength(1);
-            expect(report.failures[0]?.message).toContain('Launcher:');
+            expect(report.failures[0]?.message).toBe('Installation launcher unavailable');
             expect(report.failures[0]?.repairable).toBe(false);
             expect(report.failures[0]?.manualRepair.length).toBeGreaterThan(0);
             await Deno.chmod(entryPath, 0o700);
@@ -432,7 +454,7 @@ Deno.test('installation default resolution checks the running source entry', asy
             Deno.env.get = () => path;
             const report = await Installation.check(new AbortController().signal);
             expect(report.failures).toEqual([]);
-            expect(report.skipped).toHaveLength(3);
+            expect(report.skipped).toHaveLength(1);
         }
     } finally {
         Deno.env.get = original;
@@ -467,7 +489,7 @@ Deno.test('installation default compiled resolution uses the physical executable
         };
         const report = await Installation.check(new AbortController().signal);
         expect(report.failures).toHaveLength(3);
-        expect(report.failures[2]?.message).toContain('PATH denied');
+        expect(detail(report.failures[2], 'Error')).toContain('PATH denied');
     } finally {
         Object.defineProperty(Deno, 'build', { configurable: true, value: build });
         Deno.execPath = execPath;
@@ -498,14 +520,16 @@ Deno.test(
             });
             let report = await Installation.check(controller.signal, settings);
             expect(report.failures).toHaveLength(4);
-            expect(report.failures[0]?.message).toContain('modified');
-            expect(report.failures[1]?.message).toContain('missing');
+            expect(detail(report.failures[0], 'Error')).toContain('modified');
+            expect(detail(report.failures[1], 'Error')).toContain('missing');
             await InstallManifest.save(manifestPath, {
                 version: 1,
                 files: [{ path: 'personal', checksum: '0'.repeat(64), size: 0 }],
             });
             report = await Installation.check(controller.signal, settings);
-            expect(report.failures[0]?.message).toContain('Invalid distribution ownership path');
+            expect(detail(report.failures[0], 'Error')).toContain(
+                'Invalid distribution ownership path',
+            );
             expect(report.skipped).toEqual(['Owned files: distribution manifest unavailable.']);
             Deno.readTextFile = (path, options) => {
                 if (path === manifestPath) {
@@ -514,7 +538,7 @@ Deno.test(
                 return readTextFile(path, options);
             };
             report = await Installation.check(controller.signal, settings);
-            expect(report.failures[0]?.message).toContain('manifest denied');
+            expect(detail(report.failures[0], 'Error')).toContain('manifest denied');
             expect(report.failures).toHaveLength(3);
         } finally {
             Deno.readTextFile = readTextFile;
@@ -571,7 +595,7 @@ Deno.test(
                     (finding) => !finding.repairable && finding.manualRepair.length > 0,
                 ),
             ).toBe(true);
-            expect(report.failures.map((finding) => finding.message).join('\n')).toContain(
+            expect(report.failures.map((finding) => detail(finding, 'Error')).join('\n')).toContain(
                 'owned file denied',
             );
             InstallManifest.inspect = inspect;
@@ -625,7 +649,7 @@ Deno.test(
                 throw new Deno.errors.PermissionDenied('manifest denied');
             };
             expect(
-                (await Installation.checkInstructions(target, signal)).failures[0]?.message,
+                detail((await Installation.checkInstructions(target, signal)).failures[0], 'Error'),
             ).toContain('manifest denied');
             InstallManifest.load = () => Promise.resolve(null);
             expect((await Installation.checkInstructions(target, signal)).failures).toEqual([]);
@@ -738,6 +762,17 @@ Deno.test(
                 const report = await Installation.checkInstructions(target, signal);
                 expect(report.failures).toHaveLength(Harness.names.length);
                 for (const failure of report.failures) {
+                    const harness = detail(failure, 'Harness');
+                    const path = detail(failure, 'File');
+                    expect(detail(failure, 'Scope')).toBe(target.scope);
+                    expect(detail(failure, 'Expected name')).toBe('worker');
+                    if (target.scope === 'local') {
+                        expect(path).toBe(
+                            join(harness === 'codex' ? '.codex' : '.claude', 'agents/worker.md'),
+                        );
+                    } else {
+                        expect(path?.endsWith('agents/worker.md')).toBe(true);
+                    }
                     await failure.repair?.apply(signal);
                 }
                 expect((await Installation.checkInstructions(target, signal)).failures).toEqual([]);

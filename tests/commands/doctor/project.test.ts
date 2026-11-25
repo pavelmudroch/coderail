@@ -76,14 +76,16 @@ Deno.test('project reports invalid cwd and unreadable ancestor markers', async (
     try {
         const directory = await stat(root);
         Deno.stat = () => Promise.resolve({ ...directory, isDirectory: false });
-        expect((await Project.discover(root, signal)).failures[0]?.message).toContain(
+        expect((await Project.discover(root, signal)).failures[0]?.details?.[1]?.value).toContain(
             'not a directory',
         );
         Deno.stat = (path) =>
             path === root
                 ? Promise.resolve(directory)
                 : Promise.reject(new Deno.errors.PermissionDenied('marker'));
-        expect((await Project.discover(root, signal)).failures[0]?.message).toContain('marker');
+        expect((await Project.discover(root, signal)).failures[0]?.details?.[1]?.value).toContain(
+            'marker',
+        );
         Deno.stat = () => Promise.resolve({ ...directory, isDirectory: false });
         let first = true;
         Deno.stat = () => {
@@ -112,7 +114,7 @@ Deno.test(
             };
             const report = await Project.check(root, new AbortController().signal);
             expect(report.failures).toHaveLength(2);
-            expect(report.failures[1]?.message).toContain('expected a regular file');
+            expect(report.failures[1]?.details?.[1]?.value).toContain('expected a regular file');
             Deno.readTextFile = read;
             await Deno.remove(ignore);
             await Deno.writeTextFile(`${ignore}.real`, projectIgnoreLines.join('\n'));
@@ -148,9 +150,11 @@ Deno.test(
             const report = await Project.check(root, signal);
             expect(report.failures).toHaveLength(4);
             expect(report.failures.slice(2).every((finding) => !finding.repairable)).toBe(true);
-            expect(report.failures.map((finding) => finding.message).join('\n')).toContain(
-                'missing',
-            );
+            expect(
+                report.failures
+                    .flatMap((finding) => finding.details?.map(({ value }) => value))
+                    .join('\n'),
+            ).toContain('missing');
         } finally {
             await Deno.remove(root, { recursive: true });
         }
@@ -259,9 +263,9 @@ Deno.test(
             Deno.stat = () => Promise.resolve({ ...info, isFile: false });
             expect((await Project.checkExecutable('codex', signal)).failures).toHaveLength(1);
             Deno.stat = () => Promise.reject(new Deno.errors.PermissionDenied('candidate denied'));
-            expect((await Project.checkExecutable('codex', signal)).failures[0]?.message).toContain(
-                'candidate denied',
-            );
+            expect(
+                (await Project.checkExecutable('codex', signal)).failures[0]?.details?.[1]?.value,
+            ).toContain('candidate denied');
             const controller = new AbortController();
             Deno.stat = () => {
                 controller.abort(new Error('cancelled executable'));
@@ -273,9 +277,9 @@ Deno.test(
             Deno.env.get = () => {
                 throw new Deno.errors.PermissionDenied('PATH denied');
             };
-            expect((await Project.checkExecutable('codex', signal)).failures[0]?.message).toContain(
-                'PATH denied',
-            );
+            expect(
+                (await Project.checkExecutable('codex', signal)).failures[0]?.details?.[1]?.value,
+            ).toContain('PATH denied');
         } finally {
             Object.defineProperty(Deno, 'build', { configurable: true, value: original.build });
             Deno.env.get = original.get;
@@ -381,11 +385,12 @@ Deno.test(
             await Deno.writeTextFile(path, text);
             const report = await Project.check(root, signal);
             expect(report.failures).toHaveLength(3);
-            expect(report.failures[2]?.message).toContain(path);
-            expect(report.failures[2]?.message).toContain(
-                join(root, '.coderail/tickets/open/0017-custom.md'),
-            );
-            expect(report.skipped.join('\n')).toContain(join(root, '.coderail/tickets/active'));
+            expect(report.failures[2]?.details).toEqual([
+                { label: 'File', value: '.coderail/tickets/closed/9999-wrong.md' },
+                { label: 'Ticket', value: '0017' },
+                { label: 'Expected file', value: '.coderail/tickets/open/0017-custom.md' },
+            ]);
+            expect(report.skipped.join('\n')).toContain('.coderail/tickets/active');
             expect(await Deno.readTextFile(path)).toBe(text);
         } finally {
             await Deno.remove(root, { recursive: true });

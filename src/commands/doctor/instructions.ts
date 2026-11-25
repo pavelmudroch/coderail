@@ -93,9 +93,12 @@ async function checkFile(
     path: string,
     expectedName: string,
     signal: AbortSignal,
+    displayPath = path,
+    context: { label: string; value: string }[] = [],
 ): Promise<DoctorReport> {
     const report = createDoctorReport();
     signal.throwIfAborted();
+    const repairKey = `instruction:${resolve(path)}`;
     Log.notice(`Checking instruction frontmatter "${path}".`);
     try {
         const original = await readInstruction(path, signal);
@@ -103,11 +106,16 @@ async function checkFile(
         signal.throwIfAborted();
         if (edited !== undefined) {
             report.failures.push({
-                message: `Instruction "${path}": expected name "${expectedName}" and opening frontmatter delimiter`,
+                message: 'Incorrect instruction frontmatter',
+                details: [
+                    { label: 'File', value: displayPath },
+                    ...context,
+                    { label: 'Expected name', value: expectedName },
+                ],
                 repairable: true,
                 repair: {
-                    key: `instruction:${resolve(path)}`,
-                    description: `Repair instruction frontmatter "${path}"`,
+                    key: repairKey,
+                    description: `Repair instruction frontmatter "${displayPath}"`,
                     async apply(actionSignal: AbortSignal): Promise<void> {
                         const current = await readInstruction(path, actionSignal);
                         if (current !== original) {
@@ -118,17 +126,24 @@ async function checkFile(
                     },
                 },
                 manualRepair: [
-                    `Set frontmatter name to "${expectedName}" and restore its opening delimiter in "${path}".`,
+                    'Set the frontmatter name to the expected value and restore its opening delimiter.',
                 ],
             });
         }
     } catch (error) {
         signal.throwIfAborted();
         report.failures.push({
-            message: `Instruction "${path}": ${String(error)}`,
+            message: 'Instruction frontmatter unavailable',
+            repairKey,
+            details: [
+                { label: 'File', value: displayPath },
+                ...context,
+                { label: 'Expected name', value: expectedName },
+                { label: 'Error', value: String(error) },
+            ],
             repairable: false,
             manualRepair: [
-                `Restore readable Markdown frontmatter with name "${expectedName}", a nonblank description and both delimiters in "${path}".`,
+                'Restore readable Markdown frontmatter with the expected name, a nonblank description and both delimiters.',
             ],
         });
     }
@@ -158,7 +173,11 @@ async function checkAssets(resourceRoot: string, signal: AbortSignal): Promise<D
             signal.throwIfAborted();
             if (!(error instanceof Deno.errors.NotFound)) {
                 report.failures.push({
-                    message: `Instruction assets "${directory}": ${String(error)}`,
+                    message: 'Instruction assets unavailable',
+                    details: [
+                        { label: 'Directory', value: directory },
+                        { label: 'Error', value: String(error) },
+                    ],
                     repairable: false,
                     manualRepair: [`Restore readable instruction assets at "${directory}".`],
                 });

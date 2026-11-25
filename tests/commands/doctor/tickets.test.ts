@@ -2,7 +2,7 @@ import { Conf } from '@conf';
 import { Fs } from '@fs';
 import { Log } from '@log';
 import { expect } from '@std/expect';
-import { join } from '@std/path';
+import { join, relative } from '@std/path';
 
 import { runRepairs } from '../../../src/commands/doctor/repairs.ts';
 import { Tickets } from '../../../src/commands/doctor/tickets.ts';
@@ -25,6 +25,17 @@ async function write(root: string, name: string, fields: Frontmatter = metadata)
     await Deno.mkdir(join(path, '..'), { recursive: true });
     await Deno.writeTextFile(path, `---\n${stringifyFrontmatter(fields)}\n---\nCustom body  \r\n`);
     return path;
+}
+
+function detail(finding: DoctorFailure | undefined, label: string): string | undefined {
+    return finding?.details?.find((field) => field.label === label)?.value;
+}
+
+function findingText(finding: DoctorFailure): string {
+    return [
+        finding.message,
+        ...(finding.details ?? []).map(({ label, value }) => `${label}: ${value}`),
+    ].join('\n');
 }
 
 Deno.test(
@@ -117,9 +128,11 @@ Deno.test(
                             finding.manualRepair.length > 0,
                     ),
                 ).toBe(true);
-                expect(report.failures.every((finding) => finding.message.includes(path))).toBe(
-                    true,
-                );
+                expect(
+                    report.failures.every(
+                        (finding) => detail(finding, 'File') === relative(root, path),
+                    ),
+                ).toBe(true);
                 expect(
                     report.failures.some((finding) => finding.message.includes('placement')),
                 ).toBe(false);
@@ -162,13 +175,15 @@ Deno.test(
             });
             const originals = await Promise.all([first, second].map((path) => Deno.readFile(path)));
             const report = await Tickets.check(root, signal);
-            const messages = report.failures.map((finding) => finding.message).join('\n');
+            const messages = report.failures.map(findingText).join('\n');
             expect(messages).toContain('Invalid ticket filename');
-            expect(messages).toContain(join(root, '.coderail/tickets/open/0012-custom-title.md'));
-            expect(messages).toContain('Duplicate ticket ID "0012"');
-            expect(messages).toContain(first);
-            expect(messages).toContain(second);
-            expect(messages).not.toContain('Duplicate ticket ID "9999"');
+            expect(messages).toContain('.coderail/tickets/open/0012-custom-title.md');
+            expect(messages).toContain(
+                'Duplicate ticket ID\nDirectory: .coderail/tickets\nTicket: 0012',
+            );
+            expect(messages).toContain(relative(root, first));
+            expect(messages).toContain(relative(root, second));
+            expect(messages).not.toContain('Ticket: 9999');
             expect(messages).toContain('title/slug');
             expect(report.failures.every((finding) => !finding.repairable && !finding.repair)).toBe(
                 true,
@@ -218,18 +233,18 @@ Deno.test(
             for (const body of ['---\nid: [\n---\n', '---\nid: "0012"', 'body without metadata']) {
                 await Deno.writeTextFile(malformed, body);
                 const report = await Tickets.check(root, signal);
-                const messages = report.failures.map((finding) => finding.message).join('\n');
+                const messages = report.failures.map(findingText).join('\n');
                 for (const value of [
-                    broken,
-                    malformed,
-                    unreadable,
+                    relative(root, broken),
+                    relative(root, malformed),
+                    relative(root, unreadable),
                     'ticket denied',
                     'directory denied',
                     'regular file',
                 ]) {
                     expect(messages).toContain(value);
                 }
-                expect(messages).not.toContain(`Ticket "${healthy}"`);
+                expect(messages).not.toContain(relative(root, healthy));
                 expect(report.skipped.join(' ')).toContain('unavailable');
             }
         } finally {
@@ -304,20 +319,20 @@ Deno.test(
                 reason: 'invalid',
             });
             const report = await Tickets.check(root, signal);
-            const messages = report.failures.map((finding) => finding.message).join('\n');
+            const messages = report.failures.map(findingText).join('\n');
             for (const text of [
                 'Ambiguous target "0030"',
                 'Unusable target "0040"',
                 'Missing target "0050"',
-                source,
-                ambiguous,
-                unusable,
+                relative(root, source),
+                relative(root, ambiguous),
+                relative(root, unusable),
             ]) {
                 expect(messages).toContain(text);
             }
-            expect(messages).toContain(moved);
+            expect(messages).toContain(relative(root, moved));
             expect(messages).not.toContain('Missing target "0020"');
-            expect(messages).not.toContain('Blocked progression: "0020"');
+            expect(messages).not.toContain('Chain: "0020"');
             expect(
                 report.failures.filter((finding) =>
                     finding.message.includes('Blocked progression'),
@@ -405,34 +420,37 @@ Deno.test(
                 '0064',
             ]) {
                 expect(
-                    blocked.some((finding) =>
-                        finding.message.includes(`Blocked progression: "${id}"`),
-                    ),
+                    blocked.some((finding) => detail(finding, 'Chain')?.startsWith(`"${id}"`)),
                     id,
                 ).toBe(true);
             }
             expect(blocked).toHaveLength(12);
             const transitive = blocked.find((finding) =>
-                finding.message.includes('Blocked progression: "0005"'),
+                detail(finding, 'Chain')?.startsWith('"0005"'),
             ) as DoctorFailure;
-            expect(transitive.message).toMatch(
+            expect(detail(transitive, 'Chain')).toMatch(
                 /0005.* -> "0004".* -> "0003".* -> "0002".* -> "0001".*dismissed/,
             );
-            const cycles = report.failures.filter((finding) =>
-                finding.message.includes('Graph cycle'),
+            const cycles = report.failures.filter(
+                (finding) => finding.message === 'Ticket graph cycle',
             );
             for (const id of ['0010', '0030', '0040', '0050', '0060', '0061']) {
                 expect(
-                    cycles.some((finding) => finding.message.includes(`"${id}"`)),
+                    cycles.some((finding) => detail(finding, 'Chain')?.includes(`"${id}"`)),
                     id,
                 ).toBe(true);
             }
             expect(cycles).toHaveLength(6);
-            const messages = report.failures.map((finding) => finding.message).join('\n');
-            expect(messages).toContain('dependency: Missing target "9999"');
-            expect(messages).toContain('duplicate-of: Missing target "9998"');
-            expect(messages).toContain('Self-reference via dependency');
-            expect(messages).toContain('Self-reference via duplicate-of');
+            const messages = report.failures.map(findingText).join('\n');
+            expect(messages).toContain('Reference: dependency\nTarget: Missing target "9999"');
+            expect(messages).toContain('Reference: duplicate-of\nTarget: Missing target "9998"');
+            const selfReferences = report.failures.filter(
+                ({ message }) => message === 'Ticket self-reference',
+            );
+            expect(selfReferences.map((finding) => detail(finding, 'Reference')).sort()).toEqual([
+                'dependency',
+                'duplicate-of',
+            ]);
             expect(report.failures.every((finding) => !finding.repairable && !finding.repair)).toBe(
                 true,
             );
@@ -462,16 +480,16 @@ Deno.test(
                 dependencies: ['0030'],
             });
             const messages = (await Tickets.check(root, signal)).failures
-                .map((finding) => finding.message)
+                .map(findingText)
                 .join('\n');
-            expect(messages).toContain('Metadata unavailable');
+            expect(messages).toContain('Ticket metadata unavailable');
             expect(messages).toContain('Unavailable target "0020" (inventory incomplete)');
             expect(messages).not.toContain('Missing target "0020"');
-            expect(messages).toContain('Graph cycle');
-            expect(messages).toContain('Blocked progression: "0012"');
+            expect(messages).toContain('Ticket graph cycle');
+            expect(messages).toContain('Chain: "0012"');
             await Deno.writeTextFile(malformed, 'body without frontmatter');
             const partial = (await Tickets.check(root, signal)).failures
-                .map((finding) => finding.message)
+                .map(findingText)
                 .join('\n');
             expect(partial).toContain('Unavailable target "0020" (inventory incomplete)');
             expect(partial).not.toContain('Missing target "0020"');
@@ -756,25 +774,27 @@ Deno.test(
                     ? Promise.reject(new Deno.errors.PermissionDenied('plan read denied'))
                     : readFile(path, options);
             const report = await Tickets.check(root, signal);
-            const mentions = report.failures.filter((failure) =>
-                failure.message.startsWith('Plan '),
+            const mentions = report.failures.filter((failure) => detail(failure, 'Plan'));
+            expect(
+                mentions.find(({ message }) => message === 'Unresolved ticket link · 9999')
+                    ?.details,
+            ).toEqual([
+                { label: 'Plan', value: relative(root, plan) },
+                { label: 'Current link', value: '../tickets/closed/9999-custom-title.md' },
+                { label: 'Target', value: 'Missing target "9999"' },
+            ]);
+            const messages = mentions.map(findingText).join('\n');
+            expect(messages).toContain(
+                `Ambiguous target "0020": .coderail/tickets/open/0020-custom-title.md, ${relative(root, duplicate)}`,
             );
-            expect(mentions.map(({ message }) => message).join('\n')).toContain(
-                `"${plan}": ticket link "../tickets/closed/9999-custom-title.md": Missing target "9999"`,
+            expect(messages).toContain('Unusable target "0030"');
+            expect(messages).toContain(
+                'Ticket has authoritative slug "custom-title" at ".coderail/tickets/open/0012-custom-title.md"',
             );
-            expect(mentions.map(({ message }) => message).join('\n')).toContain(
-                `Ambiguous target "0020": ${join(root, '.coderail/tickets/open/0020-custom-title.md')}, ${duplicate}`,
+            expect(messages).toContain(
+                `Plan: ${relative(root, denied)}\nError: Cannot inspect plan links`,
             );
-            expect(mentions.map(({ message }) => message).join('\n')).toContain(
-                'Unusable target "0030"',
-            );
-            expect(mentions.map(({ message }) => message).join('\n')).toContain(
-                'No target with authoritative slug "other-title" for ticket "0012"',
-            );
-            expect(mentions.map(({ message }) => message).join('\n')).toContain(
-                `"${denied}": Cannot inspect plan links`,
-            );
-            expect(mentions.map(({ message }) => message).join('\n')).toContain('plan read denied');
+            expect(messages).toContain('plan read denied');
             expect(mentions).toHaveLength(5);
             expect(
                 mentions.every(({ repairable, repair }) => !repairable && repair === undefined),
@@ -783,9 +803,7 @@ Deno.test(
             expect(await Deno.readTextFile(plan)).toBe(original);
             await write(root, 'open/corrupt.md', { ...metadata, id: undefined });
             expect(
-                (await Tickets.check(root, signal)).failures
-                    .map(({ message }) => message)
-                    .join('\n'),
+                (await Tickets.check(root, signal)).failures.map(findingText).join('\n'),
             ).toContain('Unavailable target "9999" (inventory incomplete)');
         } finally {
             Deno.readFile = readFile;
@@ -805,7 +823,8 @@ Deno.test('tickets keep both collected and newly occupied placement targets manu
         const readOnly = await Tickets.check(root, signal);
         const [placement, links] = readOnly.failures;
         expect(placement?.message).toContain('Incorrect placement');
-        expect(links?.message).toContain(`Stale destination; expected ticket at "${open}"`);
+        expect(links?.message).toBe('Stale ticket link · 0012');
+        expect(detail(links, 'Expected link')).toBe('../tickets/open/0012-custom-title.md');
         expect(links?.repair).toBe(placement?.repair);
         expect(actions(readOnly)).toHaveLength(1);
         await Deno.mkdir(open, { recursive: true });

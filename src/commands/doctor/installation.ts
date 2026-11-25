@@ -6,10 +6,10 @@ import { InstallManifest, type Manifest } from '@install-manifest';
 import { DISTRIBUTION_MANIFEST, launcherTarget, ownedPath } from '@installation';
 import { Log } from '@log';
 import { Path } from '@path';
-import { dirname, fromFileUrl, join } from '@std/path';
+import { dirname, fromFileUrl, join, relative } from '@std/path';
 
 import { instructionName, Instructions } from './instructions.ts';
-import { createDoctorReport, type DoctorReport } from './types.ts';
+import { createDoctorReport, type DoctorFailure, type DoctorReport } from './types.ts';
 
 type InstallationSettings = {
     standalone: boolean;
@@ -24,36 +24,40 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
     const recovery =
         'Restore this installation from a trusted Coderail release or rerun install.sh.';
     async function attempt(
-        label: string,
+        message: string,
+        details: NonNullable<DoctorFailure['details']>,
         run: () => Promise<void>,
         manual = recovery,
-    ): Promise<boolean> {
+    ): Promise<void> {
         signal.throwIfAborted();
-        Log.notice(`Checking ${label}.`);
+        Log.notice(
+            `Checking ${message.toLowerCase()}${details.map(({ value }) => ` "${value}"`).join('')}.`,
+        );
         try {
             await run();
             signal.throwIfAborted();
-            return true;
         } catch (error) {
             signal.throwIfAborted();
             report.failures.push({
-                message: `${label}: ${String(error)}`,
+                message,
+                details: [...details, { label: 'Error', value: String(error) }],
                 repairable: false,
                 manualRepair: [manual],
             });
-            return false;
         }
     }
 
     let root: string | undefined;
     let resolved: InstallationSettings | undefined;
-    await attempt('Installation paths', async () => {
+    const entryDetails: { label: string; value: string }[] = [];
+    await attempt('Installation paths unavailable', entryDetails, async () => {
         resolved = settings ?? {
             standalone: Deno.build.standalone,
             entryPath: Deno.build.standalone ? Deno.execPath() : fromFileUrl(Deno.mainModule),
             windows: Deno.build.os === 'windows',
             path: '',
         };
+        entryDetails.push({ label: 'Entry', value: resolved.entryPath });
         Log.notice(`Resolving installation entry "${resolved.entryPath}".`);
         root = dirname(dirname(await Deno.realPath(resolved.entryPath)));
     });
@@ -70,21 +74,26 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
         Log.notice(`Reading installation resource directory "${path}".`);
         for await (const entry of Deno.readDir(path)) {
             const target = join(path, entry.name);
-            await attempt(`Resource ${target}`, async () => {
-                if (entry.isDirectory) {
-                    await resources(target);
-                } else if (entry.isFile) {
-                    await Deno.readFile(target, { signal });
-                } else {
-                    throw new Error('Unsupported resource entry type');
-                }
-            });
+            await attempt(
+                'Installation resource unavailable',
+                [{ label: 'Path', value: target }],
+                async () => {
+                    if (entry.isDirectory) {
+                        await resources(target);
+                    } else if (entry.isFile) {
+                        await Deno.readFile(target, { signal });
+                    } else {
+                        throw new Error('Unsupported resource entry type');
+                    }
+                },
+            );
         }
     }
     for (const directory of ['instructions', 'templates']) {
         const path = join(resourceRoot, directory);
         await attempt(
-            `Resources ${path}`,
+            'Installation resources unavailable',
+            [{ label: 'Directory', value: path }],
             async () => {
                 try {
                     await Deno.lstat(path);
@@ -102,29 +111,32 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
     const instructions = await Instructions.checkAssets(resourceRoot, signal);
     report.failures.push(...instructions.failures);
     if (!resolved.standalone) {
-        report.skipped.push(
-            'Distribution manifest: source development mode.',
-            'Launcher: source development mode.',
-            'PATH: source development mode.',
-        );
+        report.skipped.push({
+            reason: 'source development mode',
+            checks: ['distribution manifest', 'launcher', 'PATH'],
+        });
         return report;
     }
     let manifest: Manifest | undefined;
-    await attempt('Distribution manifest', async () => {
-        const path = join(installationRoot, DISTRIBUTION_MANIFEST);
-        Log.notice(`Inspecting distribution manifest "${path}".`);
-        const info = await Deno.stat(path);
-        signal.throwIfAborted();
-        if (!info.isFile) {
-            throw new Error('Distribution manifest must be a regular file');
-        }
-        const loaded: unknown = JSON.parse(await Deno.readTextFile(path, { signal }));
-        InstallManifest.validate(loaded);
-        for (const file of loaded.files) {
-            ownedPath(file.path);
-        }
-        manifest = loaded;
-    });
+    const manifestPath = join(installationRoot, DISTRIBUTION_MANIFEST);
+    await attempt(
+        'Distribution manifest unavailable or invalid',
+        [{ label: 'File', value: manifestPath }],
+        async () => {
+            Log.notice(`Inspecting distribution manifest "${manifestPath}".`);
+            const info = await Deno.stat(manifestPath);
+            signal.throwIfAborted();
+            if (!info.isFile) {
+                throw new Error('Distribution manifest must be a regular file');
+            }
+            const loaded: unknown = JSON.parse(await Deno.readTextFile(manifestPath, { signal }));
+            InstallManifest.validate(loaded);
+            for (const file of loaded.files) {
+                ownedPath(file.path);
+            }
+            manifest = loaded;
+        },
+    );
     if (manifest) {
         for (const file of manifest.files) {
             // Asset Markdown is checked above; still diagnose missing manifest-owned candidates.
@@ -135,35 +147,55 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
                 const path = join(installationRoot, file.path);
                 const result = await Instructions.checkFile(path, expected, signal);
                 for (const failure of result.failures) {
-                    if (!report.failures.some((existing) => existing.message === failure.message)) {
+                    if (
+                        !report.failures.some(
+                            (existing) =>
+                                existing.message === failure.message &&
+                                existing.details?.some(
+                                    ({ label, value }) => label === 'File' && value === path,
+                                ),
+                        )
+                    ) {
                         report.failures.push(failure);
                     }
                 }
                 continue;
             }
-            await attempt(`Owned file ${file.path}`, async () => {
-                Log.notice(
-                    `Inspecting installation owned file "${join(installationRoot, file.path)}".`,
-                );
-                const results = await InstallManifest.inspect(installationRoot, {
-                    version: 1,
-                    files: [file],
-                });
-                for (const result of results) {
-                    if (result.status !== 'unchanged') {
-                        throw new Error(result.status);
+            const path = join(installationRoot, file.path);
+            await attempt(
+                'Distribution owned file differs from manifest',
+                [{ label: 'File', value: path }],
+                async () => {
+                    Log.notice(`Inspecting installation owned file "${path}".`);
+                    const results = await InstallManifest.inspect(installationRoot, {
+                        version: 1,
+                        files: [file],
+                    });
+                    for (const result of results) {
+                        if (result.status !== 'unchanged') {
+                            throw new Error(result.status);
+                        }
                     }
-                }
-            });
+                },
+            );
         }
     } else {
         report.skipped.push('Owned files: distribution manifest unavailable.');
     }
-    await attempt('Launcher', async () => {
-        Log.notice(`Resolving installation launcher in "${join(installationRoot, 'bin')}".`);
+    const bin = join(installationRoot, 'bin');
+    const libexec = join(installationRoot, 'libexec');
+    const launcherDetails = [
+        { label: 'Launcher directory', value: bin },
+        { label: 'Expected target directory', value: libexec },
+    ];
+    await attempt('Installation launcher unavailable', launcherDetails, async () => {
+        Log.notice(`Resolving installation launcher in "${bin}".`);
         const target = await launcherTarget(installationRoot, location.windows);
         Log.notice(`Inspecting launcher target "${target ?? 'unavailable'}".`);
-        if (!target || dirname(target) !== join(installationRoot, 'libexec')) {
+        if (target) {
+            launcherDetails.push({ label: 'Target', value: target });
+        }
+        if (!target || dirname(target) !== libexec) {
             throw new Error('Missing or broken installation launcher');
         }
         const info = await Deno.lstat(target);
@@ -174,9 +206,9 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
             await access(target, constants.X_OK);
         }
     });
-    const bin = join(installationRoot, 'bin');
     await attempt(
-        'PATH',
+        'Installation bin missing from PATH',
+        [{ label: 'Expected PATH entry', value: bin }],
         () => {
             Log.notice(`Checking installation bin "${bin}" in PATH.`);
             const normalize = (value: string): string => {
@@ -188,7 +220,7 @@ async function check(signal: AbortSignal, settings?: InstallationSettings): Prom
                     .split(location.windows ? ';' : ':')
                     .some((entry) => normalize(entry) === normalize(bin))
             ) {
-                throw new Error(`Installation bin "${bin}" is absent from PATH`);
+                throw new Error('Expected entry is absent from PATH');
             }
             return Promise.resolve();
         },
@@ -203,13 +235,19 @@ async function checkInstructions(
     signal: AbortSignal,
 ): Promise<DoctorReport> {
     const report = createDoctorReport();
+    const display = (path: string): string =>
+        target.scope === 'local' ? relative(target.projectRoot, path) : path;
     for (const name of Harness.names) {
         signal.throwIfAborted();
         const label = `${target.scope} ${name} instructions`;
-        let location = label;
+        const context = [
+            { label: 'Scope', value: target.scope },
+            { label: 'Harness', value: name },
+        ];
+        let manifestPath: string | undefined;
         const manualRepair = [
             'Check the harness home override and file access permissions. Restore a valid instruction manifest; review installed files before removing invalid ownership metadata.',
-            `Check access permissions and rerun "cr install${target.scope === 'local' ? ' --local' : ''} --force ${name}"${target.scope === 'local' ? ` from "${target.projectRoot}"` : ''}; review owned file changes before overwriting.`,
+            `Check access permissions and rerun "cr install${target.scope === 'local' ? ' --local' : ''} --force ${name}"${target.scope === 'local' ? ` from the project root` : ''}; review owned file changes before overwriting.`,
         ];
         Log.notice(
             `Resolving ${label}${target.scope === 'local' ? ` in "${target.projectRoot}"` : ''}.`,
@@ -220,8 +258,8 @@ async function checkInstructions(
                 throw new Error(`Harness "${name}" is unavailable`);
             }
             const path = join(connector.home, Path.INSTALL_MANIFEST_NAME);
-            location = `${label} manifest "${path}"`;
-            Log.notice(`Inspecting ${location} (home "${connector.home}").`);
+            manifestPath = path;
+            Log.notice(`Inspecting ${label} manifest "${path}" (home "${connector.home}").`);
             let manifest: Manifest | null;
             try {
                 const info = await Deno.lstat(path);
@@ -243,7 +281,8 @@ async function checkInstructions(
             }
             for (const file of manifest.files) {
                 signal.throwIfAborted();
-                Log.notice(`Inspecting ${label} owned file "${join(connector.home, file.path)}".`);
+                const owned = join(connector.home, file.path);
+                Log.notice(`Inspecting ${label} owned file "${owned}".`);
                 try {
                     // Inspect first to retain manifest path/type and ancestor validation.
                     const results = await InstallManifest.inspect(connector.home, {
@@ -254,9 +293,11 @@ async function checkInstructions(
                     const expected = instructionName(file.path);
                     if (expected !== undefined) {
                         const result = await Instructions.checkFile(
-                            join(connector.home, file.path),
+                            owned,
                             expected,
                             signal,
+                            display(owned),
+                            context,
                         );
                         report.failures.push(...result.failures);
                         continue;
@@ -269,7 +310,12 @@ async function checkInstructions(
                 } catch (error) {
                     signal.throwIfAborted();
                     report.failures.push({
-                        message: `${label} owned file "${join(connector.home, file.path)}": ${String(error)}`,
+                        message: 'Installed instruction file differs from manifest',
+                        details: [
+                            ...context,
+                            { label: 'File', value: display(owned) },
+                            { label: 'Error', value: String(error) },
+                        ],
                         repairable: false,
                         manualRepair,
                     });
@@ -278,7 +324,17 @@ async function checkInstructions(
         } catch (error) {
             signal.throwIfAborted();
             report.failures.push({
-                message: `${location}: ${String(error)}`,
+                message:
+                    manifestPath === undefined
+                        ? 'Harness instruction location unavailable'
+                        : 'Instruction manifest unavailable or invalid',
+                details: [
+                    ...context,
+                    ...(manifestPath === undefined
+                        ? []
+                        : [{ label: 'File', value: display(manifestPath) }]),
+                    { label: 'Error', value: String(error) },
+                ],
                 repairable: false,
                 manualRepair,
             });

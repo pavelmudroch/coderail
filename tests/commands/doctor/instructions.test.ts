@@ -158,7 +158,8 @@ Deno.test(
             ).toBe(false);
             await Deno.mkdir(path);
             expect(
-                (await Instructions.checkFile(path, 'worker', signal)).failures[0]?.message,
+                (await Instructions.checkFile(path, 'worker', signal)).failures[0]?.details?.[2]
+                    ?.value,
             ).toContain('regular file');
             await expect(repair?.apply(signal)).rejects.toThrow();
             await Deno.remove(path);
@@ -265,7 +266,7 @@ Deno.test(
             };
             const report = await Instructions.checkAssets(root, signal);
             expect(report.failures).toHaveLength(2);
-            expect(report.failures[0]?.message).toContain('assets denied');
+            expect(report.failures[0]?.details?.[1]?.value).toContain('assets denied');
             expect(report.failures[0]?.repairable).toBe(false);
             expect(report.failures[0]?.manualRepair.length).toBeGreaterThan(0);
             const controller = new AbortController();
