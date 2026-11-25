@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `plans`, `tickets`, and `read`. The bundled `archive` skill previews the
   selection and asks for approval before applying it.
 
+### Changed
+
+- `cr doctor` groups skipped checks, shows labeled details and manual fixes for
+  failures, and highlights available automatic repairs.
+
 ## [0.5.1] - 2026-11-24
 
 ### Added

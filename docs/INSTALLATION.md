@@ -175,9 +175,10 @@ skipped. With no default harness configured, the executable check is skipped.
 If any configuration source is invalid, Doctor reports its errors and continues
 with built-in defaults plus explicit global CLI flags.
 
-The final report on stdout lists failures, manual repair guidance, and skipped
-checks, even with `--quiet`. Exit status is `1` if any check fails and `0`
-otherwise; skipped checks alone do not fail the command.
+The final report on stdout lists failures with labeled details and manual fixes,
+then groups skipped checks by reason where applicable. It appears even with
+`--quiet`. Use `--no-color` to disable colored status labels. Exit status is `1`
+if any check fails and `0` otherwise; skipped checks alone do not fail the command.
 Use `--verbose` to show progress and diagnostic paths on stderr from the start.
 Verbosity from valid configuration takes effect after configuration validation.
 
