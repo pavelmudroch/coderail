@@ -164,6 +164,9 @@ Doctor checks:
   Frontmatter determines identity and placement. Self-references, cycles, missing
   or ambiguous targets, and required chains blocked by dismissed or unusable
   tickets are failures; ordinary pending dependencies are allowed.
+- Markdown links to tickets from plans and other tickets. Stale links show the
+  source document, current destination, and expected destination. Missing,
+  ambiguous, or mismatched ticket identities need manual correction.
 - The configured default harness executable on PATH, including execute access on
   Unix and extension lookup through PATHEXT on Windows. Doctor does not launch the
   harness or check authentication, model access, or network connectivity.
@@ -203,6 +206,9 @@ cr --cwd /path/to/project doctor --repair
   by its valid frontmatter, preserving its bytes. This requires a complete identity
   inventory, a unique ID, and an unoccupied destination. Metadata defects,
   duplicate IDs, dependency problems, and destination conflicts need manual repair.
+- Update stale Markdown links in plans and between tickets when ticket identity
+  and placement can be resolved safely. Ticket-to-ticket repairs check that both
+  tickets are in their expected locations before editing the source ticket.
 
 Repairs recheck their collected inputs before writing and reject changed inputs
 or unsupported file types. Doctor continues independent repairs after an action

@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cr doctor` groups skipped checks, shows labeled details and manual fixes for
   failures, and highlights available automatic repairs.
 
+### Fixed
+
+- Ticket activation, closure, and reopening update matching Markdown links in
+  plans when the ticket path changes. `cr doctor` detects stale links in plans
+  and between tickets, and `cr doctor --repair` updates unambiguous links.
+
 ## [0.5.1] - 2026-11-24
 
 ### Added

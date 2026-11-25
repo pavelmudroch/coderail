@@ -143,6 +143,12 @@ Create a dependent ticket with `cr ticket create --depends-on 0001 "Add search f
 Use `cr ticket reopen 0001` to reopen a closed ticket. Idea and ticket commands
 support `--json` for scripts.
 
+Activation, closure, and reopening update matching Markdown link destinations
+under `.coderail/plans` to the ticket's current path, preserving query strings
+and fragments. Link update warnings do not undo the ticket change. Use
+`cr doctor --repair` to repair eligible stale links in plans and between tickets.
+See [diagnosing setup problems](INSTALLATION.md#diagnosing-setup-problems).
+
 ## Archive completed work
 
 Use `cr archive` to move eligible completed records from an initialized Git
