@@ -35,8 +35,8 @@ quiet-mode output rules in IDEA.md and tickets 0030–0032.
 
 | Ticket | Purpose | Dependencies |
 | --- | --- | --- |
-| [0033 — Stop harness process trees on cancellation and failure](../../tickets/open/0033-stop-harness-process-trees-on-cancellation-and-failure.md) | Terminate descendant tool processes and settle runner cleanup on every stop/failure path. | 0028 |
-| [0034 — Restore loop lifecycle formatting and logging levels](../../tickets/open/0034-restore-loop-lifecycle-formatting-and-logging-levels.md) | Restore the agreed layout and route final, iteration, and other lifecycle lines through output, info, and notice. | 0032 |
+| [0033 — Stop harness process trees on cancellation and failure](../../tickets/closed/0033-stop-harness-process-trees-on-cancellation-and-failure.md) | Terminate descendant tool processes and settle runner cleanup on every stop/failure path. | 0028 |
+| [0034 — Restore loop lifecycle formatting and logging levels](../../tickets/closed/0034-restore-loop-lifecycle-formatting-and-logging-levels.md) | Restore the agreed layout and route final, iteration, and other lifecycle lines through output, info, and notice. | 0032 |
 
 Tickets 0033 and 0034 can proceed independently after their completed prerequisites.
 Their primary implementation and test files do not overlap. Both place regression

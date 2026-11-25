@@ -31,8 +31,8 @@ implementation tasks; both tickets include the required per-file verification.
 
 | Ticket | Purpose | Dependencies |
 | --- | --- | --- |
-| [0038 — Correct doctor installation resource and launcher checks](../../tickets/open/0038-correct-doctor-installation-resource-and-launcher-checks.md) | Reject special resource files without opening them, check actual POSIX launcher execute access, and preserve literal PATH whitespace. | 0035 (closed) |
-| [0039 — Report verbose doctor progress and diagnostic context](../../tickets/open/0039-report-verbose-doctor-progress-and-diagnostic-context.md) | Announce phases/checks with useful context on verbose stderr, including bootstrap, while preserving final collected Log.output results. | 0038, 0037 (closed) |
+| [0038 — Correct doctor installation resource and launcher checks](../../tickets/closed/0038-correct-doctor-installation-resource-and-launcher-checks.md) | Reject special resource files without opening them, check actual POSIX launcher execute access, and preserve literal PATH whitespace. | 0035 (closed) |
+| [0039 — Report verbose doctor progress and diagnostic context](../../tickets/closed/0039-report-verbose-doctor-progress-and-diagnostic-context.md) | Announce phases/checks with useful context on verbose stderr, including bootstrap, while preserving final collected Log.output results. | 0038, 0037 (closed) |
 
 0038 covers the first three review items in one installation-only change. 0039
 covers progress throughout orchestration, installation, project, configuration, and
