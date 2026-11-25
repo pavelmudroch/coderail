@@ -6,6 +6,7 @@ import { parse, postprocess, preprocess } from 'micromark';
 import { decodeString } from 'micromark-util-decode-string';
 
 import { stringifyMessages } from '../log/helpers/stringifyMessages.ts';
+import { ticketFilenamePattern } from './inventory.ts';
 import { withOperationLock } from './with-ticket-lock.ts';
 
 export type TicketLinkTarget = { id: string; slug: string; path: string };
@@ -44,24 +45,33 @@ export function inspectPlanTicketLinks(
     signal: AbortSignal,
     inspect: (link: PlanTicketLink) => void,
 ): Promise<LinkWarning[]> {
-    return inspectPlanDocuments(projectRoot, signal, (content, document, root) => {
-        for (const link of ticketLinkDestinations(content, document, root)) {
-            const match = /^(\d{4,})-([a-z0-9-]+)\.md$/.exec(basename(link.path));
-            if (match) {
-                inspect({
-                    id: match[1] as string,
-                    slug: match[2] as string,
-                    document,
-                    destination: isAbsolute(
-                        decodeURIComponent(decodeString(link.destination.slice(0, link.suffix))),
-                    )
-                        ? planTicketDestination(document, link.path, link.destination)
-                        : link.destination,
-                    ticketPath: relative(root, link.path),
-                });
+    return inspectMarkdownDocuments(
+        projectRoot,
+        Path.PLANS_DIR,
+        signal,
+        (content, document, root) => {
+            for (const link of markdownLinkDestinations(content, document, [
+                join(root, Path.CODERAIL_DIR, Path.TICKETS_DIR),
+            ])) {
+                const match = ticketFilenamePattern.exec(basename(link.path));
+                if (match) {
+                    inspect({
+                        id: match[1] as string,
+                        slug: match[2] as string,
+                        document,
+                        destination: isAbsolute(
+                            decodeURIComponent(
+                                decodeString(link.destination.slice(0, link.suffix)),
+                            ),
+                        )
+                            ? planTicketDestination(document, link.path, link.destination)
+                            : link.destination,
+                        ticketPath: relative(root, link.path),
+                    });
+                }
             }
-        }
-    });
+        },
+    );
 }
 
 export async function scanTicketLinks(
@@ -70,46 +80,74 @@ export async function scanTicketLinks(
     signal: AbortSignal,
 ): Promise<TicketLinkScan> {
     const scan: TicketLinkScan = { files: [], findings: [], warnings: [] };
-    scan.warnings = await inspectPlanDocuments(projectRoot, signal, (content, doc, root) => {
-        const edits = ticketLinkEdits(
-            content,
-            doc,
-            root,
-            canonicalTarget(projectRoot, root, target),
-        );
-        if (edits.length > 0) {
-            scan.files.push(doc);
-        }
-        for (const { destination, expectedDestination } of edits) {
-            if (destination !== expectedDestination) {
-                scan.findings.push({ path: doc, destination, expectedDestination });
+    scan.warnings = await inspectMarkdownDocuments(
+        projectRoot,
+        Path.PLANS_DIR,
+        signal,
+        (content, doc, root) => {
+            const edits = ticketLinkEdits(
+                content,
+                doc,
+                root,
+                canonicalTarget(projectRoot, root, target),
+            );
+            if (edits.length > 0) {
+                scan.files.push(doc);
             }
-        }
-    });
+            for (const { destination, expectedDestination } of edits) {
+                if (destination !== expectedDestination) {
+                    scan.findings.push({ path: doc, destination, expectedDestination });
+                }
+            }
+        },
+    );
     return scan;
 }
 
-async function inspectPlanDocuments(
+export function inspectMarkdownLinks(
     projectRoot: string,
+    sourceDirectory: string,
+    destinationDirectories: string[],
+    signal: AbortSignal,
+    inspect: (link: MarkdownLink & { document: string }) => void,
+): Promise<LinkWarning[]> {
+    return inspectMarkdownDocuments(
+        projectRoot,
+        sourceDirectory,
+        signal,
+        (content, document, root) => {
+            const destinations = destinationDirectories.map((path) =>
+                join(root, Path.CODERAIL_DIR, path),
+            );
+            for (const link of markdownLinkDestinations(content, document, destinations, true)) {
+                inspect({ ...link, document });
+            }
+        },
+    );
+}
+
+async function inspectMarkdownDocuments(
+    projectRoot: string,
+    sourceDirectory: string,
     signal: AbortSignal,
     inspect: (content: string, document: string, root: string) => void,
 ): Promise<LinkWarning[]> {
     signal.throwIfAborted();
     const warnings: LinkWarning[] = [];
     const root = await Deno.realPath(resolve(projectRoot));
-    const plans = join(root, Path.CODERAIL_DIR, Path.PLANS_DIR);
+    const source = join(root, Path.CODERAIL_DIR, sourceDirectory);
     let directory: string;
     try {
-        directory = await planDirectory(plans);
+        directory = await planDirectory(source);
     } catch (error) {
         signal.throwIfAborted();
         if (!(error instanceof Deno.errors.NotFound)) {
-            warnings.push(warning(plans, 'Cannot inspect plan links', error));
+            warnings.push(warning(source, 'Cannot inspect plan links', error));
         }
         return warnings;
     }
 
-    for await (const path of planFiles(directory, warnings, signal)) {
+    for await (const path of markdownFiles(directory, warnings, signal)) {
         try {
             const doc = await planFile(directory, path);
             const content = await readMarkdown(doc);
@@ -153,7 +191,7 @@ export async function updateTicketLinks(
                 const content = await readMarkdown(await planFile(await planDirectory(plans), doc));
                 signal.throwIfAborted();
                 const edits = ticketLinkEdits(content, doc, root, destination);
-                const updated = applyEdits(content, edits);
+                const updated = applyLinkEdits(content, edits);
                 if (updated !== content) {
                     await Fs.write(doc, ReadableStream.from([updated]));
                 }
@@ -173,7 +211,7 @@ export async function updateTicketLinks(
     return warnings;
 }
 
-async function* planFiles(
+async function* markdownFiles(
     directory: string,
     warnings: LinkWarning[],
     signal: AbortSignal,
@@ -183,7 +221,7 @@ async function* planFiles(
             signal.throwIfAborted();
             const path = join(directory, entry.name);
             if (entry.isDirectory) {
-                yield* planFiles(path, warnings, signal);
+                yield* markdownFiles(path, warnings, signal);
             } else if (entry.isFile && /\.md$/i.test(entry.name)) {
                 yield path;
             }
@@ -234,7 +272,9 @@ function ticketLinkEdits(
 ): LinkEdit[] {
     const filename = `${target.id}-${target.slug}.md`;
     const edits: LinkEdit[] = [];
-    for (const { start, end, destination, path } of ticketLinkDestinations(content, doc, root)) {
+    for (const { start, end, destination, path } of markdownLinkDestinations(content, doc, [
+        join(root, Path.CODERAIL_DIR, Path.TICKETS_DIR),
+    ])) {
         if (basename(path) === filename) {
             edits.push({
                 start,
@@ -250,11 +290,21 @@ function ticketLinkEdits(
     return edits;
 }
 
-function* ticketLinkDestinations(
+type MarkdownLink = {
+    start: number;
+    end: number;
+    path: string;
+    requiresDirectory: boolean;
+    destination: string;
+    suffix: number;
+};
+
+export function* markdownLinkDestinations(
     content: string,
     doc: string,
-    root: string,
-): Generator<{ start: number; end: number; path: string; destination: string; suffix: number }> {
+    directories: string[],
+    includeImages = false,
+): Generator<MarkdownLink> {
     const bodyStart = markdownBodyStart(content);
     const body = content.slice(bodyStart);
     // The tokenizer excludes a UTF-8 BOM from its offsets.
@@ -264,7 +314,6 @@ function* ticketLinkDestinations(
             .document()
             .write(preprocess()(body, undefined, true)),
     );
-    const tickets = join(root, Path.CODERAIL_DIR, Path.TICKETS_DIR);
     let images = 0;
     for (const [phase, token] of events) {
         if (token.type === 'image') {
@@ -272,7 +321,7 @@ function* ticketLinkDestinations(
         }
         if (
             phase !== 'enter' ||
-            images > 0 ||
+            (!includeImages && images > 0) ||
             (token.type !== 'resourceDestinationString' &&
                 token.type !== 'definitionDestinationString')
         ) {
@@ -282,9 +331,12 @@ function* ticketLinkDestinations(
         const end = token.end.offset + offset;
         const destination = content.slice(start, end);
         const suffix = destinationSuffix(destination);
-        const path = localPath(destination.slice(0, suffix), doc);
-        if (path !== undefined && isDescendant(tickets, path)) {
-            yield { start, end, path, destination, suffix };
+        const target = localPath(destination.slice(0, suffix), doc);
+        if (
+            target !== undefined &&
+            directories.some((directory) => isDescendant(directory, target.path))
+        ) {
+            yield { start, end, ...target, destination, suffix };
         }
     }
 }
@@ -314,13 +366,20 @@ function destinationSuffix(destination: string): number {
     return destination.length;
 }
 
-function localPath(destination: string, doc: string): string | undefined {
+function localPath(
+    destination: string,
+    doc: string,
+): Pick<MarkdownLink, 'path' | 'requiresDirectory'> | undefined {
     const path = decodeString(destination);
-    if (/^(?:[a-z][a-z\d+.-]*:|[/\\]{2})/i.test(path)) {
+    if (path === '' || /^(?:[a-z][a-z\d+.-]*:|[/\\]{2})/i.test(path)) {
         return undefined;
     }
     try {
-        return resolve(dirname(doc), decodeURIComponent(path));
+        const decoded = decodeURIComponent(path);
+        return {
+            path: resolve(dirname(doc), decoded),
+            requiresDirectory: /\/(?:\.)?$/.test(decoded.replaceAll(SEPARATOR, '/')),
+        };
     } catch {
         return undefined;
     }
@@ -348,7 +407,10 @@ function canonicalTarget(
     return { ...target, path: resolve(root, relative(resolve(projectRoot), path)) };
 }
 
-function applyEdits(content: string, edits: LinkEdit[]): string {
+export function applyLinkEdits(
+    content: string,
+    edits: Pick<LinkEdit, 'start' | 'end' | 'expectedDestination'>[],
+): string {
     const chunks: string[] = [];
     let cursor = 0;
     for (const { start, end, expectedDestination } of edits) {

@@ -4,7 +4,7 @@ import { expect } from '@std/expect';
 import { dirname, fromFileUrl, join } from '@std/path';
 import { scanTicketLinks, type TicketLinkTarget, updateTicketLinks } from '@tickets';
 
-import { inspectPlanTicketLinks } from '../../src/tickets/plan-links.ts';
+import { inspectMarkdownLinks, inspectPlanTicketLinks } from '../../src/tickets/plan-links.ts';
 
 const signal = new AbortController().signal;
 
@@ -42,6 +42,67 @@ async function documentLock(root: string, filename: string): Promise<string> {
     );
     return join(root, '.coderail', '.locks', 'markdown', `${new Uint8Array(hash).toHex()}.lock`);
 }
+
+Deno.test(
+    'Shared link inspection discovers ticket and artifact links across Coderail',
+    async () => {
+        await workspace(async (root, target) => {
+            const ticketDestination = link('closed') + '#details';
+            const artifactDestination = '../plans/legacy/assets/map.png?raw=1';
+            const directoryDestination = '../plans/legacy/assets%2F?view=all';
+            const content = [
+                `[Details](${ticketDestination})`,
+                `![Map](${artifactDestination})`,
+                `[Assets](${directoryDestination})`,
+                '[Outside](../../plans/file.md)',
+                '[External](https://example.test/.coderail/plans/file.md)',
+                '[Fragment](#details)',
+            ].join('\n');
+            const document = await put(root, 'notes/overview.md', content);
+            await put(root, 'notes/ignored.txt', `[Ignored](${ticketDestination})`);
+            const links: unknown[] = [];
+            const warnings = await inspectMarkdownLinks(
+                root,
+                '.',
+                ['tickets', 'plans'],
+                signal,
+                (link) => {
+                    links.push({
+                        document: link.document,
+                        path: link.path,
+                        source: content.slice(link.start, link.end),
+                        suffix: link.destination.slice(link.suffix),
+                        requiresDirectory: link.requiresDirectory,
+                    });
+                },
+            );
+            expect(warnings).toEqual([]);
+            expect(links).toEqual([
+                {
+                    document,
+                    path: target.path,
+                    source: ticketDestination,
+                    suffix: '#details',
+                    requiresDirectory: false,
+                },
+                {
+                    document,
+                    path: join(root, '.coderail', 'plans', 'legacy', 'assets', 'map.png'),
+                    source: artifactDestination,
+                    suffix: '?raw=1',
+                    requiresDirectory: false,
+                },
+                {
+                    document,
+                    path: join(root, '.coderail', 'plans', 'legacy', 'assets'),
+                    source: directoryDestination,
+                    suffix: '?view=all',
+                    requiresDirectory: true,
+                },
+            ]);
+        });
+    },
+);
 
 Deno.test(
     'Plan link inspection reports eligible identities in one shared Markdown scan',

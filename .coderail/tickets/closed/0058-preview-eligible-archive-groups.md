@@ -2,10 +2,11 @@
 id: "0058"
 slug: "preview-eligible-archive-groups"
 title: "Preview eligible archive groups"
-status: "open"
+status: "closed"
 created_at: "2026-11-25T12:10:49.381Z"
-updated_at: "2026-11-25T12:10:49.381Z"
+updated_at: "2026-11-25T12:33:02.757Z"
 dependencies: []
+reason: "done"
 ---
 
 # Preview eligible archive groups
@@ -16,10 +17,24 @@ and validation logic to apply.
 
 ## Tasks
 
-1. [ ] Add preview and existing-behavior regression coverage
-2. [ ] Share ticket inventory and Markdown link inspection
-3. [ ] Select and validate complete archive groups
-4. [ ] Expose preview through the archive command
+1. [x] Add preview and existing-behavior regression coverage
+2. [x] Share ticket inventory and Markdown link inspection
+3. [x] Select and validate complete archive groups
+4. [x] Expose preview through the archive command
+
+## Review findings
+
+- Limit ticket destination validation to paths that represent ticket records.
+  A retained `.coderail/README.md` linking to the existing
+  `.coderail/tickets/README.md` currently stops preview as a stale archive link.
+  The destination is ordinary Coderail Markdown and is outside the ticket
+  destination scope. Stale ticket paths in another status directory must still
+  fail without ID fallback.
+- Preserve directory intent when validating exact link destinations. Preview
+  accepts `tickets/closed/0001-ticket-0001.md/` and lets it defer a ticket, even
+  though the exact path fails with `NotADirectory`. Reject trailing-slash links
+  to regular ticket and plan artifact files as stale. Preserve support for
+  valid directory links and existing doctor link behavior.
 
 ## Task details
 

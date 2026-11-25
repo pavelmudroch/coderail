@@ -2,6 +2,7 @@ import { Commands, type GlobalArguments, type ParsedArguments } from '@commands'
 import { expect } from '@std/expect';
 
 import { UsageError } from '../../src/cli/usage-error.ts';
+import { Archive } from '../../src/commands/archive.ts';
 import { Doctor } from '../../src/commands/doctor.ts';
 import { Idea } from '../../src/commands/idea.ts';
 import { Init } from '../../src/commands/init.ts';
@@ -36,6 +37,7 @@ for (const [name, Child] of [
     ['upgrade', Upgrade],
     ['ticket', Ticket],
     ['idea', Idea],
+    ['archive', Archive],
     ['verify', Verify],
     ['doctor', Doctor],
     ['template', Template],

@@ -1,5 +1,6 @@
 import { Cli } from '@cli';
 
+import { Archive } from './archive.ts';
 import { Doctor } from './doctor.ts';
 import type { Command, ParsedArguments, RunContext } from './helpers/command.ts';
 import { Idea } from './idea.ts';
@@ -31,6 +32,7 @@ const COMMAND = {
     UPGRADE: 'upgrade',
     TICKET: 'ticket',
     IDEA: 'idea',
+    ARCHIVE: 'archive',
     VERIFY: 'verify',
     DOCTOR: 'doctor',
     TEMPLATE: 'template',
@@ -72,6 +74,7 @@ export class Cr implements Command<GlobalArguments> {
             '  upgrade              Upgrade coderail to different version.',
             '  ticket               Manage tickets related to the project.',
             '  idea                 Manage ideas related to the project.',
+            '  archive              Manage retained archive history.',
             '  verify               Verify files by project configuration.',
             '  doctor               Diagnose and fix issues in the project.',
             '  template             Template management.',
@@ -93,6 +96,8 @@ export class Cr implements Command<GlobalArguments> {
                 return new Ticket();
             case COMMAND.IDEA:
                 return new Idea();
+            case COMMAND.ARCHIVE:
+                return new Archive();
             case COMMAND.VERIFY:
                 return new Verify();
             case COMMAND.DOCTOR:
