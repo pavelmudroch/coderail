@@ -171,6 +171,10 @@ Deno.test('Cr::parseArguments stops at global help and forwards command help', (
             rest: [help, 'argument'],
         });
     }
+    expect(parse(['archive', 'read', '--help=false'])).toEqual({
+        args: { ...defaults(), command: 'archive' },
+        rest: ['read', '--help=false'],
+    });
 });
 
 Deno.test('Cr forwards upgrade version selection to the upgrade parser', () => {

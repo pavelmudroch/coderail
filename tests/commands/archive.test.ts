@@ -1,10 +1,15 @@
 import { projectIgnoreLines } from '@project';
 import { expect } from '@std/expect';
-import { dirname, fromFileUrl, join } from '@std/path';
+import { join } from '@std/path';
 import { resolveTicket } from '@tickets';
 
-import { ARCHIVE_REF } from '../../src/archive/history.ts';
-import { Apply, Archive, BrowseArchive, Preview } from '../../src/commands/archive.ts';
+import { Archive } from '../../src/commands/archive.ts';
+import { Apply } from '../../src/commands/archive/apply.ts';
+import { List } from '../../src/commands/archive/list.ts';
+import { Plans } from '../../src/commands/archive/plans.ts';
+import { Preview } from '../../src/commands/archive/preview.ts';
+import { Read } from '../../src/commands/archive/read.ts';
+import { Tickets } from '../../src/commands/archive/tickets.ts';
 import {
     archiveFiles,
     artifactPath,
@@ -15,113 +20,136 @@ import {
     ticketPath,
     withArchiveFixture,
 } from '../archive/fixtures.ts';
-import { captureOutput } from '../log/helpers.ts';
+import { cli, cliOutput, crOutput, write } from './archive/fixtures.ts';
 
-const main = fromFileUrl(new URL('../../src/main.ts', import.meta.url));
-
-async function git(root: string, ...args: string[]): Promise<string> {
-    const result = await new Deno.Command('git', { cwd: root, args }).output();
-    if (!result.success) {
-        throw new Error(new TextDecoder().decode(result.stderr));
+Deno.test('archive CLI shows help and reports argument errors without initialization', async () => {
+    const root = await Deno.makeTempDir();
+    try {
+        const parentUsage = 'cr archive [--help] [--json] <command>';
+        const cases = [
+            {
+                prefix: [],
+                usage: parentUsage,
+                invalid: [[], ['unknown'], ['--json=false'], ['--help=false']],
+            },
+            {
+                prefix: ['preview'],
+                usage: 'cr archive preview [--help] [--json]',
+                invalid: [['extra'], ['--json=false']],
+            },
+            {
+                prefix: ['apply'],
+                usage: 'cr archive apply [--help] [--json] [--yes] <batch-name> <description>',
+                invalid: [['name'], ['--yes=false']],
+            },
+            {
+                prefix: ['list'],
+                usage: 'cr archive list [--help] [--json]',
+                invalid: [['extra'], ['--yes']],
+            },
+            {
+                prefix: ['plans'],
+                usage: 'cr archive plans [--help] [--json] <batch-id>',
+                invalid: [[], [batch, 'extra']],
+            },
+            {
+                prefix: ['tickets'],
+                usage: 'cr archive tickets [--help] [--json] <batch-id>',
+                invalid: [[], ['']],
+            },
+            {
+                prefix: ['read'],
+                usage: 'cr archive read [--help] [--json] <batch-id>/<path-to-file>',
+                invalid: [[], ['--help=false']],
+            },
+        ];
+        for (const { prefix, usage, invalid } of cases) {
+            const [short, long] = await Promise.all([
+                cli(root, ...prefix, '-h'),
+                cli(root, ...prefix, '--help'),
+            ]);
+            expect(short).toEqual(long);
+            expect(long).toMatchObject({ code: 0, stderr: '' });
+            expect(long.stdout).toContain(`Usage:\n  ${usage}\n\n  `);
+            expect(long.stdout).toContain('Options:\n  -h, --help');
+            expect(long.stdout).toContain('--json');
+            if (prefix.length === 0) {
+                expect(long.stdout).toContain(
+                    'Manage archive batches and archived files within the history branch.',
+                );
+                expect(long.stdout).toContain('Commands:\n');
+            } else if (usage.includes('<')) {
+                expect(long.stdout).toContain('Arguments:\n');
+            }
+            for (const result of await Promise.all(
+                invalid.map((args) => cli(root, ...prefix, ...args)),
+            )) {
+                expect(result.code).toBe(2);
+                expect(result.stderr).toContain(`Usage:\n  ${usage}\n`);
+            }
+        }
+        for (const args of [['preview'], ['apply', '--yes', 'name', 'Description']]) {
+            const result = await cli(root, ...args);
+            expect(result.code).toBe(1);
+            expect(result.stderr).toContain('No initialized project found');
+        }
+        await expect(Deno.lstat(join(root, '.coderail'))).rejects.toBeInstanceOf(
+            Deno.errors.NotFound,
+        );
+    } finally {
+        await Deno.remove(root, { recursive: true });
     }
-    return new TextDecoder().decode(result.stdout).trim();
-}
+});
 
-async function cli(
-    root: string,
-    ...args: string[]
-): Promise<{ code: number; stdout: string; stderr: string }> {
-    const result = await cliOutput(root, ...args);
-    const decoder = new TextDecoder();
-    return {
-        code: result.code,
-        stdout: decoder.decode(result.stdout),
-        stderr: decoder.decode(result.stderr),
-    };
-}
-
-function cliOutput(root: string, ...args: string[]): Promise<Deno.CommandOutput> {
-    return crOutput(root, 'archive', ...args);
-}
-
-function crOutput(root: string, ...args: string[]): Promise<Deno.CommandOutput> {
-    return new Deno.Command(Deno.execPath(), {
-        cwd: root,
-        args: ['run', '-A', main, '--no-color', ...args],
-    }).output();
-}
-
-async function write(root: string, path: string, text: string): Promise<void> {
-    const filename = join(root, path);
-    await Deno.mkdir(dirname(filename), { recursive: true });
-    await Deno.writeTextFile(filename, text);
-}
-
-Deno.test('archive resolves preview and handles argument errors and help', async () => {
+Deno.test('archive requires a known subcommand and forwards leaf options', async () => {
     const archive = new Archive();
     expect(archive.requiresInit).toBe(false);
     expect(archive.getUsage()).toContain('cr archive [--help] [--json] <command>');
-    expect(archive.shouldHandleHelp(archive.parseArguments([]))).toBe(false);
-    expect(archive.parseArguments(['--json'])).toEqual({ args: { help: false }, rest: ['--json'] });
-    expect(archive.getSubcommand(archive.parseArguments(['preview']))).toBeInstanceOf(Preview);
-    expect(archive.getSubcommand(archive.parseArguments(['apply']))).toBeInstanceOf(Apply);
-    expect(archive.parseArguments(['--json', 'preview', '--help']).rest).toEqual([
-        '--json',
-        '--help',
-    ]);
-    for (const flag of ['-h', '--help']) {
-        expect(archive.shouldHandleHelp(archive.parseArguments([flag, 'ignored']))).toBe(true);
+    for (const [name, command] of Object.entries({
+        preview: Preview,
+        apply: Apply,
+        list: List,
+        plans: Plans,
+        tickets: Tickets,
+        read: Read,
+    })) {
+        const parsed = archive.parseArguments(['--json', name, '--help']);
+        expect(parsed).toEqual({
+            args: { help: false, command: name },
+            rest: ['--json', '--help'],
+        });
+        expect(archive.getSubcommand(parsed)).toBeInstanceOf(command);
     }
-    expect(() => archive.parseArguments(['--unknown'])).toThrow('Unknown option "--unknown".');
-    expect(() => archive.getSubcommand(archive.parseArguments([]))).toThrow(
-        'Required archive subcommand is missing.',
-    );
-    expect(() => archive.getSubcommand(archive.parseArguments(['unknown']))).toThrow(
-        'Unknown archive subcommand "unknown".',
-    );
-    expect(await archive.run()).toBeUndefined();
-
-    const preview = new Preview();
-    expect(preview.requiresInit).toBe(true);
-    expect(preview.getSubcommand()).toBeUndefined();
-    expect(preview.getUsage()).toContain('cr archive preview [--help] [--json]');
-    expect(preview.parseArguments([])).toEqual({ args: { help: false, json: false }, rest: [] });
-    expect(preview.parseArguments(['--json']).args.json).toBe(true);
-    for (const flag of ['-h', '--help']) {
-        expect(preview.shouldHandleHelp(preview.parseArguments([flag, 'ignored']))).toBe(true);
-    }
-    expect(() => preview.parseArguments(['too-many'])).toThrow(
-        'Unexpected archive preview argument "too-many".',
-    );
-});
-
-Deno.test('archive apply parses approval, JSON, and positional arguments', () => {
-    const apply = new Apply();
-    expect(apply.requiresInit).toBe(true);
-    expect(apply.getSubcommand()).toBeUndefined();
-    expect(apply.getUsage()).toContain('cr archive apply');
-    for (const flag of ['-h', '--help']) {
-        expect(apply.shouldHandleHelp(apply.parseArguments([flag, 'ignored']))).toBe(true);
-    }
-    expect(apply.shouldHandleHelp(apply.parseArguments(['name', 'description']))).toBe(false);
-    expect(
-        apply.parseArguments(['--json', '--yes', '--', 'first-batch', '--quoted description']),
-    ).toEqual({
-        args: {
-            help: false,
-            json: true,
-            yes: true,
-            name: 'first-batch',
-            description: '--quoted description',
-        },
-        rest: [],
+    expect(archive.parseArguments(['--json', '--', 'read', '--', 'path'])).toEqual({
+        args: { help: false, command: 'read' },
+        rest: ['--json', '--', 'path'],
     });
-    for (const args of [[], ['name'], ['name', 'description', 'extra']]) {
-        expect(() => apply.parseArguments(args)).toThrow('requires a batch name and a description');
+    expect(archive.parseArguments(['--json'])).toEqual({ args: { help: false }, rest: ['--json'] });
+    for (const flag of ['-h', '--help']) {
+        const parsed = archive.parseArguments(['--json', flag, 'ignored']);
+        expect(parsed).toEqual({ args: { help: true }, rest: ['--json'] });
+        expect(archive.shouldHandleHelp(parsed)).toBe(true);
     }
-    expect(() => apply.parseArguments(['--force', 'name', 'description'])).toThrow(
-        'Unknown archive apply option',
-    );
+    for (const [flag, message] of [
+        ['--unknown', 'Unknown option "--unknown".'],
+        ['--help=false', 'Option "--help" does not take a value.'],
+        ['--json=', 'Option "--json" does not take a value.'],
+    ] as const) {
+        expect(() => archive.parseArguments([flag])).toThrow(message);
+    }
+    for (const args of [[], ['--json'], ['--']]) {
+        const parsed = archive.parseArguments(args);
+        expect(archive.shouldHandleHelp(parsed)).toBe(false);
+        expect(() => archive.getSubcommand(parsed)).toThrow(
+            'Required archive subcommand is missing.',
+        );
+    }
+    for (const args of [['unknown'], ['--', '--help']]) {
+        expect(() => archive.getSubcommand(archive.parseArguments(args))).toThrow(
+            `Unknown archive subcommand "${args.at(-1)}".`,
+        );
+    }
+    expect(await archive.run()).toBeUndefined();
 });
 
 Deno.test(
@@ -169,395 +197,6 @@ Deno.test(
     },
 );
 
-Deno.test('archive apply reports recovery coordinates even when interrupted', async () => {
-    const root = await Deno.makeTempDir();
-    const ideaPath = '.coderail/plans/an-idea/IDEA.md';
-    const idea = '---\ntitle: "An idea"\nstatus: "archived"\n---\n';
-    try {
-        await fixtureGit(root, 'init', '-q');
-        await fixtureGit(root, 'config', 'user.name', 'Archive Tests');
-        await fixtureGit(root, 'config', 'user.email', 'archive@example.test');
-        await write(root, ideaPath, idea);
-        await write(root, '.coderail/plans/an-idea/notes.txt', 'Original notes');
-        await fixtureGit(root, 'add', '.');
-        await fixtureGit(root, 'commit', '--no-gpg-sign', '-qm', 'Apply fixture');
-        const command = new Apply();
-        const controller = new AbortController();
-        const remove = Deno.remove;
-        Deno.remove = async (path, options) => {
-            await remove(path, options);
-            if (path === join(root, ideaPath)) {
-                controller.abort();
-            }
-        };
-        using captured = captureOutput();
-        try {
-            await expect(
-                command.run({
-                    context: { currentWorkingDirectory: root, installRoot: root },
-                    configuration: {
-                        logLevel: 'normal',
-                        noColor: true,
-                        nonInteractive: true,
-                        verify: { rules: [] },
-                    },
-                    signal: controller.signal,
-                    parsedArguments: command.parseArguments([
-                        '--yes',
-                        'interrupted',
-                        'Description',
-                    ]),
-                }),
-            ).rejects.toThrow('Archive source removal failed');
-        } finally {
-            Deno.remove = remove;
-        }
-        expect(captured.stderr.join('')).toMatch(
-            /Rollback succeeded.*Batch: .*_interrupted.*Source commit: .*Archive commit: /s,
-        );
-        expect(await Deno.readTextFile(join(root, ideaPath))).toBe(idea);
-        expect(await fixtureGit(root, 'for-each-ref', ARCHIVE_REF)).toBe('');
-    } finally {
-        await Deno.remove(root, { recursive: true });
-    }
-});
-
-Deno.test(
-    'archive apply CLI requires approval, emits valid JSON, and handles empty selections',
-    async () => {
-        const root = await Deno.makeTempDir();
-        const ideaPath = '.coderail/plans/an-idea/IDEA.md';
-        const idea = '---\ntitle: "An idea"\nstatus: "archived"\n---\n';
-        try {
-            await fixtureGit(root, 'init', '-q');
-            await fixtureGit(root, 'config', 'user.name', 'Archive Tests');
-            await fixtureGit(root, 'config', 'user.email', 'archive@example.test');
-            await write(root, '.coderail/.gitignore', projectIgnoreLines.join('\n') + '\n');
-            await fixtureGit(root, 'add', '.');
-            await fixtureGit(root, 'commit', '--no-gpg-sign', '-qm', 'Empty fixture');
-            const empty = await cli(root, 'apply', '--yes', 'empty', 'No work');
-            expect(empty.code).toBe(0);
-            expect(empty.stdout).toContain('No eligible files to archive.');
-            await write(root, ideaPath, idea);
-            await fixtureGit(root, 'add', '.');
-            await fixtureGit(root, 'commit', '--no-gpg-sign', '-qm', 'Apply fixture');
-            const sourceCommit = await fixtureGit(root, 'rev-parse', 'HEAD');
-            const index = await Deno.readFile(join(root, '.git/index'));
-            const denied = await cli(root, '--json', 'apply', 'test', 'Description');
-            expect(denied.code).toBe(1);
-            expect(denied.stderr).toContain('Pause source edits and ticket or plan updates');
-            expect(denied.stderr).toContain('use --yes after approval');
-            expect(denied.stdout).toBe('');
-
-            const nested = join(root, 'nested-checkout');
-            await Deno.mkdir(nested);
-            await fixtureGit(nested, 'init', '-q');
-            const wrongCheckout = await cli(
-                nested,
-                'apply',
-                '--yes',
-                'wrong-checkout',
-                'Description',
-            );
-            expect(wrongCheckout.code).toBe(1);
-            expect(wrongCheckout.stderr).toContain('current Git checkout does not contain');
-
-            const command = new Apply();
-            const currentWorkingDirectory = join(root, '.coderail');
-            const context = { currentWorkingDirectory, repositoryRoot: root, installRoot: root };
-            const configuration = {
-                logLevel: 'normal' as const,
-                noColor: true,
-                nonInteractive: false,
-                verify: { rules: [] },
-            };
-            const signal = new AbortController().signal;
-            const run = (args: string[]): Promise<void> =>
-                command.run({
-                    context,
-                    configuration,
-                    signal,
-                    parsedArguments: command.parseArguments(args),
-                });
-            const captured = captureOutput();
-            const readSync = Deno.stdin.readSync;
-            Deno.stdin.readSync = (buffer): number => {
-                buffer.set([10]);
-                return 1;
-            };
-            try {
-                await run(['test', 'Description']);
-                expect(captured.stderr.join('')).toContain('eligible archive files? [y/N]');
-                expect(captured.stdout.join('')).toContain('Archive apply declined.');
-                await expect(
-                    command.run({
-                        context,
-                        configuration: { ...configuration, nonInteractive: true },
-                        signal,
-                        parsedArguments: command.parseArguments(['test', 'Description']),
-                    }),
-                ).rejects.toThrow('use --yes after approval');
-            } finally {
-                Deno.stdin.readSync = readSync;
-                captured[Symbol.dispose]();
-            }
-            expect(await fixtureGit(root, 'for-each-ref', ARCHIVE_REF)).toBe('');
-            expect(await Deno.readTextFile(join(root, ideaPath))).toBe(idea);
-            expect(await Deno.readFile(join(root, '.git/index'))).toEqual(index);
-
-            const applied = await cli(root, '--json', 'apply', '--yes', 'test', 'Description');
-            expect(applied.code).toBe(0);
-            expect(applied.stderr).toContain('Pause source edits and ticket or plan updates');
-            const batchId = `${new Date().toISOString().slice(0, 10)}_test`;
-            const archiveCommit = await fixtureGit(root, 'rev-parse', ARCHIVE_REF);
-            expect(JSON.parse(applied.stdout)).toEqual({
-                status: 'applied',
-                sourceCommit,
-                batchId,
-                archiveCommit,
-                paths: [ideaPath],
-            });
-            expect((await cli(root, 'read', `${batchId}/plans/an-idea/IDEA.md`)).stdout).toBe(idea);
-            await expect(Deno.lstat(join(root, ideaPath))).rejects.toBeInstanceOf(
-                Deno.errors.NotFound,
-            );
-            expect(await Deno.readFile(join(root, '.git/index'))).toEqual(index);
-            expect(await fixtureGit(root, 'rev-parse', 'HEAD')).toBe(sourceCommit);
-
-            await write(root, ideaPath, idea);
-            using humanOutput = captureOutput();
-            await run(['--yes', 'second', 'Description']);
-            expect(humanOutput.stdout.join('')).toMatch(
-                /Recorded archive batch [\d-]+_second at [a-f\d]+\. Removed 1 source files\./,
-            );
-        } finally {
-            await Deno.remove(root, { recursive: true });
-        }
-    },
-);
-
-Deno.test(
-    'archive preview CLI emits empty, grouped and deferred results and leaves source state alone',
-    async () => {
-        const root = await Deno.makeTempDir();
-        try {
-            await git(root, 'init', '-q');
-            await write(root, '.coderail/.gitignore', projectIgnoreLines.join('\n') + '\n');
-            await git(root, 'add', '.');
-            const commit = (): Promise<string> =>
-                git(
-                    root,
-                    '-c',
-                    'user.name=Archive Tests',
-                    '-c',
-                    'user.email=archive@example.test',
-                    'commit',
-                    '--no-gpg-sign',
-                    '-qm',
-                    'Fixture',
-                );
-            await commit();
-            const empty = await cli(root, '--json', 'preview');
-            expect(empty.code).toBe(0);
-            expect(JSON.parse(empty.stdout)).toEqual({
-                sourceCommit: await git(root, 'rev-parse', 'HEAD'),
-                eligible: [],
-                deferred: [],
-            });
-
-            const idea = '---\ntitle: "Old plan"\nstatus: "archived"\n---\n';
-            await write(root, '.coderail/plans/first/IDEA.md', idea);
-            await write(root, '.coderail/plans/second/IDEA.md', idea);
-            const retained = '.coderail/plans/INDEX.md';
-            await write(root, retained, '[Active reference](second/IDEA.md)\n');
-            await git(root, 'add', '.');
-            await commit();
-
-            const human = await cli(root, 'preview');
-            expect(human.code).toBe(0);
-            expect(human.stdout).toContain(
-                'Eligible groups: 1\n\n  .coderail/plans/first/IDEA.md\n\nDeferred groups: 1\n\n' +
-                    '  .coderail/plans/second/IDEA.md\n    Referenced by retained Markdown: .coderail/plans/INDEX.md.',
-            );
-            const grouped = await cli(root, 'preview', '--json');
-            expect(grouped.code).toBe(0);
-            expect(JSON.parse(grouped.stdout).eligible).toHaveLength(1);
-            expect(JSON.parse(grouped.stdout).deferred).toHaveLength(1);
-            const preview = new Preview();
-            const context = { currentWorkingDirectory: root, installRoot: root };
-            const configuration = {
-                logLevel: 'normal' as const,
-                noColor: true,
-                nonInteractive: true,
-                verify: { rules: [] },
-            };
-            using captured = captureOutput();
-            for (const flags of [[], ['--json']]) {
-                captured.stdout.length = 0;
-                await preview.run({
-                    context,
-                    configuration,
-                    signal: new AbortController().signal,
-                    parsedArguments: preview.parseArguments(flags),
-                });
-                expect(captured.stdout.join('')).toContain('.coderail/plans/first/IDEA.md');
-                expect(captured.stdout.join('')).toContain('.coderail/plans/second/IDEA.md');
-            }
-            captured.stdout.length = 0;
-            await preview.run({
-                context: {
-                    ...context,
-                    currentWorkingDirectory: join(root, 'ignored'),
-                    repositoryRoot: root,
-                },
-                configuration,
-                signal: new AbortController().signal,
-                parsedArguments: preview.parseArguments(['--json']),
-            });
-            expect(JSON.parse(captured.stdout.join('')).deferred).toHaveLength(1);
-
-            const bad = '[Broken reference](second/missing.md)\n';
-            await write(root, retained, bad);
-            const refs = await git(root, 'show-ref');
-            const index = await Deno.readFile(join(root, '.git', 'index'));
-            const failure = await cli(root, 'preview', '--json');
-            expect(failure.code).toBe(1);
-            expect(failure.stdout).toBe('');
-            expect(failure.stderr).toContain(
-                'Stale archive link in ".coderail/plans/INDEX.md": "second/missing.md"',
-            );
-            expect(await git(root, 'show-ref')).toBe(refs);
-            expect(await Deno.readFile(join(root, '.git', 'index'))).toEqual(index);
-            expect(await Deno.readTextFile(join(root, retained))).toBe(bad);
-        } finally {
-            await Deno.remove(root, { recursive: true });
-        }
-    },
-);
-
-Deno.test('archive browsing parses command usage and required arguments', () => {
-    const archive = new Archive();
-    for (const command of ['list', 'plans', 'tickets', 'read'] as const) {
-        expect(archive.getUsage()).toContain(`  ${command} `);
-        const parsed = archive.parseArguments(['--json', command]);
-        expect(archive.getSubcommand(parsed)).toBeInstanceOf(BrowseArchive);
-        const browse = new BrowseArchive(command);
-        expect(browse.requiresInit).toBe(false);
-        expect(browse.getSubcommand()).toBeUndefined();
-        expect(browse.getUsage()).toContain(`cr archive ${command} [--help]`);
-        const defaultArgs = command === 'list' ? [] : [batch];
-        expect(browse.parseArguments(defaultArgs).args.json).toBe(false);
-        expect(browse.parseArguments(['--json', ...defaultArgs])).toEqual({
-            args: { help: false, json: true, target: defaultArgs[0] ?? '' },
-            rest: [],
-        });
-        expect(browse.shouldHandleHelp(browse.parseArguments(defaultArgs))).toBe(false);
-        for (const help of ['--help', '-h']) {
-            expect(browse.shouldHandleHelp(browse.parseArguments([help, 'ignored']))).toBe(true);
-        }
-        expect(() => browse.parseArguments(['--unknown'])).toThrow(
-            `Unexpected archive ${command} argument "--unknown".`,
-        );
-    }
-    expect(() => new BrowseArchive('list').parseArguments(['extra'])).toThrow(
-        'Unexpected archive list argument "extra".',
-    );
-    expect(() => new BrowseArchive('plans').parseArguments([batch, 'extra'])).toThrow(
-        'Unexpected archive plans argument "extra".',
-    );
-    expect(() => new BrowseArchive('plans').parseArguments(['', batch])).toThrow(
-        'Unexpected archive plans argument "".',
-    );
-    expect(() => new BrowseArchive('plans').parseArguments([])).toThrow(
-        'Archive plans requires a batch ID.',
-    );
-    expect(() => new BrowseArchive('read').parseArguments([])).toThrow(
-        'Archive read requires an archived file path.',
-    );
-});
-
-Deno.test('archive browse commands format listings and emit raw bytes in-process', async () => {
-    await withArchiveFixture(archiveFiles, async (root) => {
-        const context = { currentWorkingDirectory: root, installRoot: root };
-        const runBrowse = (
-            command: BrowseArchive,
-            args: string[],
-            repositoryRoot?: string,
-        ): Promise<void> =>
-            command.run({
-                context: { ...context, repositoryRoot },
-                configuration: {
-                    logLevel: 'normal',
-                    noColor: true,
-                    nonInteractive: true,
-                    verify: { rules: [] },
-                },
-                signal: new AbortController().signal,
-                parsedArguments: command.parseArguments(args),
-            });
-        using captured = captureOutput();
-        const outputAfter = async (command: BrowseArchive, ...args: string[]): Promise<string> => {
-            captured.stdout.length = 0;
-            await runBrowse(command, args);
-            const stdout = captured.stdout.join('');
-            return args.includes('--json') ? stdout : stdout.replaceAll('\x1b[0K', '');
-        };
-        const list = new BrowseArchive('list');
-        const plans = new BrowseArchive('plans');
-        const tickets = new BrowseArchive('tickets');
-        expect(await outputAfter(list)).toBe(
-            '2026-11-25_alpha\n2026-11-25_zulu\n2026-11-24_previous\n',
-        );
-        expect(JSON.parse(await outputAfter(list, '--json'))).toEqual([
-            batch,
-            '2026-11-25_zulu',
-            '2026-11-24_previous',
-        ]);
-        expect(await outputAfter(plans, batch)).toBe(
-            expectedPlans
-                .map(({ title, parent, path, artifacts }) =>
-                    [
-                        `${title}  ${path}`,
-                        ...(parent === null ? [] : [`  Parent: ${parent}`]),
-                        ...artifacts.map((artifact) => `  ${artifact}`),
-                    ].join('\n'),
-                )
-                .join('\n') + '\n',
-        );
-        expect(await outputAfter(plans, '2026-11-25_zulu')).toContain('No archived plans');
-        expect(JSON.parse(await outputAfter(plans, batch, '--json'))).toEqual(expectedPlans);
-        expect(await outputAfter(tickets, batch)).toBe(
-            `0009  Small ticket  ${ticketPath}\n` +
-                `9999  Last four digits  ${batch}/tickets/9999-last-four.md\n` +
-                `10000  Large ticket  ${batch}/tickets/10000-large.md\n`,
-        );
-        expect(await outputAfter(tickets, '2026-11-25_zulu')).toContain('No archived tickets');
-        expect(JSON.parse(await outputAfter(tickets, batch, '--json'))[0]).toEqual({
-            id: '0009',
-            title: 'Small ticket',
-            path: ticketPath,
-        });
-        const bytes: number[] = [];
-        const original = Deno.stdout.writeSync;
-        Deno.stdout.writeSync = (buffer): number => {
-            bytes.push(...buffer);
-            return buffer.length;
-        };
-        try {
-            await runBrowse(
-                new BrowseArchive('read'),
-                ['--json', artifactPath],
-                join(root, 'ignored'),
-            );
-            expect(new Uint8Array(bytes)).toEqual(rawFile);
-        } finally {
-            Deno.stdout.writeSync = original;
-        }
-        await fixtureGit(root, 'update-ref', '-d', 'refs/heads/coderail/archive-history');
-        expect(await outputAfter(list)).toBe('No archive batches.\n');
-    });
-});
-
 Deno.test(
     'archive browse CLI passes listing paths to byte-exact reads without affecting source state',
     async () => {
@@ -581,6 +220,8 @@ Deno.test(
             const plans = await cli(root, 'plans', batch, '--json');
             expect(plans.code).toBe(0);
             expect(JSON.parse(plans.stdout)).toEqual(expectedPlans);
+            const leadingJsonPlans = await cli(subdirectory, '--json', '--', 'plans', '--', batch);
+            expect(leadingJsonPlans).toMatchObject({ code: 0, stdout: plans.stdout });
             const humanPlans = await cli(root, 'plans', batch);
             expect(humanPlans.code).toBe(0);
             expect(humanPlans.stdout).toContain(`  Parent: ${batch}/plans/parent/IDEA.md\n`);
@@ -591,6 +232,16 @@ Deno.test(
                 title: 'Small ticket',
                 path: ticketPath,
             });
+            const trailingJsonTickets = await cli(subdirectory, 'tickets', batch, '--json');
+            expect(trailingJsonTickets).toMatchObject({ code: 0, stdout: tickets.stdout });
+            for (const args of [
+                ['--json', 'read', artifactPath],
+                ['read', artifactPath, '--json'],
+            ]) {
+                const raw = await cliOutput(subdirectory, ...args);
+                expect(raw.code).toBe(0);
+                expect(raw.stdout).toEqual(rawFile);
+            }
             const humanTickets = await cli(root, 'tickets', batch);
             expect(humanTickets.code).toBe(0);
             expect(humanTickets.stdout).toContain(`0009  Small ticket  ${ticketPath}\n`);

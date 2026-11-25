@@ -144,7 +144,7 @@ export class Cr implements Command<GlobalArguments> {
                     }
                     args.help = true;
                     return { args, rest };
-                case arg.startsWith('--help='):
+                case arg.startsWith('--help=') && args.command === undefined:
                     Cli.raiseUsageError('Option "--help" does not take a value.', this);
                 case arg === '--version':
                     if (args.command === COMMAND.UPGRADE) {
