@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `cr archive` previews eligible groups of closed tickets and completed plan
+  trees, records approved batches on the local `coderail/archive-history` branch,
+  and removes their source files from the checkout. Browse batches with `list`,
+  `plans`, `tickets`, and `read`. The bundled `archive` skill previews the
+  selection and asks for approval before applying it.
+
 ## [0.5.1] - 2026-11-24
 
 ### Added

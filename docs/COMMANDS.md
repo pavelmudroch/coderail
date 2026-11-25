@@ -7,6 +7,7 @@
 - [Start a project](#start-a-project)
 - [Agent instructions](#agent-instructions)
 - [Ideas and tickets](#ideas-and-tickets)
+- [Archive completed work](#archive-completed-work)
 - [Configuration](#configuration)
 - [Verify your changes](#verify-your-changes)
 - [Command help and current limitations](#command-help-and-current-limitations)
@@ -113,8 +114,8 @@ Use `cr idea ready <idea>` when an idea is ready for further processing,
 `cr idea reopen <idea>` to reopen it. After creating tickets from a ready idea,
 use `cr idea archive <idea>` to mark it as archived. Only ready ideas can be
 archived; `--json` returns the updated idea. Archived ideas remain visible with
-their status in `cr idea` and `cr idea --json`, and can be reopened. Use the idea
-identifier returned by the CLI.
+their status in `cr idea` and `cr idea --json`, and can be reopened while they
+remain in the checkout. Use the idea identifier returned by the CLI.
 
 Tickets track implementation work. After creating a ticket, use its returned ID
 in subsequent commands. Existing tickets can be identified by a numeric ID with
@@ -141,6 +142,56 @@ cr ticket close .coderail/tickets/open/0001-improve-search.md
 Create a dependent ticket with `cr ticket create --depends-on 0001 "Add search filters"`.
 Use `cr ticket reopen 0001` to reopen a closed ticket. Idea and ticket commands
 support `--json` for scripts.
+
+## Archive completed work
+
+Use `cr archive` to move eligible completed records from an initialized Git
+project into local history. Start with `cr archive preview`. It reports eligible
+groups and explains why deferred groups must stay. Candidates include closed
+tickets and plans marked `archived` or `split`. Preview keeps related records
+together based on plan hierarchy, ticket dependencies and duplicate references,
+and Markdown links. References from retained records can defer the entire group.
+Stale links to archive records can block selection. Use `cr doctor` to diagnose
+ticket links and correct any invalid destinations before retrying. Files selected
+for archival must be committed regular files that match `HEAD` in both the index
+and the working tree.
+
+```sh
+cr archive preview
+cr archive apply doctor-cleanup "Retain completed Doctor work"
+```
+
+Apply rechecks eligibility and requests confirmation before recording and
+removing files. For non-interactive use, pass `--yes` after approval. Pause edits
+to source files, plans, and tickets while apply runs. The bundled `archive`
+skill can preview the selection and request approval in your agent session.
+
+Batch names use lowercase letters or digits separated by single hyphens. Supply
+a nonempty description as one argument. CodeRail prefixes the name with the UTC
+date to form a batch ID such as `2026-11-25_doctor-cleanup`. Apply uses your Git
+identity to commit the batch to the local `coderail/archive-history` branch.
+Switch away from that branch in any worktree before applying. Apply then removes
+source files from the working tree, leaving the deletions unstaged for review
+and commit on your current branch. CodeRail attempts rollback if source removal
+fails. New tickets can reuse IDs removed from the checkout, so use the batch ID
+and listing path to identify an archived ticket.
+
+Browse retained files from a Git checkout with the local archive branch. These
+commands also work after the archived records have left the project tree.
+
+```sh
+cr archive list
+cr archive plans 2026-11-25_doctor-cleanup
+cr archive tickets 2026-11-25_doctor-cleanup
+cr archive read 2026-11-25_doctor-cleanup/README.md
+```
+
+Replace the example batch ID with one from `cr archive list`. Pass a path
+printed by `plans` or `tickets` to `read` to retrieve that file. Each batch also
+contains a `README.md` with its description, source revision, and original file
+paths. CodeRail updates Markdown links between files in the same batch to use
+their archived locations. `preview`, `apply`, `list`, `plans`, and `tickets`
+support `--json`. `read` writes the archived file's raw bytes to stdout.
 
 ## Configuration
 

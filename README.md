@@ -143,6 +143,10 @@ Invoke `docs` to bring user documentation into line with the implemented behavio
 Stage the final changes and invoke `commit` to create logically coherent commits
 from the staged diff.
 
+When you're ready to clear completed work from the checkout, invoke `archive`
+to preview eligible plans and tickets and approve their removal. The records
+remain browsable in local Git history. See the [archive commands](docs/COMMANDS.md#archive-completed-work).
+
 ## Further reading
 
 - [Installation, upgrades, and diagnostics](docs/INSTALLATION.md)
