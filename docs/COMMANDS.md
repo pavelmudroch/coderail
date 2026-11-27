@@ -321,6 +321,9 @@ Use `cr --help`, `cr <command> --help`, or a subcommand's help, such as
 `--cwd <path>`, `--non-interactive`, `--no-color`, `--verbose`, and `--quiet`.
 For example, `cr --cwd /path/to/project ticket next` selects another project.
 
+Commands that support `--json` write JSON to stdout with four-space indentation.
+Live terminal display updates go to stderr.
+
 Templates are stored at `<installRoot>/templates/<name>`, including during source
 development. Use `cr template` to list them alphabetically or `cr template <name>`
 to inspect an exact name. `--json` returns an array of `{ name, description, path }`

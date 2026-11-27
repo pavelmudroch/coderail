@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in text or JSON. `cr work start <name>` creates and switches to a
   `coderail/work/<name>` branch that tracks the current local branch.
 
+### Changed
+
+- JSON output from `cr archive`, `cr template`, and `cr ticket` subcommands
+  uses four-space indentation.
+
+### Fixed
+
+- Live terminal display updates stay on stderr, so they no longer add escape
+  sequences to command results on stdout.
+
 ## [0.6.0] - 2026-11-25
 
 ### Added
