@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `cr work` shows the current Git branch, upstream, and committed review range
+  in text or JSON. `cr work start <name>` creates and switches to a
+  `coderail/work/<name>` branch that tracks the current local branch.
+
 ## [0.6.0] - 2026-11-25
 
 ### Added

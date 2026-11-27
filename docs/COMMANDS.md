@@ -170,9 +170,9 @@ collide with an existing branch. To start another work branch, first switch
 to a regular branch.
 
 Use Git to manage the branch. While on the work branch, `git push origin HEAD`
-publishes it without changing the local upstream and `git rebase @{upstream}`
-rebases it onto that upstream. To merge and delete it, switch to the intended
-target branch and run the commands below.
+publishes it while keeping the local upstream, and `git rebase '@{upstream}'`
+rebases it onto that upstream. To merge and delete it, switch back to the local
+branch you started from and run the commands below.
 
 ```sh
 git merge coderail/work/internal-archive-history
@@ -180,21 +180,25 @@ git branch -d coderail/work/internal-archive-history
 ```
 
 Run `cr work` from a Git working tree to show the branch, its configured
-upstream, the merge base, HEAD, and the review range. For a branch named
-`coderail/work/<name>`, the command also shows `<name>` as the work name.
-Coderail initialization is optional. Use `--cwd <path>` to select a different
-checkout or a directory inside it. Use `cr work --json` for full commit IDs
-and `null` values for unavailable fields.
+upstream, the merge base, HEAD, and the review range. The command works on
+regular branches too. For a branch named `coderail/work/<name>`, it also shows
+`<name>` as the work name. Both commands work without `cr init` and accept the
+global `--cwd <path>` option to select a checkout or a directory inside it.
+
+Text output abbreviates commit IDs. `cr work --json` writes an object with
+`work`, `branch`, `upstream`, `baseCommit`, `headCommit`, and `reviewRange` to
+stdout, with full commit IDs and `null` for unavailable values.
 
 The review range covers committed changes from the merge base of HEAD and its
 upstream through HEAD. It uses local refs and stays the same when you edit or
-stage files. The range is unavailable when no upstream is configured, its ref
-is missing, or the histories have no common ancestor. Running `git push -u`
-can change the configured upstream and therefore the review range.
+stage files. The range is unavailable with a detached HEAD, before the first
+commit, when the upstream is unset or missing locally, or when the histories
+have no common ancestor. Running `git push -u` can change the configured
+upstream and therefore the review range.
 
-Use `git diff @{upstream}...HEAD` to see the aggregate patch. To review the
-exact commits reported by Coderail, use `git diff <base> <head>` with the two
-reported endpoints.
+Use `git diff '@{upstream}...HEAD'` to see the aggregate patch. To compare the
+reported endpoints directly, substitute the two commit IDs into
+`git diff <base> <head>`.
 
 ## Archive completed work
 

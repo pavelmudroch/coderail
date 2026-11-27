@@ -92,6 +92,10 @@ formatter, linter, type checker, and tests before starting implementation.
 
 See [project setup](docs/COMMANDS.md#start-a-project) for the commands.
 
+In a Git checkout, you can use `cr work start <name>` to create a work branch
+that tracks your current local branch. Use `cr work` to find the committed
+changes to review. See [work branches and review ranges](docs/COMMANDS.md#review-work).
+
 ### 2. Explore the idea
 
 Start an agent session in your project and invoke `explore` with your goal—for
