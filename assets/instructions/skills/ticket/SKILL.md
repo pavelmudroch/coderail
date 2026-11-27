@@ -21,7 +21,17 @@ Decompose available implementation context into small, actionable tickets.
 - Declare dependencies using repeated `-d <ticket-id>` options.
 - Edit only ticket files returned by `cr ticket --json create`.
 - Preserve CLI-generated front matter.
-- Context is idea without status 'ready' then report failure.
+- If the context is an idea without status 'ready', report failure.
+
+## Work Context
+
+Before creating any tickets:
+
+1. Inspect the current work context using `cr work --json`.
+2. If already on a work branch, continue within the existing work.
+3. Otherwise, derive a concise work name from the implementation context and ask the user whether to start new work or continue on the current branch.
+4. If approved, invoke `cr work start <work-name>`.
+5. If work creation fails, report failure and do not proceed with ticket creation.
 
 ## Completion
 

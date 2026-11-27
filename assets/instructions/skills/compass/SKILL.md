@@ -23,13 +23,14 @@ disable-model-invocation: true
 | Current need or state | Recommend |
 | --- | --- |
 | Missing project setup | Initialize, configure verification, and install harness instructions. |
+| Starting or resuming work in Git | Inspect `cr work`. Continue on the existing work branch or consider `cr work start <work-name>` for a substantial change. |
 | Unclear goal, scope, behavior, or important interfaces | Use `explore` to produce an implementation-ready idea. |
 | Agreed design without actionable work | Use `ticket` to create small tickets with dependencies and validation criteria. |
 | Ready ticket for autonomous implementation | Use `implement` with the ticket, or let it select the next ready ticket. |
 | User wants to write the code and learn | Use `mentor` to guide implementation and review each task. |
 | Queue of ready tickets for delegated work | Use <skill>orchestrate</skill> to implement, review, and commit. |
 | Failing verification or incomplete task | Diagnose and correct the failure before marking the task complete or closing the ticket. |
-| Staged changes needing explanation and discussion | Use `walkthrough` to review them and record agreed follow-up work. |
+| Completed work needing aggregate review | Use `walkthrough` to review the committed range reported by `cr work` and record agreed follow-up work. |
 | Agreed review findings | Address in-scope corrections; create tickets for independent work; return to `explore` for consequential design changes. |
 | Verified behavior missing from documentation | Use `docs` to synchronize the relevant documentation. |
 | Reviewed changes ready to record | Stage the intended changes and use `commit`. |
@@ -55,6 +56,13 @@ Use `code` for implementation and code-review conventions, `question` for focuse
 - Distinguish distribution upgrades from installation of instructions into a harness; reinstall the relevant harness scope when its installed instructions need refreshing.
 - Follow printed PATH setup instructions and open a new shell or reload the profile. Treat PATH consent separately from overwrite approval; use the executable's full path while resolving shell setup.
 - Repair an interrupted installation by resolving its reported problem and rerunning the installer for the same root. Explain that another install root creates a separate installation and that completed writes have no automatic rollback.
+
+## Establish Git work context
+
+- Use `cr work` to inspect the current branch, configured upstream, merge base, HEAD, and committed review range. It also reports the work name on `coderail/work/<name>` branches. Use `cr work --json` for full commit IDs and `null` for unavailable values. Both `cr work` and `cr work start` require a Git working tree and work without `cr init`. Use `cr --cwd <path> work` to inspect another checkout.
+- Continue on the current work branch when it matches the task. A small, isolated change can stay on the current branch. For substantial new work, recommend `cr work start <work-name>` before exploration or ticket creation so committed plans, tickets, and implementation can share a review range.
+- `cr work start <work-name>` creates and switches to `coderail/work/<slug>` and tracks the original local branch directly. Start requires a regular local branch with at least one commit and a clean index and working tree. Clear staged, unstaged, untracked, and submodule changes before starting. Ignored files can stay. If the normalized name is empty or the branch already exists, choose a different name.
+- The range runs from the merge base of HEAD and its configured upstream through HEAD. If unavailable, check for detached HEAD, a missing first commit, an unset or locally missing upstream, or histories with no common ancestor. When publishing is requested, `git push origin HEAD` preserves local tracking. `git push -u` can change the upstream and therefore the range.
 
 ## Explore and persist design
 
@@ -119,8 +127,8 @@ Use `code` for implementation and code-review conventions, `question` for focuse
 
 ## Review, document, and commit
 
-- Stage only the changes intended for interactive review, then use `walkthrough` to explain all staged changes in manageable sections and discuss findings.
-- Associate the staged diff with an idea before recording decisions. Preserve existing `REVIEW.md`; record agreed actionable changes and consequential unresolved questions beside that idea.
+- Use `walkthrough` after implementation and before integration. Resolve the endpoints with `cr work --json` and review `git diff <base-commit> <head-commit>` in manageable sections. Report and exclude uncommitted changes. If the range is unavailable, report the blocker before starting the walkthrough.
+- Associate the committed diff with the corresponding idea or ideas before recording decisions. Preserve existing `REVIEW.md` content and record agreed actionable changes and consequential unresolved questions beside the corresponding idea.
 - Keep walkthrough implementation edits, staging, and commits outside its scope. Let the user confirm review completion; distinguish suggestions from agreed work.
 - Implement agreed corrections through the appropriate workflow, verify modified files, and review again as needed. Reopen affected tickets or create follow-ups according to scope.
 - Use `docs` to update relevant user documentation and changelogs against verified current behavior. Supply an explicit baseline when inspecting committed changes requires a comparison range.
