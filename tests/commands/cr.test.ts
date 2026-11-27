@@ -12,6 +12,7 @@ import { Ticket } from '../../src/commands/ticket.ts';
 import { Uninstall } from '../../src/commands/uninstall.ts';
 import { Upgrade } from '../../src/commands/upgrade.ts';
 import { Verify } from '../../src/commands/verify.ts';
+import { Work } from '../../src/commands/work.ts';
 
 function parse(args: readonly string[]): ParsedArguments<GlobalArguments> {
     return Commands.cr().parseArguments(args);
@@ -38,6 +39,7 @@ for (const [name, Child] of [
     ['ticket', Ticket],
     ['idea', Idea],
     ['archive', Archive],
+    ['work', Work],
     ['verify', Verify],
     ['doctor', Doctor],
     ['template', Template],

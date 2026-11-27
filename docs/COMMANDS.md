@@ -7,6 +7,7 @@
 - [Start a project](#start-a-project)
 - [Agent instructions](#agent-instructions)
 - [Ideas and tickets](#ideas-and-tickets)
+- [Review work](#review-work)
 - [Archive completed work](#archive-completed-work)
 - [Configuration](#configuration)
 - [Verify your changes](#verify-your-changes)
@@ -148,6 +149,52 @@ under `.coderail/plans` to the ticket's current path, preserving query strings
 and fragments. Link update warnings do not undo the ticket change. Use
 `cr doctor --repair` to repair eligible stale links in plans and between tickets.
 See [diagnosing setup problems](INSTALLATION.md#diagnosing-setup-problems).
+
+## Review work
+
+Start from a local branch with at least one commit and a clean working tree.
+Commit or stash staged, unstaged, and untracked changes, including changes in
+submodules. Ignored files can stay. Run the following commands to create work
+and inspect its review range.
+
+```sh
+cr work start internal/archive-history
+cr work
+```
+
+This switches to `coderail/work/internal-archive-history` and sets its
+upstream to the local branch you started from. Work names are lowercased,
+accents and unsupported punctuation are stripped, and spaces and slashes
+become hyphens. Start rejects names that normalize to an empty string or
+collide with an existing branch. To start another work branch, first switch
+to a regular branch.
+
+Use Git to manage the branch. While on the work branch, `git push origin HEAD`
+publishes it without changing the local upstream and `git rebase @{upstream}`
+rebases it onto that upstream. To merge and delete it, switch to the intended
+target branch and run the commands below.
+
+```sh
+git merge coderail/work/internal-archive-history
+git branch -d coderail/work/internal-archive-history
+```
+
+Run `cr work` from a Git working tree to show the branch, its configured
+upstream, the merge base, HEAD, and the review range. For a branch named
+`coderail/work/<name>`, the command also shows `<name>` as the work name.
+Coderail initialization is optional. Use `--cwd <path>` to select a different
+checkout or a directory inside it. Use `cr work --json` for full commit IDs
+and `null` values for unavailable fields.
+
+The review range covers committed changes from the merge base of HEAD and its
+upstream through HEAD. It uses local refs and stays the same when you edit or
+stage files. The range is unavailable when no upstream is configured, its ref
+is missing, or the histories have no common ancestor. Running `git push -u`
+can change the configured upstream and therefore the review range.
+
+Use `git diff @{upstream}...HEAD` to see the aggregate patch. To review the
+exact commits reported by Coderail, use `git diff <base> <head>` with the two
+reported endpoints.
 
 ## Archive completed work
 

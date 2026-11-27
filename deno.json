@@ -16,6 +16,7 @@
         "@utils": "./src/utils.ts",
         "@install-manifest": "./src/install-manifest.ts",
         "@templates": "./src/templates.ts",
+        "@work": "./src/work.ts",
         "oxc-parser": "npm:oxc-parser@^0.153.0",
         "micromark": "npm:micromark@4.0.2",
         "micromark-util-decode-string": "npm:micromark-util-decode-string@2.0.1",

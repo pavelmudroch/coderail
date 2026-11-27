@@ -11,6 +11,7 @@ import { Ticket } from './ticket.ts';
 import { Uninstall } from './uninstall.ts';
 import { Upgrade } from './upgrade.ts';
 import { Verify } from './verify.ts';
+import { Work } from './work.ts';
 
 type CommandName = string;
 
@@ -33,6 +34,7 @@ const COMMAND = {
     TICKET: 'ticket',
     IDEA: 'idea',
     ARCHIVE: 'archive',
+    WORK: 'work',
     VERIFY: 'verify',
     DOCTOR: 'doctor',
     TEMPLATE: 'template',
@@ -75,6 +77,7 @@ export class Cr implements Command<GlobalArguments> {
             '  ticket               Manage tickets related to the project.',
             '  idea                 Manage ideas related to the project.',
             '  archive              Manage retained archive history.',
+            '  work                 Show the current work context and review range.',
             '  verify               Verify files by project configuration.',
             '  doctor               Diagnose and fix issues in the project.',
             '  template             Template management.',
@@ -98,6 +101,8 @@ export class Cr implements Command<GlobalArguments> {
                 return new Idea();
             case COMMAND.ARCHIVE:
                 return new Archive();
+            case COMMAND.WORK:
+                return new Work();
             case COMMAND.VERIFY:
                 return new Verify();
             case COMMAND.DOCTOR:
