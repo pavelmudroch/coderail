@@ -13,7 +13,7 @@ export type IdeaArtifact = {
     files: string[];
 };
 
-export function formatJson(ideaTree: IdeaTree): string {
+export function getIdeaArtifacts(ideaTree: IdeaTree): IdeaArtifact[] {
     const artifacts: IdeaArtifact[] = [];
     function populateIdeaTreeArtifacts(ideaTree: IdeaTree): void {
         for (const idea of ideaTree) {
@@ -32,7 +32,7 @@ export function formatJson(ideaTree: IdeaTree): string {
         }
     }
     populateIdeaTreeArtifacts(ideaTree);
-    return JSON.stringify(artifacts, null, 4);
+    return artifacts;
 }
 
 export function formatText(ideaTree: IdeaTree): string {

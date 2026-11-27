@@ -5,7 +5,7 @@ import { Log } from '@log';
 import { Md } from '@md';
 import { join } from '@std/path';
 
-import { formatJson, formatText } from './helpers/format.ts';
+import { formatText, getIdeaArtifacts } from './helpers/format.ts';
 import { IDEA_STATUS } from './helpers/idea-frontmatter.ts';
 import { resolveIdea } from './helpers/resolve-idea.ts';
 
@@ -107,7 +107,7 @@ export class Reopen implements Command<ReopenArguments> {
             await Fs.write(filePath, Md.toStream(markdown));
             idea.frontmatter.status = IDEA_STATUS.OPEN;
             if (context.parsedArguments.args.json) {
-                Log.output(formatJson([idea]));
+                Log.output(JSON.stringify(getIdeaArtifacts([idea]), null, 4));
                 return;
             }
             Log.output(formatText([idea]));

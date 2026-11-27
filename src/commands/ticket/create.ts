@@ -9,7 +9,7 @@ import { resolveTicket, type Ticket } from '@tickets';
 import { Text } from '@utils';
 
 import { formatTicketId } from './helpers/format-ticket-id.ts';
-import { formatJson, formatText } from './helpers/format.ts';
+import { formatText } from './helpers/format.ts';
 import { getLastTicketId } from './helpers/get-last-ticket-id.ts';
 
 type CreateArguments = {
@@ -171,7 +171,7 @@ export class Create implements Command<CreateArguments> {
             await Fs.write(path, Md.toStream(markdown));
             const result = await resolveTicket(cwd, id);
             if (context.parsedArguments.args.json) {
-                Log.output(formatJson([result]));
+                Log.output(JSON.stringify([result], null, 4));
                 return;
             }
             Log.output(formatText([result]));

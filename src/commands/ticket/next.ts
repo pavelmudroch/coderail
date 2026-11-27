@@ -3,7 +3,7 @@ import type { Command, ParsedArguments, RunContext } from '@commands';
 import { Log } from '@log';
 import { getReadyTickets } from '@tickets';
 
-import { formatJson, formatText } from './helpers/format.ts';
+import { formatText } from './helpers/format.ts';
 
 type NextArguments = {
     help: boolean;
@@ -98,7 +98,7 @@ export class Next implements Command<NextArguments> {
         try {
             const tickets = await getReadyTickets(cwd, context.parsedArguments.args.limit);
             if (context.parsedArguments.args.json) {
-                Log.output(formatJson(tickets));
+                Log.output(JSON.stringify(tickets, null, 4));
                 return;
             }
             if (tickets.length > 0) {

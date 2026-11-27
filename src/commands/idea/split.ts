@@ -6,7 +6,7 @@ import { Md } from '@md';
 import { join } from '@std/path';
 import { Text } from '@utils';
 
-import { formatJson, formatText } from './helpers/format.ts';
+import { formatText, getIdeaArtifacts } from './helpers/format.ts';
 import { IDEA_STATUS } from './helpers/idea-frontmatter.ts';
 import { resolveIdea } from './helpers/resolve-idea.ts';
 
@@ -151,7 +151,7 @@ export class Split implements Command<SplitArguments> {
             idea.frontmatter.status = IDEA_STATUS.SPLIT;
             idea.children.sort((a, b) => a.id.localeCompare(b.id));
             if (context.parsedArguments.args.json) {
-                Log.output(formatJson([idea]));
+                Log.output(JSON.stringify(getIdeaArtifacts([idea]), null, 4));
                 return;
             }
             Log.output(formatText([idea]));

@@ -11,7 +11,3 @@ export function formatText(tickets: Ticket[]): string {
     }
     return lines.join('\n');
 }
-
-export function formatJson(tickets: Ticket[]): string {
-    return JSON.stringify(tickets, null, 2);
-}

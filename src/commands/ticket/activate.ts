@@ -13,7 +13,7 @@ import {
     withTicketLock,
 } from '@tickets';
 
-import { formatJson, formatText } from './helpers/format.ts';
+import { formatText } from './helpers/format.ts';
 
 type ActivateArguments = {
     help: boolean;
@@ -127,7 +127,7 @@ export class Activate implements Command<ActivateArguments> {
                 return resolveTicket(cwd, id);
             });
             if (context.parsedArguments.args.json) {
-                Log.output(formatJson([result]));
+                Log.output(JSON.stringify([result], null, 4));
                 return;
             }
             Log.output(formatText([result]));

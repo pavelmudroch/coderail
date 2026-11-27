@@ -6,7 +6,7 @@ import type { RunContext } from './helpers/command.ts';
 import { Archive } from './idea/archive.ts';
 import { Create } from './idea/create.ts';
 import { ensurePlansDir } from './idea/helpers/ensure-plans-dir.ts';
-import { formatJson, formatText } from './idea/helpers/format.ts';
+import { formatText, getIdeaArtifacts } from './idea/helpers/format.ts';
 import { getIdeaTree } from './idea/helpers/get-idea-tree.ts';
 import { Ready } from './idea/ready.ts';
 import { Reopen } from './idea/reopen.ts';
@@ -112,7 +112,7 @@ export class Idea implements Command<IdeaArguments> {
             const ideaTree = await getIdeaTree(context.context.currentWorkingDirectory);
 
             if (context.parsedArguments.args.json) {
-                Log.output(formatJson(ideaTree));
+                Log.output(JSON.stringify(getIdeaArtifacts(ideaTree), null, 4));
                 return;
             }
 

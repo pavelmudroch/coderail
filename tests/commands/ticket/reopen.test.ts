@@ -154,7 +154,7 @@ Deno.test(
                                       },
                                   ],
                                   null,
-                                  2,
+                                  4,
                               )
                             : `${Log.color.yellow(id)} ${Log.color.cyan('New ticket')} ${Log.color.gray(
                                   path,

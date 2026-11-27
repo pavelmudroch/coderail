@@ -94,7 +94,7 @@ export function parseTemplateArguments(
 
 export function outputTemplates(entries: TemplateInfo[], args: TemplateArguments): void {
     if (args.json) {
-        console.log(JSON.stringify(entries, null, 2));
+        Log.output(JSON.stringify(entries, null, 4));
         return;
     }
     for (const entry of entries) {

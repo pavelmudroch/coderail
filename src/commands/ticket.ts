@@ -107,8 +107,7 @@ export class Ticket implements Command<TicketArguments> {
     async run(context: RunContext<TicketArguments>): Promise<void> {
         const tickets = await getTicketList();
         if (context.parsedArguments.args.json) {
-            const jsonOutput = JSON.stringify(tickets, null, 4);
-            Log.output(jsonOutput);
+            Log.output(JSON.stringify(tickets, null, 4));
             return;
         }
 

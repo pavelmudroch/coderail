@@ -2,7 +2,7 @@ import { Log } from '@log';
 import { expect } from '@std/expect';
 import { join } from '@std/path';
 
-import { formatJson, formatText } from '../../../../src/commands/idea/helpers/format.ts';
+import { formatText, getIdeaArtifacts } from '../../../../src/commands/idea/helpers/format.ts';
 import type { IdeaTree } from '../../../../src/commands/idea/helpers/get-idea-tree.ts';
 
 const tree: IdeaTree = [
@@ -43,11 +43,11 @@ const tree: IdeaTree = [
 
 Deno.test('idea formatters handle empty trees', () => {
     expect(formatText([])).toBe('');
-    expect(formatJson([])).toBe('[]');
+    expect(getIdeaArtifacts([])).toEqual([]);
 });
 
-Deno.test('formatJson preserves statuses, metadata and hierarchy in a flat list', () => {
-    expect(JSON.parse(formatJson(tree))).toEqual([
+Deno.test('getIdeaArtifacts preserves statuses, metadata and hierarchy in a flat list', () => {
+    expect(getIdeaArtifacts(tree)).toEqual([
         {
             path: '/plans/parent',
             id: 'parent',
