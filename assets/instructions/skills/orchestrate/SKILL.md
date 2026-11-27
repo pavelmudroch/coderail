@@ -32,18 +32,22 @@ disable-model-invocation: true
 
 ## Workflow
 
-1. Run `cr ticket next --json` to discover available tickets.
-2. Exclude tickets already assigned to active subagents.
-3. Identify tickets safe for parallel implementation.
-4. Record the implementation baseline. Spawn `implementer` subagents with the ticket path and instructions to report the closed ticket path and changed paths.
-5. Monitor active subagents and collect completed results.
-6. For each successfully implemented ticket, spawn a separate `reviewer` subagent with the closed ticket path, baseline, and changed paths.
-7. Inspect review results and ticket state.
-8. For approved implementations, stage related changes and invoke <skill>commit</skill>.
-9. For reopened tickets, return them to the available ticket pool.
-10. Reevaluate available tickets, active subagents, and pending commits.
-11. Start additional independent work when safe; otherwise wait for active subagents.
-12. Repeat until completion or an unresolved blocker requires user intervention.
+1. Inspect the working tree using git status.
+2. Identify uncommitted Coderail planning artifacts, including new tickets, updated plans and specifications.
+3. If only planning artifacts are changed, stage and commit them automatically.
+4. If unrelated changes exist, stop and ask the user how to proceed.
+5. Run `cr ticket next --json` to discover available tickets.
+6. Exclude tickets already assigned to active subagents.
+7. Identify tickets safe for parallel implementation.
+8. Record the implementation baseline. Spawn `implementer` subagents with the ticket path and instructions to report the closed ticket path and changed paths.
+9. Monitor active subagents and collect completed results.
+10. For each successfully implemented ticket, spawn a separate `reviewer` subagent with the closed ticket path, baseline, and changed paths.
+11. Inspect review results and ticket state.
+12. For approved implementations, stage related changes and invoke <skill>commit</skill>.
+13. For reopened tickets, return them to the available ticket pool.
+14. Reevaluate available tickets, active subagents, and pending commits.
+15. Start additional independent work when safe; otherwise wait for active subagents.
+16. Repeat until completion or an unresolved blocker requires user intervention.
 
 ## Completion
 
